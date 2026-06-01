@@ -22242,9 +22242,9 @@ var CRLDistributionPointsExtension = class extends Extension2 {
       super(args[0]);
     } else if (Array.isArray(args[0]) && typeof args[0][0] === "string") {
       const urls = args[0];
-      const dps = urls.map((url2) => {
+      const dps = urls.map((url) => {
         return new DistributionPoint({
-          distributionPoint: new DistributionPointName({ fullName: [new GeneralName({ uniformResourceIdentifier: url2 })] })
+          distributionPoint: new DistributionPointName({ fullName: [new GeneralName({ uniformResourceIdentifier: url })] })
         });
       });
       const value = new CRLDistributionPoints(dps);
@@ -22366,13 +22366,13 @@ function addAccessDescriptions(value, params, method, key) {
   const items = params[key];
   if (items) {
     const array2 = Array.isArray(items) ? items : [items];
-    array2.forEach((url2) => {
-      if (typeof url2 === "string") {
-        url2 = new GeneralName3("url", url2);
+    array2.forEach((url) => {
+      if (typeof url === "string") {
+        url = new GeneralName3("url", url);
       }
       value.push(new AccessDescription({
         accessMethod: method,
-        accessLocation: AsnConvert.parse(url2.rawData, GeneralName)
+        accessLocation: AsnConvert.parse(url.rawData, GeneralName)
       }));
     });
   }
@@ -23510,11 +23510,11 @@ AsnEcSignatureFormatter.namedCurveSize.set("P-384", 48);
 AsnEcSignatureFormatter.namedCurveSize.set("P-521", 66);
 
 // node_modules/@simplewebauthn/server/esm/helpers/fetch.js
-function fetch2(url2) {
-  return _fetchInternals.stubThis(url2);
+function fetch2(url) {
+  return _fetchInternals.stubThis(url);
 }
 var _fetchInternals = {
-  stubThis: (url2) => globalThis.fetch(url2)
+  stubThis: (url) => globalThis.fetch(url)
 };
 
 // node_modules/@simplewebauthn/server/esm/helpers/isCertRevoked.js
@@ -24703,17 +24703,17 @@ var BaseMetadataService = class {
     if (mdsServers?.length) {
       const currentCacheCount = Object.keys(this.statementCache).length;
       let numServers = mdsServers.length;
-      for (const url2 of mdsServers) {
+      for (const url of mdsServers) {
         try {
           const cachedMDS = {
-            url: url2,
+            url,
             no: 0,
             nextUpdate: /* @__PURE__ */ new Date(0)
           };
           const blob = await this.downloadBlob(cachedMDS);
           await this.verifyBlob(blob, cachedMDS);
         } catch (err) {
-          log(`Could not download BLOB from ${url2}:`, err);
+          log(`Could not download BLOB from ${url}:`, err);
           numServers -= 1;
         }
       }
@@ -24770,8 +24770,8 @@ var BaseMetadataService = class {
    * Download and process the latest BLOB from MDS
    */
   async downloadBlob(cachedMDS) {
-    const { url: url2 } = cachedMDS;
-    const resp = await fetch2(url2);
+    const { url } = cachedMDS;
+    const resp = await fetch2(url);
     const data = await resp.text();
     return data;
   }
@@ -24779,18 +24779,18 @@ var BaseMetadataService = class {
    * Verify and process the MDS metadata blob
    */
   async verifyBlob(blob, cachedMDS) {
-    const { url: url2, no } = cachedMDS;
+    const { url, no } = cachedMDS;
     const { payload, parsedNextUpdate } = await verifyMDSBlob(blob);
     if (payload.no <= no) {
       throw new Error(`Latest BLOB no. ${payload.no} is not greater than previous no. ${no}`);
     }
     for (const entry of payload.entries) {
       if (entry.aaguid) {
-        this.statementCache[entry.aaguid] = { entry, url: url2 };
+        this.statementCache[entry.aaguid] = { entry, url };
       }
     }
-    if (url2) {
-      this.mdsCache[url2] = {
+    if (url) {
+      this.mdsCache[url] = {
         ...cachedMDS,
         // Store the payload `no` to make sure we're getting the next BLOB in the sequence
         no: payload.no,
@@ -29143,8 +29143,8 @@ function buildHeadline({ pullRequest, reviewLoop }) {
     if (pullRequest.mergeability.status === "unverified") {
       return `${base} PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment.`;
     }
-    const url2 = reviewLoop.reviewerEvidence.url ? ` Approve evidence: ${reviewLoop.reviewerEvidence.url}` : "";
-    return `${base} Gemini reviewer action is approve.${url2}`;
+    const url = reviewLoop.reviewerEvidence.url ? ` Approve evidence: ${reviewLoop.reviewerEvidence.url}` : "";
+    return `${base} Gemini reviewer action is approve.${url}`;
   }
   if (reviewLoop.reviewCommentsCount > 0) {
     return `${base} Reviewer feedback exists and should be checked before human GO.`;
@@ -29206,14 +29206,14 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
   }
   if (reviewLoop.reviewerEvidence?.recommendedAction) {
     const action = reviewLoop.reviewerEvidence.recommendedAction;
-    const url2 = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
-    focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url2}`);
+    const url = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
+    focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url}`);
   }
   const latestTimelineItem = reviewLoop.reviewTimeline.at(-1);
   if (latestTimelineItem) {
-    const url2 = latestTimelineItem.url ? ` ${latestTimelineItem.url}` : "";
+    const url = latestTimelineItem.url ? ` ${latestTimelineItem.url}` : "";
     focus.push(
-      `Latest review timeline item: ${latestTimelineItem.type}, status=${latestTimelineItem.status || "unknown"}${url2}`
+      `Latest review timeline item: ${latestTimelineItem.type}, status=${latestTimelineItem.status || "unknown"}${url}`
     );
   }
   for (const warning of reviewLoop.reviewerSignalTruth?.warnings ?? []) {
@@ -29732,10 +29732,10 @@ async function createGitHubAppJwt({ appId, privateKey, env, nowSeconds }) {
 async function fetchGitHubInstallationRepositories({ token, fetchImpl, apiBaseUrl }) {
   const repositories = [];
   for (let page = 1; page <= MAX_REPOSITORY_PAGES; page += 1) {
-    const url2 = `${apiBaseUrl}${INSTALLATION_REPOSITORIES_PATH}?per_page=${REPOSITORIES_PER_PAGE}&page=${page}`;
+    const url = `${apiBaseUrl}${INSTALLATION_REPOSITORIES_PATH}?per_page=${REPOSITORIES_PER_PAGE}&page=${page}`;
     let response;
     try {
-      response = await fetchImpl(url2, {
+      response = await fetchImpl(url, {
         method: "GET",
         headers: {
           authorization: `Bearer ${token}`,
@@ -39943,18 +39943,18 @@ function normalizeApiBaseUrl5(value) {
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL4;
 }
 function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber, pullNumber }) {
-  const url2 = new URL("/v2/approval/passkey/operator", `${origin}/`);
-  url2.searchParams.set("repositoryInput", repository);
-  url2.searchParams.set("phase", phase || "execution");
-  url2.searchParams.set("actionType", actionType);
-  url2.searchParams.set("highRiskKind", highRiskKind);
+  const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
+  url.searchParams.set("repositoryInput", repository);
+  url.searchParams.set("phase", phase || "execution");
+  url.searchParams.set("actionType", actionType);
+  url.searchParams.set("highRiskKind", highRiskKind);
   if (Number.isInteger(issueNumber) && issueNumber > 0) {
-    url2.searchParams.set("issueNumber", String(issueNumber));
+    url.searchParams.set("issueNumber", String(issueNumber));
   }
   if (Number.isInteger(pullNumber) && pullNumber > 0) {
-    url2.searchParams.set("pullNumber", String(pullNumber));
+    url.searchParams.set("pullNumber", String(pullNumber));
   }
-  return url2.toString();
+  return url.toString();
 }
 function classifyIssueCloseOperatorStatus({
   repository,
@@ -40323,12 +40323,12 @@ function buildGitHubReadRequest({
     };
   }
   if (resource === GitHubReadResource.WORKFLOW_RUNS) {
-    const url2 = new URL(`${apiBaseUrl}/repos/${encodedRepository}/actions/runs`);
-    url2.searchParams.set("per_page", String(limit));
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/actions/runs`);
+    url.searchParams.set("per_page", String(limit));
     if (branch) {
-      url2.searchParams.set("branch", branch);
+      url.searchParams.set("branch", branch);
     }
-    return { url: url2.toString() };
+    return { url: url.toString() };
   }
   if (resource === GitHubReadResource.WORKFLOW_JOBS) {
     return {
@@ -40347,16 +40347,16 @@ function buildGitHubReadRequest({
   }
   if (resource === GitHubReadResource.CONTENTS) {
     const encodedPath = path.split("/").filter(Boolean).map((segment) => encodeURIComponent(segment)).join("/");
-    const url2 = new URL(`${apiBaseUrl}/repos/${encodedRepository}/contents/${encodedPath}`);
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/contents/${encodedPath}`);
     if (ref) {
-      url2.searchParams.set("ref", ref);
+      url.searchParams.set("ref", ref);
     }
-    return { url: url2.toString() };
+    return { url: url.toString() };
   }
   if (resource === GitHubReadResource.TREE) {
-    const url2 = new URL(`${apiBaseUrl}/repos/${encodedRepository}/git/trees/${encodeURIComponent(ref)}`);
-    url2.searchParams.set("recursive", "1");
-    return { url: url2.toString() };
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/git/trees/${encodeURIComponent(ref)}`);
+    url.searchParams.set("recursive", "1");
+    return { url: url.toString() };
   }
   return { url: `${apiBaseUrl}/repos/${encodedRepository}` };
 }
@@ -40964,11 +40964,11 @@ function resolveGitHubWriteFetch(env) {
   }
   return globalThis.fetch.bind(globalThis);
 }
-function buildGitHubWriteFetchExceptionDiagnostics({ operation, method, url: url2, error: error2 }) {
+function buildGitHubWriteFetchExceptionDiagnostics({ operation, method, url, error: error2 }) {
   return {
     operation,
     requestMethod: method,
-    requestUrl: sanitizeGitHubWriteDiagnosticText(url2),
+    requestUrl: sanitizeGitHubWriteDiagnosticText(url),
     exceptionName: sanitizeGitHubWriteDiagnosticText(error2?.name || "Error"),
     exceptionMessage: sanitizeGitHubWriteDiagnosticText(error2?.message || error2)
   };
@@ -47465,10 +47465,10 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
           return;
         }
       }
-      const url2 = new URL(trimmed);
+      const url = new URL(trimmed);
       if (def.hostname) {
         def.hostname.lastIndex = 0;
-        if (!def.hostname.test(url2.hostname)) {
+        if (!def.hostname.test(url.hostname)) {
           payload.issues.push({
             code: "invalid_format",
             format: "url",
@@ -47482,7 +47482,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
       }
       if (def.protocol) {
         def.protocol.lastIndex = 0;
-        if (!def.protocol.test(url2.protocol.endsWith(":") ? url2.protocol.slice(0, -1) : url2.protocol)) {
+        if (!def.protocol.test(url.protocol.endsWith(":") ? url.protocol.slice(0, -1) : url.protocol)) {
           payload.issues.push({
             code: "invalid_format",
             format: "url",
@@ -47495,7 +47495,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
         }
       }
       if (def.normalize) {
-        payload.value = url2.href;
+        payload.value = url.href;
       } else {
         payload.value = trimmed;
       }
@@ -57512,8 +57512,8 @@ var DashboardChatRoom = class {
     this.sessions = /* @__PURE__ */ new Map();
   }
   async fetch(request) {
-    const url2 = new URL(request.url);
-    if (request.method === "POST" && url2.pathname === "/broadcast") {
+    const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === "/broadcast") {
       const payload = await readJson(request);
       const threadId2 = normalizeDashboardThreadId(payload.threadId || payload.thread_id);
       if (!threadId2) {
@@ -57543,10 +57543,10 @@ var DashboardChatRoom = class {
         reason: "WebSocketPair is not available in this runtime"
       });
     }
-    const appServerBridgeSocket = isDashboardAppServerBridgeSocketPath(url2.pathname);
-    const threadId = appServerBridgeSocket ? normalizeDashboardThreadId(url2.searchParams.get("threadId") || url2.searchParams.get("thread_id")) : extractDashboardChatSocketThreadId(url2.pathname);
+    const appServerBridgeSocket = isDashboardAppServerBridgeSocketPath(url.pathname);
+    const threadId = appServerBridgeSocket ? normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id")) : extractDashboardChatSocketThreadId(url.pathname);
     if (appServerBridgeSocket) {
-      return this.acceptSocket({ request, role: "app_server_bridge", threadId });
+      return this.acceptSocket({ request, role: "app_server_bridge", threadId, origin: url.origin });
     }
     if (!threadId) {
       return json(422, {
@@ -57555,12 +57555,12 @@ var DashboardChatRoom = class {
         reason: "threadId is required"
       });
     }
-    return this.acceptSocket({ request, role: "dashboard", threadId });
+    return this.acceptSocket({ request, role: "dashboard", threadId, origin: url.origin });
   }
-  async acceptSocket({ request, role, threadId }) {
+  async acceptSocket({ request, role, threadId, origin }) {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const attachment = { role, threadId, origin: url.origin };
+    const attachment = { role, threadId, origin: normalizeText32(origin) || new URL(request.url).origin };
     if (typeof this.ctx?.acceptWebSocket === "function") {
       server.serializeAttachment(attachment);
       this.ctx.acceptWebSocket(server);
@@ -58120,8 +58120,8 @@ var MEDIA_UPLOAD_HARD_LIMIT_BYTES = 20 * 1024 * 1024;
 var MEDIA_REFERENCE_LIMIT = 12;
 var runtime_default = {
   async fetch(request, env) {
-    const url2 = new URL(request.url);
-    if (request.method === "GET" && url2.pathname === "/health") {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/health") {
       return json(200, {
         ok: true,
         service: "vtdd-v2-worker",
@@ -58129,63 +58129,63 @@ var runtime_default = {
         autonomyMode: resolveRuntimeAutonomyMode(env)
       });
     }
-    if (request.method === "GET" && url2.pathname === "/status") {
+    if (request.method === "GET" && url.pathname === "/status") {
       return html(
         200,
         renderV2StatusPage({
-          runtimeOrigin: url2.origin,
+          runtimeOrigin: url.origin,
           autonomyMode: resolveRuntimeAutonomyMode(env)
         })
       );
     }
-    if (request.method === "GET" && (url2.pathname === "/setup" || url2.pathname === "/setup/recovery" || url2.pathname === "/setup/latest" || url2.pathname === "/setup/known-good")) {
-      return handleCustomGptRecoveryPageRequest(url2, env);
+    if (request.method === "GET" && (url.pathname === "/setup" || url.pathname === "/setup/recovery" || url.pathname === "/setup/latest" || url.pathname === "/setup/known-good")) {
+      return handleCustomGptRecoveryPageRequest(url, env);
     }
-    if (request.method === "GET" && url2.pathname === "/setup/diagnostics") {
-      return handleCustomGptSetupDiagnosticsPageRequest(url2, env);
+    if (request.method === "GET" && url.pathname === "/setup/diagnostics") {
+      return handleCustomGptSetupDiagnosticsPageRequest(url, env);
     }
-    if (request.method === "GET" && (url2.pathname === "/help" || url2.pathname === "/guide")) {
+    if (request.method === "GET" && (url.pathname === "/help" || url.pathname === "/guide")) {
       return html(
         200,
         renderVtddHelpGuidePage({
-          runtimeOrigin: url2.origin,
+          runtimeOrigin: url.origin,
           mcpPath: MCP_PATH
         })
       );
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard.webmanifest") {
-      return json(200, buildDashboardWebManifest(url2), {
+    if (request.method === "GET" && url.pathname === "/dashboard.webmanifest") {
+      return json(200, buildDashboardWebManifest(url), {
         "content-type": "application/manifest+json; charset=utf-8"
       });
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard-sw.js") {
+    if (request.method === "GET" && url.pathname === "/dashboard-sw.js") {
       return javascript(200, renderDashboardServiceWorkerScript());
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard-icon.svg") {
+    if (request.method === "GET" && url.pathname === "/dashboard-icon.svg") {
       return svg(200, renderDashboardIconSvg());
     }
-    if (request.method === "GET" && (url2.pathname === "/dashboard-icon.png" || url2.pathname === DASHBOARD_ICON_PNG_PATH || url2.pathname === "/apple-touch-icon.png" || url2.pathname === "/apple-touch-icon-precomposed.png")) {
+    if (request.method === "GET" && (url.pathname === "/dashboard-icon.png" || url.pathname === DASHBOARD_ICON_PNG_PATH || url.pathname === "/apple-touch-icon.png" || url.pathname === "/apple-touch-icon-precomposed.png")) {
       return png(200, dashboard_butler_icon_512_default);
     }
-    if (request.method === "GET" && isDashboardPagePath(url2.pathname)) {
-      const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url2.pathname });
+    if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
+      const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
         return html(
           auth.status,
           renderDashboardAuthRequiredPage({
-            runtimeOrigin: url2.origin,
-            returnPath: `${url2.pathname}${url2.search}`,
+            runtimeOrigin: url.origin,
+            returnPath: `${url.pathname}${url.search}`,
             reason: auth.reason,
             passkeyFallbackReason: auth.passkeyFallbackReason
           })
         );
       }
     }
-    if (request.method === "GET" && (url2.pathname === "/dashboard" || url2.pathname === "/orchestrator")) {
+    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
       const dashboardAuth = await authorizeDashboardRequest({
         request,
         env,
-        apiSuffix: url2.pathname
+        apiSuffix: url.pathname
       });
       const dashboardSessionHeaders = await createDashboardReadSessionCookieHeadersFromAuth({
         request,
@@ -58195,107 +58195,107 @@ var runtime_default = {
       return html(
         200,
         await renderV2DashboardPage({
-          runtimeOrigin: url2.origin,
-          url: url2,
+          runtimeOrigin: url.origin,
+          url,
           dashboardEventStore: resolveDashboardEventStore(env)
         }),
         dashboardSessionHeaders
       );
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard/github") {
-      return html(200, await renderDashboardGitHubTruthPage({ url: url2, env }));
+    if (request.method === "GET" && url.pathname === "/dashboard/github") {
+      return html(200, await renderDashboardGitHubTruthPage({ url, env }));
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard/preflight") {
-      return html(200, await renderDashboardPreflightPage({ url: url2, env }));
+    if (request.method === "GET" && url.pathname === "/dashboard/preflight") {
+      return html(200, await renderDashboardPreflightPage({ url, env }));
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard/progress") {
-      return html(200, await renderDashboardProgressPage({ url: url2, env }));
+    if (request.method === "GET" && url.pathname === "/dashboard/progress") {
+      return html(200, await renderDashboardProgressPage({ url, env }));
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard/vps-runner") {
-      return html(200, await renderDashboardVpsRunnerPage({ url: url2, env }));
+    if (request.method === "GET" && url.pathname === "/dashboard/vps-runner") {
+      return html(200, await renderDashboardVpsRunnerPage({ url, env }));
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard/memory") {
-      return html(200, await renderDashboardMemoryPage({ url: url2, env }));
+    if (request.method === "GET" && url.pathname === "/dashboard/memory") {
+      return html(200, await renderDashboardMemoryPage({ url, env }));
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard/self-parity") {
-      return html(200, await renderDashboardSelfParityPage({ url: url2, env }));
+    if (request.method === "GET" && url.pathname === "/dashboard/self-parity") {
+      return html(200, await renderDashboardSelfParityPage({ url, env }));
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard/news") {
-      return html(200, renderDashboardNewsPage({ runtimeOrigin: url2.origin, env }));
+    if (request.method === "GET" && url.pathname === "/dashboard/news") {
+      return html(200, renderDashboardNewsPage({ runtimeOrigin: url.origin, env }));
     }
-    if (request.method === "GET" && url2.pathname === "/dashboard/notifications") {
+    if (request.method === "GET" && url.pathname === "/dashboard/notifications") {
       return html(
         200,
         await renderDashboardNotificationsPage({
-          runtimeOrigin: url2.origin,
+          runtimeOrigin: url.origin,
           dashboardEventStore: resolveDashboardEventStore(env),
           env
         })
       );
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/dashboard/chat/messages")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/chat/messages")) {
       return handleDashboardChatMessageRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/media/upload")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/media/upload")) {
       return handleMediaUploadRequest(request, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/media/search")) {
-      return handleMediaSearchRequest(request, url2, env);
+    if (request.method === "GET" && isApiPath(url.pathname, "/media/search")) {
+      return handleMediaSearchRequest(request, url, env);
     }
-    const mediaRoute = matchMediaObjectRoute(url2.pathname);
+    const mediaRoute = matchMediaObjectRoute(url.pathname);
     if (mediaRoute && request.method === "GET") {
       return handleMediaObjectRequest(request, env, mediaRoute);
     }
     if (mediaRoute && request.method === "DELETE") {
       return handleMediaDeleteRequest(request, env, mediaRoute);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/dashboard/push/subscription")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/subscription")) {
       return handleDashboardPushSubscriptionRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/dashboard/push/status")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/status")) {
       return handleDashboardPushStatusRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/dashboard/push/test")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/test")) {
       return handleDashboardPushTestRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/dashboard/push/ack")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/ack")) {
       return handleDashboardPushAckRequest(request, env);
     }
-    if (request.method === "GET" && isDashboardChatSocketApiPath(url2.pathname)) {
-      return handleDashboardChatSocketRequest(request, url2, env);
+    if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
+      return handleDashboardChatSocketRequest(request, url, env);
     }
-    if (request.method === "GET" && isDashboardAppServerBridgeSocketPath(url2.pathname)) {
-      return handleDashboardAppServerBridgeSocketRequest(request, url2, env);
+    if (request.method === "GET" && isDashboardAppServerBridgeSocketPath(url.pathname)) {
+      return handleDashboardAppServerBridgeSocketRequest(request, url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/dashboard/chat/search")) {
-      return handleDashboardChatSearchRequest(request, url2, env);
+    if (request.method === "GET" && isApiPath(url.pathname, "/dashboard/chat/search")) {
+      return handleDashboardChatSearchRequest(request, url, env);
     }
-    if ((request.method === "GET" || request.method === "POST") && isDashboardChatSummaryApiPath(url2.pathname)) {
-      return handleDashboardChatSummaryRequest(request, url2, env);
+    if ((request.method === "GET" || request.method === "POST") && isDashboardChatSummaryApiPath(url.pathname)) {
+      return handleDashboardChatSummaryRequest(request, url, env);
     }
-    if (request.method === "GET" && isDashboardChatThreadApiPath(url2.pathname)) {
-      return handleDashboardChatThreadRequest(request, url2, env);
+    if (request.method === "GET" && isDashboardChatThreadApiPath(url.pathname)) {
+      return handleDashboardChatThreadRequest(request, url, env);
     }
-    if (request.method === "GET" && (url2.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH || url2.pathname === MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH)) {
-      return json(200, buildMcpProtectedResourceMetadata(url2));
+    if (request.method === "GET" && (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH || url.pathname === MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH)) {
+      return json(200, buildMcpProtectedResourceMetadata(url));
     }
-    if ((request.method === "POST" || request.method === "GET") && url2.pathname === MCP_PATH) {
+    if ((request.method === "POST" || request.method === "GET") && url.pathname === MCP_PATH) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: MCP_PATH });
       if (!auth.ok) {
-        const headers = auth.status === 401 ? buildMcpUnauthorizedHeaders(url2, auth.headers ?? {}) : auth.headers ?? {};
+        const headers = auth.status === 401 ? buildMcpUnauthorizedHeaders(url, auth.headers ?? {}) : auth.headers ?? {};
         return json(auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         }, headers);
       }
-      return handleMcpRequest({ request, env, url: url2 });
+      return handleMcpRequest({ request, env, url });
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/approval/passkey/operator")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/approval/passkey/operator")) {
       await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
       return handlePasskeyOperatorPageRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/gateway")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/gateway")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/gateway" });
       if (!auth.ok) {
         return json(auth.status, {
@@ -58319,7 +58319,7 @@ var runtime_default = {
       });
       return json(auditedGatewayOutcome.status, auditedGatewayOutcome.body);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/execute")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/execute")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/execute" });
       if (!auth.ok) {
         return json(auth.status, {
@@ -58374,7 +58374,7 @@ var runtime_default = {
         execution: dispatched.execution
       });
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/github")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/github" });
       if (!auth.ok) {
         return json(auth.status, {
@@ -58385,7 +58385,7 @@ var runtime_default = {
       }
       return handleGitHubWritePlaneRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/memory-write")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/memory-write")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58400,7 +58400,7 @@ var runtime_default = {
       }
       return handleMemoryWriteRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/github-authority")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github-authority")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
         env,
@@ -58415,7 +58415,7 @@ var runtime_default = {
       }
       return handleGitHubHighRiskPlaneRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/deploy")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/deploy")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
         env,
@@ -58430,7 +58430,7 @@ var runtime_default = {
       }
       return handleDeployProductionRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/events/github-actions")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/events/github-actions")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58445,7 +58445,7 @@ var runtime_default = {
       }
       return handleGitHubActionsEventRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/events/vps-runner")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/events/vps-runner")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58460,7 +58460,7 @@ var runtime_default = {
       }
       return handleVpsRunnerEventRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/events/owner-action-required")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/events/owner-action-required")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58475,7 +58475,7 @@ var runtime_default = {
       }
       return handleOwnerActionRequiredEventRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/vps/privileged-maintenance/proposals")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/proposals")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58490,7 +58490,7 @@ var runtime_default = {
       }
       return handleVpsPrivilegedMaintenanceProposalRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/vps/privileged-maintenance/helper-requests")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-requests")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58505,7 +58505,7 @@ var runtime_default = {
       }
       return handleVpsPrivilegedMaintenanceHelperRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/vps/privileged-maintenance/helper-dry-runs")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-dry-runs")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58520,7 +58520,7 @@ var runtime_default = {
       }
       return handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/vps/privileged-maintenance/helper-executions")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-executions")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58535,7 +58535,7 @@ var runtime_default = {
       }
       return handleVpsPrivilegedMaintenanceHelperExecutionRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/vps/privileged-maintenance/helper-execution-queues")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-execution-queues")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58550,21 +58550,21 @@ var runtime_default = {
       }
       return handleVpsPrivilegedMaintenanceHelperExecutionQueueRequest(request, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/vps-maintenance-install-inventory")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/vps-maintenance-install-inventory")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
         apiSuffix: "/retrieve/vps-maintenance-install-inventory"
       });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveVpsMaintenanceInstallInventoryRequest(url2);
+      return handleRetrieveVpsMaintenanceInstallInventoryRequest(url);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/github-actions-secret")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
         env,
@@ -58579,7 +58579,7 @@ var runtime_default = {
       }
       return handleGitHubActionsSecretSyncRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/github-actions-variable")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-variable")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
         env,
@@ -58594,7 +58594,7 @@ var runtime_default = {
       }
       return handleGitHubActionsVariableSyncRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/github-actions-variable/proposals")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-variable/proposals")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58607,9 +58607,9 @@ var runtime_default = {
           reason: auth.reason
         });
       }
-      return handleGitHubActionsVariableSyncProposalRequest(request, url2, env);
+      return handleGitHubActionsVariableSyncProposalRequest(request, url, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/repository-nickname")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/repository-nickname")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58624,7 +58624,7 @@ var runtime_default = {
       }
       return handleRepositoryNicknameUpsertRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/repository-nickname/delete")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/repository-nickname/delete")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58639,7 +58639,7 @@ var runtime_default = {
       }
       return handleRepositoryNicknameDeleteRequest(request, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/action/progress")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/action/progress")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/progress" });
       if (!auth.ok) {
         return json(auth.status, {
@@ -58649,11 +58649,11 @@ var runtime_default = {
         });
       }
       const progress = await retrieveRemoteCodexExecutionProgress({
-        executionId: url2.searchParams.get("executionId"),
-        repository: url2.searchParams.get("repository"),
-        issueNumber: url2.searchParams.get("issueNumber"),
-        branch: url2.searchParams.get("branch"),
-        executorTransport: url2.searchParams.get("executorTransport"),
+        executionId: url.searchParams.get("executionId"),
+        repository: url.searchParams.get("repository"),
+        issueNumber: url.searchParams.get("issueNumber"),
+        branch: url.searchParams.get("branch"),
+        executorTransport: url.searchParams.get("executorTransport"),
         env
       });
       if (!progress.ok) {
@@ -58668,7 +58668,7 @@ var runtime_default = {
         progress: progress.progress
       });
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/action/vps-runner-status")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/action/vps-runner-status")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58682,10 +58682,10 @@ var runtime_default = {
         });
       }
       const status = await retrieveVpsRunnerHealthStatus({
-        executionId: url2.searchParams.get("executionId"),
-        repository: url2.searchParams.get("repository"),
-        issueNumber: url2.searchParams.get("issueNumber"),
-        branch: url2.searchParams.get("branch"),
+        executionId: url.searchParams.get("executionId"),
+        repository: url.searchParams.get("repository"),
+        issueNumber: url.searchParams.get("issueNumber"),
+        branch: url.searchParams.get("branch"),
         env
       });
       if (!status.ok) {
@@ -58701,7 +58701,7 @@ var runtime_default = {
         progress: status.progress
       });
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/action/vps-runner-cancel")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/vps-runner-cancel")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
@@ -58737,18 +58737,18 @@ var runtime_default = {
         cancellation: cancellation.cancellation
       });
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/approval-grant")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/approval-grant")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/approval-grant" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveApprovalGrantRequest(url2, env);
+      return handleRetrieveApprovalGrantRequest(url, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/approval/passkey/register/options")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/register/options")) {
       await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
       const auth = await authorizePasskeyRegistrationRequest({
         request,
@@ -58764,7 +58764,7 @@ var runtime_default = {
       }
       return handlePasskeyRegistrationOptionsRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/approval/passkey/register/verify")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/register/verify")) {
       await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
       const auth = await authorizePasskeyRegistrationRequest({
         request,
@@ -58780,7 +58780,7 @@ var runtime_default = {
       }
       return handlePasskeyRegistrationVerifyRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/approval/passkey/challenge")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/challenge")) {
       await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -58796,7 +58796,7 @@ var runtime_default = {
       }
       return handlePasskeyApprovalOptionsRequest(request, env);
     }
-    if (request.method === "POST" && isApiPath(url2.pathname, "/approval/passkey/verify")) {
+    if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/verify")) {
       await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -58812,147 +58812,147 @@ var runtime_default = {
       }
       return handlePasskeyApprovalVerifyRequest(request, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/constitution")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/constitution")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/constitution" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveConstitutionRequest(url2, env);
+      return handleRetrieveConstitutionRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/decisions")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/decisions")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/decisions" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveDecisionLogsRequest(url2, env);
+      return handleRetrieveDecisionLogsRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/proposals")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/proposals")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/proposals" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveProposalLogsRequest(url2, env);
+      return handleRetrieveProposalLogsRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/cross")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/cross")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/cross" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveCrossIssueRequest(url2, env);
+      return handleRetrieveCrossIssueRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/operational-memory")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/operational-memory")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
         apiSuffix: "/retrieve/operational-memory"
       });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveOperationalMemoryRequest(url2, env);
+      return handleRetrieveOperationalMemoryRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/startup-preflight")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/startup-preflight")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
         apiSuffix: "/retrieve/startup-preflight"
       });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveStartupPreflightRequest(url2, env);
+      return handleRetrieveStartupPreflightRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/github")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/github")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/github" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveGitHubReadPlaneRequest(url2, env);
+      return handleRetrieveGitHubReadPlaneRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/cloudflare-pages")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/cloudflare-pages")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
         apiSuffix: "/retrieve/cloudflare-pages"
       });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveCloudflarePagesRequest(url2);
+      return handleRetrieveCloudflarePagesRequest(url);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/setup-artifact")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/setup-artifact")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/setup-artifact" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveCustomGptSetupArtifactRequest(url2, env);
+      return handleRetrieveCustomGptSetupArtifactRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/self-parity")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/self-parity")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/self-parity" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveButlerSelfParityRequest(url2, env);
+      return handleRetrieveButlerSelfParityRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/setup-diagnostics")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/setup-diagnostics")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/setup-diagnostics" });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
         });
       }
-      return handleRetrieveCustomGptSetupDiagnosticsRequest(url2, env);
+      return handleRetrieveCustomGptSetupDiagnosticsRequest(url, env);
     }
-    if (request.method === "GET" && isApiPath(url2.pathname, "/retrieve/repository-nicknames")) {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/repository-nicknames")) {
       const auth = authorizeGatewayRequest({
         request,
         env,
         apiSuffix: "/retrieve/repository-nicknames"
       });
       if (!auth.ok) {
-        return retrieveErrorJson(url2, auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -58966,17 +58966,17 @@ var runtime_default = {
     });
   }
 };
-async function handleRetrieveConstitutionRequest(url2, env) {
+async function handleRetrieveConstitutionRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return retrieveErrorJson(url2, 503, {
+    return retrieveErrorJson(url, 503, {
       ok: false,
       error: "memory_provider_unavailable",
       reason: "valid memory provider is required for constitution retrieval"
     });
   }
-  const limit = normalizeLimit7(url2.searchParams.get("limit"), 5);
+  const limit = normalizeLimit7(url.searchParams.get("limit"), 5);
   const records = await retrieveConstitution(provider, limit);
   return json(200, {
     ok: true,
@@ -58985,24 +58985,24 @@ async function handleRetrieveConstitutionRequest(url2, env) {
     records
   });
 }
-async function handleRetrieveDecisionLogsRequest(url2, env) {
+async function handleRetrieveDecisionLogsRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return retrieveErrorJson(url2, 503, {
+    return retrieveErrorJson(url, 503, {
       ok: false,
       error: "memory_provider_unavailable",
       reason: "valid memory provider is required for decision log retrieval"
     });
   }
-  const limit = normalizeLimit7(url2.searchParams.get("limit"), 5);
-  const relatedIssue = normalizeIssue6(url2.searchParams.get("relatedIssue"));
+  const limit = normalizeLimit7(url.searchParams.get("limit"), 5);
+  const relatedIssue = normalizeIssue6(url.searchParams.get("relatedIssue"));
   const retrieved = await retrieveDecisionLogReferences(provider, {
     limit,
     relatedIssue
   });
   if (!retrieved.ok) {
-    return retrieveErrorJson(url2, retrieved.status, {
+    return retrieveErrorJson(url, retrieved.status, {
       ok: false,
       error: retrieved.error ?? "memory_read_failed",
       reason: retrieved.reason
@@ -59015,24 +59015,24 @@ async function handleRetrieveDecisionLogsRequest(url2, env) {
     references: retrieved.references
   });
 }
-async function handleRetrieveProposalLogsRequest(url2, env) {
+async function handleRetrieveProposalLogsRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return retrieveErrorJson(url2, 503, {
+    return retrieveErrorJson(url, 503, {
       ok: false,
       error: "memory_provider_unavailable",
       reason: "valid memory provider is required for proposal log retrieval"
     });
   }
-  const limit = normalizeLimit7(url2.searchParams.get("limit"), 5);
-  const relatedIssue = normalizeIssue6(url2.searchParams.get("relatedIssue"));
+  const limit = normalizeLimit7(url.searchParams.get("limit"), 5);
+  const relatedIssue = normalizeIssue6(url.searchParams.get("relatedIssue"));
   const retrieved = await retrieveProposalLogReferences(provider, {
     limit,
     relatedIssue
   });
   if (!retrieved.ok) {
-    return retrieveErrorJson(url2, retrieved.status, {
+    return retrieveErrorJson(url, retrieved.status, {
       ok: false,
       error: retrieved.error ?? "memory_read_failed",
       reason: retrieved.reason
@@ -59045,16 +59045,16 @@ async function handleRetrieveProposalLogsRequest(url2, env) {
     references: retrieved.references
   });
 }
-async function handleRetrieveCrossIssueRequest(url2, env) {
+async function handleRetrieveCrossIssueRequest(url, env) {
   const provider = resolveMemoryProvider(env);
-  const phase = normalize7(url2.searchParams.get("phase")) || "execution";
-  const limit = normalizeLimit7(url2.searchParams.get("limit"), 5);
-  const relatedIssue = normalizeIssue6(url2.searchParams.get("relatedIssue"));
-  const issueNumber = normalizeIssue6(url2.searchParams.get("issueNumber"));
-  const issueTitle = normalizeText32(url2.searchParams.get("issueTitle"));
-  const issueUrl = normalizeText32(url2.searchParams.get("issueUrl"));
-  const queryText = normalizeText32(url2.searchParams.get("text")) || normalizeText32(url2.searchParams.get("q"));
-  const semanticEnabled = parseBooleanQueryParam(url2.searchParams.get("semantic"));
+  const phase = normalize7(url.searchParams.get("phase")) || "execution";
+  const limit = normalizeLimit7(url.searchParams.get("limit"), 5);
+  const relatedIssue = normalizeIssue6(url.searchParams.get("relatedIssue"));
+  const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
+  const issueTitle = normalizeText32(url.searchParams.get("issueTitle"));
+  const issueUrl = normalizeText32(url.searchParams.get("issueUrl"));
+  const queryText = normalizeText32(url.searchParams.get("text")) || normalizeText32(url.searchParams.get("q"));
+  const semanticEnabled = parseBooleanQueryParam(url.searchParams.get("semantic"));
   const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
     phase,
     limit,
@@ -59071,7 +59071,7 @@ async function handleRetrieveCrossIssueRequest(url2, env) {
     } : null
   });
   if (!retrieved.ok) {
-    return retrieveErrorJson(url2, retrieved.status ?? 503, {
+    return retrieveErrorJson(url, retrieved.status ?? 503, {
       ok: false,
       error: retrieved.error ?? "memory_read_failed",
       reason: retrieved.reason
@@ -59088,13 +59088,13 @@ async function handleRetrieveCrossIssueRequest(url2, env) {
     orderedReferences: retrieved.orderedReferences
   });
 }
-async function handleRetrieveOperationalMemoryRequest(url2, env) {
+async function handleRetrieveOperationalMemoryRequest(url, env) {
   const provider = resolveMemoryProvider(env);
-  const limit = normalizeLimit7(url2.searchParams.get("limit"), 8);
-  const queryText = normalizeText32(url2.searchParams.get("text")) || normalizeText32(url2.searchParams.get("q"));
-  const recordId = normalizeText32(url2.searchParams.get("recordId"));
-  const repository = normalizeText32(url2.searchParams.get("repository"));
-  const runtimeTruth = buildRetrieveRuntimeTruth(url2);
+  const limit = normalizeLimit7(url.searchParams.get("limit"), 8);
+  const queryText = normalizeText32(url.searchParams.get("text")) || normalizeText32(url.searchParams.get("q"));
+  const recordId = normalizeText32(url.searchParams.get("recordId"));
+  const repository = normalizeText32(url.searchParams.get("repository"));
+  const runtimeTruth = buildRetrieveRuntimeTruth(url);
   const retrieved = await retrieveOperationalMemory(provider, {
     text: queryText,
     recordId,
@@ -59103,7 +59103,7 @@ async function handleRetrieveOperationalMemoryRequest(url2, env) {
     runtimeTruth
   });
   if (!retrieved.ok) {
-    return retrieveErrorJson(url2, retrieved.status ?? 503, {
+    return retrieveErrorJson(url, retrieved.status ?? 503, {
       ok: false,
       error: retrieved.error ?? "operational_memory_read_failed",
       reason: retrieved.reason
@@ -59122,21 +59122,21 @@ async function handleRetrieveOperationalMemoryRequest(url2, env) {
     retrievalSignals: retrieved.retrievalSignals
   });
 }
-async function handleRetrieveStartupPreflightRequest(url2, env) {
-  const repository = normalizeText32(url2.searchParams.get("repository"));
+async function handleRetrieveStartupPreflightRequest(url, env) {
+  const repository = normalizeText32(url.searchParams.get("repository"));
   if (!repository) {
-    return retrieveErrorJson(url2, 422, {
+    return retrieveErrorJson(url, 422, {
       ok: false,
       error: "startup_preflight_request_invalid",
       reason: "repository is required",
       issues: ["repository is required"]
     });
   }
-  const ref = normalizeText32(url2.searchParams.get("ref")) || "main";
-  const issueNumber = normalizeIssue6(url2.searchParams.get("issueNumber"));
-  const phase = normalizeText32(url2.searchParams.get("phase")) || "execution";
-  const currentSurface = normalizeText32(url2.searchParams.get("currentSurface")) || "butler";
-  const queryText = normalizeText32(url2.searchParams.get("text")) || [
+  const ref = normalizeText32(url.searchParams.get("ref")) || "main";
+  const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
+  const phase = normalizeText32(url.searchParams.get("phase")) || "execution";
+  const currentSurface = normalizeText32(url.searchParams.get("currentSurface")) || "butler";
+  const queryText = normalizeText32(url.searchParams.get("text")) || [
     "VTDD startup preflight",
     "Butler-first",
     "iPhone iPad first",
@@ -59150,7 +59150,7 @@ async function handleRetrieveStartupPreflightRequest(url2, env) {
     phase,
     currentSurface,
     queryText,
-    runtimeOrigin: url2.origin,
+    runtimeOrigin: url.origin,
     env
   });
   return json(200, {
@@ -59712,19 +59712,19 @@ function compactExcerpt(value, maxLength = 400) {
   }
   return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
 }
-async function handleRetrieveApprovalGrantRequest(url2, env) {
+async function handleRetrieveApprovalGrantRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return retrieveErrorJson(url2, 503, {
+    return retrieveErrorJson(url, 503, {
       ok: false,
       error: "memory_provider_unavailable",
       reason: "valid memory provider is required for approval grant retrieval"
     });
   }
-  const approvalId = normalizeText32(url2.searchParams.get("approvalId"));
+  const approvalId = normalizeText32(url.searchParams.get("approvalId"));
   if (!approvalId) {
-    return retrieveErrorJson(url2, 422, {
+    return retrieveErrorJson(url, 422, {
       ok: false,
       error: "approval_id_required",
       reason: "approvalId query parameter is required"
@@ -59732,14 +59732,14 @@ async function handleRetrieveApprovalGrantRequest(url2, env) {
   }
   const record2 = await findApprovalRecordById(provider, approvalId);
   if (!record2 || normalizeText32(record2?.content?.kind) !== "passkey_grant") {
-    return retrieveErrorJson(url2, 404, {
+    return retrieveErrorJson(url, 404, {
       ok: false,
       error: "approval_grant_not_found",
       reason: "matching passkey approval grant was not found"
     });
   }
   if (isExpiredPasskeyEphemeralRecord(record2)) {
-    return retrieveErrorJson(url2, 410, {
+    return retrieveErrorJson(url, 410, {
       ok: false,
       error: "approval_grant_expired",
       reason: "approval grant is expired. Worker origin \u3067\u518D\u627F\u8A8D\u3057\u3066\u3001\u65B0\u3057\u3044 approvalGrantId \u3092\u53D6\u5F97\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
@@ -60137,22 +60137,22 @@ function normalizeRejectedReasons2(value) {
 function makeOperationalMemoryRecordId(record2) {
   return `mem_${crypto.randomUUID()}`;
 }
-async function handleRetrieveGitHubReadPlaneRequest(url2, env) {
+async function handleRetrieveGitHubReadPlaneRequest(url, env) {
   const retrieved = await retrieveGitHubReadPlane({
-    resource: url2.searchParams.get("resource"),
-    repository: url2.searchParams.get("repository"),
-    issueNumber: url2.searchParams.get("issueNumber"),
-    pullNumber: url2.searchParams.get("pullNumber"),
-    branch: url2.searchParams.get("branch"),
-    ref: url2.searchParams.get("ref"),
-    path: url2.searchParams.get("path"),
-    runId: url2.searchParams.get("runId"),
-    state: url2.searchParams.get("state"),
-    limit: url2.searchParams.get("limit"),
+    resource: url.searchParams.get("resource"),
+    repository: url.searchParams.get("repository"),
+    issueNumber: url.searchParams.get("issueNumber"),
+    pullNumber: url.searchParams.get("pullNumber"),
+    branch: url.searchParams.get("branch"),
+    ref: url.searchParams.get("ref"),
+    path: url.searchParams.get("path"),
+    runId: url.searchParams.get("runId"),
+    state: url.searchParams.get("state"),
+    limit: url.searchParams.get("limit"),
     env
   });
   if (!retrieved.ok) {
-    return retrieveErrorJson(url2, retrieved.status ?? 503, {
+    return retrieveErrorJson(url, retrieved.status ?? 503, {
       ok: false,
       error: retrieved.error ?? "github_read_failed",
       reason: retrieved.reason,
@@ -60164,15 +60164,15 @@ async function handleRetrieveGitHubReadPlaneRequest(url2, env) {
     read: retrieved.read
   });
 }
-async function handleRetrieveCustomGptSetupArtifactRequest(url2, env) {
+async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
   const retrieved = await retrieveCustomGptSetupArtifact({
-    artifact: normalizeText32(url2.searchParams.get("artifact")),
-    repository: normalizeText32(url2.searchParams.get("repository")),
-    ref: normalizeText32(url2.searchParams.get("ref")),
+    artifact: normalizeText32(url.searchParams.get("artifact")),
+    repository: normalizeText32(url.searchParams.get("repository")),
+    ref: normalizeText32(url.searchParams.get("ref")),
     env
   });
   if (!retrieved.ok) {
-    return retrieveErrorJson(url2, retrieved.status ?? 503, {
+    return retrieveErrorJson(url, retrieved.status ?? 503, {
       ok: false,
       error: retrieved.error ?? "custom_gpt_setup_artifact_unavailable",
       reason: retrieved.reason,
@@ -60184,20 +60184,20 @@ async function handleRetrieveCustomGptSetupArtifactRequest(url2, env) {
     artifact: retrieved.artifact
   });
 }
-function handleRetrieveCloudflarePagesRequest(url2) {
-  return json(200, buildVtddCloudflarePageDirectory({ runtimeOrigin: url2.origin }));
+function handleRetrieveCloudflarePagesRequest(url) {
+  return json(200, buildVtddCloudflarePageDirectory({ runtimeOrigin: url.origin }));
 }
-async function handleRetrieveButlerSelfParityRequest(url2, env) {
+async function handleRetrieveButlerSelfParityRequest(url, env) {
   const parity = await evaluateButlerSelfParity({
-    repository: normalizeText32(url2.searchParams.get("repository")),
-    ref: normalizeText32(url2.searchParams.get("ref")),
-    issueNumber: normalizeIssue6(url2.searchParams.get("issueNumber")),
-    pullNumber: normalizeIssue6(url2.searchParams.get("pullNumber")),
-    runtimeOrigin: url2.origin,
+    repository: normalizeText32(url.searchParams.get("repository")),
+    ref: normalizeText32(url.searchParams.get("ref")),
+    issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
+    pullNumber: normalizeIssue6(url.searchParams.get("pullNumber")),
+    runtimeOrigin: url.origin,
     env
   });
   if (!parity.ok) {
-    return retrieveErrorJson(url2, parity.status ?? 503, {
+    return retrieveErrorJson(url, parity.status ?? 503, {
       ok: false,
       error: parity.error ?? "custom_gpt_self_parity_unavailable",
       reason: parity.reason
@@ -60208,17 +60208,17 @@ async function handleRetrieveButlerSelfParityRequest(url2, env) {
     selfParity: parity.selfParity
   });
 }
-async function handleRetrieveCustomGptSetupDiagnosticsRequest(url2, env) {
+async function handleRetrieveCustomGptSetupDiagnosticsRequest(url, env) {
   const result = await evaluateCustomGptSetupDiagnostics({
-    repository: normalizeText32(url2.searchParams.get("repository")),
-    ref: normalizeText32(url2.searchParams.get("ref")),
-    issueNumber: normalizeIssue6(url2.searchParams.get("issueNumber")),
-    runtimeOrigin: url2.origin,
-    observedFailure: readObservedSetupFailureFromUrl(url2),
+    repository: normalizeText32(url.searchParams.get("repository")),
+    ref: normalizeText32(url.searchParams.get("ref")),
+    issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
+    runtimeOrigin: url.origin,
+    observedFailure: readObservedSetupFailureFromUrl(url),
     env
   });
   if (!result.ok) {
-    return retrieveErrorJson(url2, result.status ?? 503, {
+    return retrieveErrorJson(url, result.status ?? 503, {
       ok: false,
       error: result.error ?? "custom_gpt_setup_diagnostics_unavailable",
       reason: result.reason
@@ -60229,16 +60229,16 @@ async function handleRetrieveCustomGptSetupDiagnosticsRequest(url2, env) {
     diagnostics: result.diagnostics
   });
 }
-async function handleCustomGptSetupDiagnosticsPageRequest(url2, env) {
-  const repository = normalizeText32(url2.searchParams.get("repository")) || "marushu/vtdd-v2-p";
-  const ref = normalizeText32(url2.searchParams.get("ref")) || "main";
-  const issueNumber = normalizeIssue6(url2.searchParams.get("issueNumber"));
+async function handleCustomGptSetupDiagnosticsPageRequest(url, env) {
+  const repository = normalizeText32(url.searchParams.get("repository")) || "marushu/vtdd-v2-p";
+  const ref = normalizeText32(url.searchParams.get("ref")) || "main";
+  const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
   const result = await evaluateCustomGptSetupDiagnostics({
     repository,
     ref,
     issueNumber,
-    runtimeOrigin: url2.origin,
-    observedFailure: readObservedSetupFailureFromUrl(url2),
+    runtimeOrigin: url.origin,
+    observedFailure: readObservedSetupFailureFromUrl(url),
     env
   });
   return html(
@@ -60277,7 +60277,7 @@ async function handleRetrieveRepositoryNicknamesRequest(env) {
     aliasRegistry: retrieved.aliasRegistry
   });
 }
-async function handleMcpRequest({ request, env, url: url2 }) {
+async function handleMcpRequest({ request, env, url }) {
   if (request.method === "GET") {
     return json(
       405,
@@ -60286,7 +60286,7 @@ async function handleMcpRequest({ request, env, url: url2 }) {
         error: "mcp_post_required",
         reason: "VTDD MCP endpoint requires MCP JSON-RPC POST requests. This stateless read surface does not expose an SSE GET stream.",
         protectedResourceMetadataUrl: buildRuntimeUrl2(
-          url2.origin,
+          url.origin,
           MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH
         )
       },
@@ -60296,7 +60296,7 @@ async function handleMcpRequest({ request, env, url: url2 }) {
       }
     );
   }
-  const server = createVtddMcpServer({ env, runtimeOrigin: url2.origin });
+  const server = createVtddMcpServer({ env, runtimeOrigin: url.origin });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: void 0,
     enableJsonResponse: true
@@ -60898,21 +60898,21 @@ async function responseToMcpToolResult(response) {
     value: body
   };
 }
-function buildMcpProtectedResourceMetadata(url2) {
-  const resource = buildRuntimeUrl2(url2.origin, MCP_PATH);
+function buildMcpProtectedResourceMetadata(url) {
+  const resource = buildRuntimeUrl2(url.origin, MCP_PATH);
   return {
     resource,
     resource_name: "VTDD MCP",
-    resource_documentation: buildRuntimeUrl2(url2.origin, "/help#paths"),
+    resource_documentation: buildRuntimeUrl2(url.origin, "/help#paths"),
     bearer_methods_supported: ["header"],
     scopes_supported: ["vtdd:mcp:read"]
   };
 }
-function buildMcpUnauthorizedHeaders(url2, baseHeaders = {}) {
+function buildMcpUnauthorizedHeaders(url, baseHeaders = {}) {
   return {
     ...baseHeaders,
     "www-authenticate": `Bearer realm="vtdd-mcp", resource_metadata="${buildRuntimeUrl2(
-      url2.origin,
+      url.origin,
       MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH
     )}"`,
     "mcp-protocol-version": MCP_PROTOCOL_VERSION
@@ -60995,8 +60995,8 @@ function wantsActionVisibleGitHubWriteErrors(payload) {
   const responseMode = normalizeText32(payload?.responseMode);
   return responseMode === "action_visible";
 }
-function retrieveErrorJson(url2, status, body = {}) {
-  if (!wantsActionVisibleRetrieveErrors(url2)) {
+function retrieveErrorJson(url, status, body = {}) {
+  if (!wantsActionVisibleRetrieveErrors(url)) {
     return json(status, body);
   }
   return json(200, {
@@ -61006,14 +61006,14 @@ function retrieveErrorJson(url2, status, body = {}) {
     reason: normalizeText32(body.reason) || null,
     issues: Array.isArray(body.issues) ? body.issues : [],
     diagnostics: {
-      route: normalizeText32(url2?.pathname) || null,
+      route: normalizeText32(url?.pathname) || null,
       responseMode: "action_visible",
       rootCause: "Custom GPT Action test screen can surface non-2xx retrieve responses as ClientResponseError; this envelope preserves error/reason/issues for debugging."
     }
   });
 }
-function wantsActionVisibleRetrieveErrors(url2) {
-  const responseMode = normalizeText32(url2?.searchParams?.get("responseMode"));
+function wantsActionVisibleRetrieveErrors(url) {
+  const responseMode = normalizeText32(url?.searchParams?.get("responseMode"));
   return responseMode === "action_visible";
 }
 function validateConsistentIssueScope({ payload, issueContext }) {
@@ -61354,12 +61354,12 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
       reason: "valid memory provider is required for VPS maintenance approval proposals"
     });
   }
-  const url2 = new URL(request.url);
+  const url = new URL(request.url);
   const payload = await readJson(request);
   const result = await createVpsPrivilegedMaintenanceProposal({
     payload,
     provider,
-    origin: url2.origin
+    origin: url.origin
   });
   return json(result.status, result.body);
 }
@@ -61529,23 +61529,23 @@ function createVpsMaintenanceApprovalProposalRecord({ vpsProposalId, proposal, a
   });
 }
 function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProposalId, dashboardThreadId, executionId }) {
-  const url2 = new URL("/v2/approval/passkey/operator", `${origin}/`);
-  url2.searchParams.set("mode", "vps");
-  url2.searchParams.set("vpsProposalId", vpsProposalId);
-  url2.searchParams.set("repositoryInput", approvalScope.repositoryInput);
-  url2.searchParams.set("issueNumber", approvalScope.relatedIssue);
-  url2.searchParams.set("phase", approvalScope.phase || "execution");
-  url2.searchParams.set("actionType", approvalScope.actionType);
-  url2.searchParams.set("highRiskKind", approvalScope.highRiskKind);
+  const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
+  url.searchParams.set("mode", "vps");
+  url.searchParams.set("vpsProposalId", vpsProposalId);
+  url.searchParams.set("repositoryInput", approvalScope.repositoryInput);
+  url.searchParams.set("issueNumber", approvalScope.relatedIssue);
+  url.searchParams.set("phase", approvalScope.phase || "execution");
+  url.searchParams.set("actionType", approvalScope.actionType);
+  url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
   const normalizedThreadId = normalizeDashboardThreadId(dashboardThreadId);
   if (normalizedThreadId) {
-    url2.searchParams.set("dashboardThreadId", normalizedThreadId);
+    url.searchParams.set("dashboardThreadId", normalizedThreadId);
   }
   const normalizedExecutionId = normalizeText32(executionId);
   if (normalizedExecutionId) {
-    url2.searchParams.set("executionId", normalizedExecutionId);
+    url.searchParams.set("executionId", normalizedExecutionId);
   }
-  return url2.href;
+  return url.href;
 }
 function normalizeVpsMaintenanceProposalExpiresAt(value, now = /* @__PURE__ */ new Date()) {
   const normalized = normalizeText32(value);
@@ -62052,25 +62052,25 @@ function normalizeGitHubLogin(value) {
   const login = normalizeText32(value);
   return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login) ? login : "";
 }
-async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url2) {
+async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
   const inventory = buildVpsPrivilegedMaintenanceInstallInventory({
-    host: url2.searchParams.get("host"),
-    repository: url2.searchParams.get("repository"),
-    helperPath: url2.searchParams.get("helperPath"),
-    manifestPath: url2.searchParams.get("manifestPath"),
-    sudoersPath: url2.searchParams.get("sudoersPath"),
-    runnerUser: url2.searchParams.get("runnerUser"),
-    helperInstalled: url2.searchParams.get("helperInstalled"),
-    manifestInstalled: url2.searchParams.get("manifestInstalled"),
-    sudoersInstalled: url2.searchParams.get("sudoersInstalled"),
-    helperOwner: url2.searchParams.get("helperOwner"),
-    manifestOwner: url2.searchParams.get("manifestOwner"),
-    sudoersOwner: url2.searchParams.get("sudoersOwner"),
-    sudoersAllowsAll: url2.searchParams.get("sudoersAllowsAll"),
-    sudoersScopedHelperEntry: url2.searchParams.get("sudoersScopedHelperEntry")
+    host: url.searchParams.get("host"),
+    repository: url.searchParams.get("repository"),
+    helperPath: url.searchParams.get("helperPath"),
+    manifestPath: url.searchParams.get("manifestPath"),
+    sudoersPath: url.searchParams.get("sudoersPath"),
+    runnerUser: url.searchParams.get("runnerUser"),
+    helperInstalled: url.searchParams.get("helperInstalled"),
+    manifestInstalled: url.searchParams.get("manifestInstalled"),
+    sudoersInstalled: url.searchParams.get("sudoersInstalled"),
+    helperOwner: url.searchParams.get("helperOwner"),
+    manifestOwner: url.searchParams.get("manifestOwner"),
+    sudoersOwner: url.searchParams.get("sudoersOwner"),
+    sudoersAllowsAll: url.searchParams.get("sudoersAllowsAll"),
+    sudoersScopedHelperEntry: url.searchParams.get("sudoersScopedHelperEntry")
   });
   if (!inventory.ok) {
-    return retrieveErrorJson(url2, 422, {
+    return retrieveErrorJson(url, 422, {
       error: "vps_maintenance_install_inventory_invalid",
       reason: "VPS maintenance install inventory query is invalid",
       issues: inventory.issues
@@ -62352,7 +62352,7 @@ async function handleMediaObjectRequest(request, env, mediaRoute) {
     }
   });
 }
-async function handleMediaSearchRequest(request, url2, env) {
+async function handleMediaSearchRequest(request, url, env) {
   const dashboardAuth = await authorizeDashboardRequest({
     request,
     env,
@@ -62373,7 +62373,7 @@ async function handleMediaSearchRequest(request, url2, env) {
       reason: "D1 media metadata store is not configured"
     });
   }
-  const repository = normalizeCanonicalRepositoryInput(url2.searchParams.get("repository"));
+  const repository = normalizeCanonicalRepositoryInput(url.searchParams.get("repository"));
   if (!repository) {
     return json(422, {
       ok: false,
@@ -62383,9 +62383,9 @@ async function handleMediaSearchRequest(request, url2, env) {
   }
   const records = await store.search({
     repository,
-    relatedIssue: url2.searchParams.get("relatedIssue") || url2.searchParams.get("issueNumber"),
-    relatedPr: url2.searchParams.get("relatedPr") || url2.searchParams.get("pullRequestNumber"),
-    limit: url2.searchParams.get("limit")
+    relatedIssue: url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"),
+    relatedPr: url.searchParams.get("relatedPr") || url.searchParams.get("pullRequestNumber"),
+    limit: url.searchParams.get("limit")
   });
   return json(200, {
     ok: true,
@@ -62406,10 +62406,10 @@ async function handleMediaDeleteRequest(request, env, mediaRoute) {
       reason: dashboardAuth.reason
     });
   }
-  const url2 = new URL(request.url);
-  const cleanup = normalizeDashboardEventText(url2.searchParams.get("cleanup"));
+  const url = new URL(request.url);
+  const cleanup = normalizeDashboardEventText(url.searchParams.get("cleanup"));
   if (cleanup === "abandoned_send") {
-    return handleAbandonedMediaSendRollback({ env, mediaRoute, url: url2 });
+    return handleAbandonedMediaSendRollback({ env, mediaRoute, url });
   }
   return json(403, {
     ok: false,
@@ -62418,7 +62418,7 @@ async function handleMediaDeleteRequest(request, env, mediaRoute) {
     mediaId: mediaRoute.id
   });
 }
-async function handleAbandonedMediaSendRollback({ env, mediaRoute, url: url2 }) {
+async function handleAbandonedMediaSendRollback({ env, mediaRoute, url }) {
   const store = resolveMediaObjectStore(env);
   if (!store || typeof store.get !== "function" || typeof store.delete !== "function") {
     return json(503, {
@@ -62443,9 +62443,9 @@ async function handleAbandonedMediaSendRollback({ env, mediaRoute, url: url2 }) 
       reason: "media object was not found"
     });
   }
-  const repository = normalizeCanonicalRepositoryInput(url2.searchParams.get("repository"));
-  const relatedIssue = normalizePositiveInteger10(url2.searchParams.get("relatedIssue") || url2.searchParams.get("issueNumber"));
-  const requestedSourceEventId = sanitizeDashboardChatText(url2.searchParams.get("sourceEventId") || url2.searchParams.get("source_event_id"));
+  const repository = normalizeCanonicalRepositoryInput(url.searchParams.get("repository"));
+  const relatedIssue = normalizePositiveInteger10(url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"));
+  const requestedSourceEventId = sanitizeDashboardChatText(url.searchParams.get("sourceEventId") || url.searchParams.get("source_event_id"));
   const sourceEventId = normalizeDashboardEventText(record2.sourceEventId);
   const repositoryScopeMatches = record2.repository ? Boolean(repository) && record2.repository === repository : !repository;
   const isRollbackScoped = record2.visibility === "private" && record2.sourceSurface === "dashboard_butler" && sourceEventId.startsWith("dashboard_owner_message:") && requestedSourceEventId === sourceEventId && repositoryScopeMatches && (!relatedIssue || record2.relatedIssue === relatedIssue);
@@ -62731,7 +62731,7 @@ function isSupportedDashboardPushAckSourceEventId(value) {
   const text = normalizeText32(value);
   return text.startsWith("github-actions:") || text.startsWith("vps-runner:") || text.startsWith("ai-news:") || text.startsWith("owner-action-required:") || text.startsWith("dashboard-push-test:");
 }
-async function handleDashboardChatSocketRequest(request, url2, env) {
+async function handleDashboardChatSocketRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
     env,
@@ -62744,7 +62744,7 @@ async function handleDashboardChatSocketRequest(request, url2, env) {
       reason: auth.reason
     });
   }
-  const threadId = extractDashboardChatSocketThreadId(url2.pathname);
+  const threadId = extractDashboardChatSocketThreadId(url.pathname);
   if (!threadId) {
     return json(422, {
       ok: false,
@@ -62769,7 +62769,7 @@ async function handleDashboardChatSocketRequest(request, url2, env) {
   }
   return room.fetch(request);
 }
-async function handleDashboardAppServerBridgeSocketRequest(request, url2, env) {
+async function handleDashboardAppServerBridgeSocketRequest(request, url, env) {
   const auth = authorizeDashboardAppServerBridgeRequest({
     request,
     env,
@@ -62782,7 +62782,7 @@ async function handleDashboardAppServerBridgeSocketRequest(request, url2, env) {
       reason: auth.reason
     });
   }
-  const threadId = normalizeDashboardThreadId(url2.searchParams.get("threadId") || url2.searchParams.get("thread_id"));
+  const threadId = normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id"));
   const room = resolveDashboardChatRoomStub(env, threadId || "dashboard-app-server-bridge");
   if (!room) {
     return json(503, {
@@ -62816,7 +62816,7 @@ function authorizeDashboardAppServerBridgeRequest({ request, env, apiSuffix }) {
   }
   return direct;
 }
-async function handleDashboardChatThreadRequest(request, url2, env) {
+async function handleDashboardChatThreadRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
     env,
@@ -62829,7 +62829,7 @@ async function handleDashboardChatThreadRequest(request, url2, env) {
       reason: auth.reason
     });
   }
-  const threadId = extractDashboardChatThreadId(url2.pathname);
+  const threadId = extractDashboardChatThreadId(url.pathname);
   if (!threadId) {
     return json(422, {
       ok: false,
@@ -62846,7 +62846,7 @@ async function handleDashboardChatThreadRequest(request, url2, env) {
     });
   }
   const messages = await store.listThread(threadId, {
-    limit: normalizeLimit7(url2.searchParams.get("limit"), 80)
+    limit: normalizeLimit7(url.searchParams.get("limit"), 80)
   });
   const summary = typeof store.getSummary === "function" ? await store.getSummary(threadId) : null;
   return json(200, {
@@ -62856,7 +62856,7 @@ async function handleDashboardChatThreadRequest(request, url2, env) {
     summary
   });
 }
-async function handleDashboardChatSearchRequest(request, url2, env) {
+async function handleDashboardChatSearchRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
     env,
@@ -62878,17 +62878,17 @@ async function handleDashboardChatSearchRequest(request, url2, env) {
     });
   }
   const results = await store.search({
-    text: url2.searchParams.get("text") || url2.searchParams.get("q"),
-    repository: url2.searchParams.get("repository"),
-    relatedIssue: url2.searchParams.get("relatedIssue") || url2.searchParams.get("issueNumber"),
-    limit: normalizeLimit7(url2.searchParams.get("limit"), 20)
+    text: url.searchParams.get("text") || url.searchParams.get("q"),
+    repository: url.searchParams.get("repository"),
+    relatedIssue: url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"),
+    limit: normalizeLimit7(url.searchParams.get("limit"), 20)
   });
   return json(200, {
     ok: true,
     results
   });
 }
-async function handleDashboardChatSummaryRequest(request, url2, env) {
+async function handleDashboardChatSummaryRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
     env,
@@ -62901,7 +62901,7 @@ async function handleDashboardChatSummaryRequest(request, url2, env) {
       reason: auth.reason
     });
   }
-  const threadId = extractDashboardChatSummaryThreadId(url2.pathname);
+  const threadId = extractDashboardChatSummaryThreadId(url.pathname);
   if (!threadId) {
     return json(422, {
       ok: false,
@@ -63087,7 +63087,7 @@ async function handleGitHubActionsVariableSyncRequest(request, env) {
     }
   });
 }
-async function handleGitHubActionsVariableSyncProposalRequest(request, url2, env) {
+async function handleGitHubActionsVariableSyncProposalRequest(request, url, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
@@ -63100,7 +63100,7 @@ async function handleGitHubActionsVariableSyncProposalRequest(request, url2, env
   const payload = await readJson(request);
   const proposal = buildGitHubActionsVariableSyncProposal({
     payload,
-    origin: url2.origin
+    origin: url.origin
   });
   if (!proposal.ok) {
     return json(422, {
@@ -63206,17 +63206,17 @@ function createGitHubActionsVariableSyncProposalRecord(proposal) {
   }).record;
 }
 function buildGitHubActionsVariableSyncApprovalOperatorUrl({ origin, approvalScope, variableProposalId }) {
-  const url2 = new URL("/v2/approval/passkey/operator", `${origin || "https://example.com"}/`);
-  url2.searchParams.set("mode", "github_actions_variable_sync");
-  url2.searchParams.set("variableProposalId", variableProposalId);
-  url2.searchParams.set("repositoryInput", approvalScope.repositoryInput);
+  const url = new URL("/v2/approval/passkey/operator", `${origin || "https://example.com"}/`);
+  url.searchParams.set("mode", "github_actions_variable_sync");
+  url.searchParams.set("variableProposalId", variableProposalId);
+  url.searchParams.set("repositoryInput", approvalScope.repositoryInput);
   if (approvalScope.relatedIssue) {
-    url2.searchParams.set("issueNumber", approvalScope.relatedIssue);
+    url.searchParams.set("issueNumber", approvalScope.relatedIssue);
   }
-  url2.searchParams.set("phase", approvalScope.phase || "execution");
-  url2.searchParams.set("actionType", approvalScope.actionType);
-  url2.searchParams.set("highRiskKind", approvalScope.highRiskKind);
-  return url2.href;
+  url.searchParams.set("phase", approvalScope.phase || "execution");
+  url.searchParams.set("actionType", approvalScope.actionType);
+  url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
+  return url.href;
 }
 async function resolveGitHubActionsVariableSyncProposal({ provider, proposalId }) {
   const id = normalizeText32(proposalId);
@@ -63308,21 +63308,21 @@ async function recordGitHubActionsVariableSyncNotification({ ownerAction, env } 
     pwaNotificationDelivered: eventWithNotificationTruth.pwaNotificationDelivered
   };
 }
-async function handleCustomGptRecoveryPageRequest(url2, env) {
-  const channel = url2.pathname === "/setup/known-good" ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
-  const ref = normalizeText32(url2.searchParams.get("ref")) || "main";
-  const issueNumber = normalizeIssue6(url2.searchParams.get("issueNumber"));
+async function handleCustomGptRecoveryPageRequest(url, env) {
+  const channel = url.pathname === "/setup/known-good" ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
+  const ref = normalizeText32(url.searchParams.get("ref")) || "main";
+  const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
   const bundle = await buildCustomGptRecoveryBundle({
     channel,
     ref,
     issueNumber,
-    runtimeOrigin: url2.origin,
+    runtimeOrigin: url.origin,
     env
   });
   return html(
     200,
     renderCustomGptRecoveryPage({
-      runtimeOrigin: url2.origin,
+      runtimeOrigin: url.origin,
       channel,
       ref,
       issueNumber,
@@ -63336,49 +63336,49 @@ async function handleCustomGptRecoveryPageRequest(url2, env) {
   );
 }
 async function handlePasskeyOperatorPageRequest(request, env) {
-  const url2 = new URL(request.url);
-  const syncApiBase = normalizeOptionalHttpUrl(url2.searchParams.get("syncApiBase"));
+  const url = new URL(request.url);
+  const syncApiBase = normalizeOptionalHttpUrl(url.searchParams.get("syncApiBase"));
   const syncEnabled = Boolean(syncApiBase);
-  const requestedActionType = url2.searchParams.get("actionType");
-  const requestedHighRiskKind = url2.searchParams.get("highRiskKind");
-  const requestedOperatorMode = url2.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
+  const requestedActionType = url.searchParams.get("actionType");
+  const requestedHighRiskKind = url.searchParams.get("highRiskKind");
+  const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
   const dashboardSessionMode = normalizeText32(requestedOperatorMode) === "dashboard";
   const vpsProposal = await retrieveVpsMaintenanceApprovalProposalForOperator({
     provider: resolveMemoryProvider(env),
-    proposalId: url2.searchParams.get("vpsProposalId")
+    proposalId: url.searchParams.get("vpsProposalId")
   });
   const githubActionsVariableProposal = await retrieveGitHubActionsVariableSyncProposalForOperator({
     provider: resolveMemoryProvider(env),
-    proposalId: url2.searchParams.get("variableProposalId")
+    proposalId: url.searchParams.get("variableProposalId")
   });
   const vpsScope = vpsProposal?.content?.approvalScope ?? {};
   const githubActionsVariableScope = githubActionsVariableProposal?.content?.approvalScope ?? {};
   const html2 = renderPasskeyOperatorPage({
-    origin: url2.origin,
+    origin: url.origin,
     syncApiBase,
     operatorMode: requestedOperatorMode,
-    repositoryInput: dashboardSessionMode ? "" : url2.searchParams.get("repositoryInput"),
-    issueNumber: dashboardSessionMode ? "" : url2.searchParams.get("issueNumber"),
-    pullNumber: dashboardSessionMode ? "" : url2.searchParams.get("pullNumber"),
-    phase: url2.searchParams.get("phase") || "execution",
+    repositoryInput: dashboardSessionMode ? "" : url.searchParams.get("repositoryInput"),
+    issueNumber: dashboardSessionMode ? "" : url.searchParams.get("issueNumber"),
+    pullNumber: dashboardSessionMode ? "" : url.searchParams.get("pullNumber"),
+    phase: url.searchParams.get("phase") || "execution",
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
-    mergeMethod: url2.searchParams.get("mergeMethod") || "squash",
-    vpsProposalId: url2.searchParams.get("vpsProposalId"),
+    mergeMethod: url.searchParams.get("mergeMethod") || "squash",
+    vpsProposalId: url.searchParams.get("vpsProposalId"),
     vpsHost: vpsScope.vpsHost || vpsScope.display?.host || "",
     vpsOperation: vpsScope.vpsOperation || vpsScope.display?.operation || "",
     vpsCapabilityId: vpsScope.vpsCapabilityId || vpsScope.display?.capabilityId || "",
     vpsImpactScope: vpsScope.vpsImpactScope || vpsScope.display?.impactScope || "",
     vpsExpiresAt: vpsScope.vpsExpiresAt || vpsScope.display?.expiresAt || "",
-    vpsDashboardThreadId: url2.searchParams.get("dashboardThreadId") || url2.searchParams.get("threadId"),
-    vpsExecutionId: url2.searchParams.get("executionId"),
-    githubActionsVariableProposalId: url2.searchParams.get("variableProposalId"),
+    vpsDashboardThreadId: url.searchParams.get("dashboardThreadId") || url.searchParams.get("threadId"),
+    vpsExecutionId: url.searchParams.get("executionId"),
+    githubActionsVariableProposalId: url.searchParams.get("variableProposalId"),
     githubActionsVariableProposalName: githubActionsVariableScope.variableName || githubActionsVariableProposal?.content?.variableName || "",
-    returnUrl: normalizeOperatorReturnUrl(url2.searchParams.get("returnUrl")),
-    dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url2.searchParams.get("dashboardReturnPath")),
-    operatorId: url2.searchParams.get("operatorId") || "vtdd-operator",
-    operatorLabel: url2.searchParams.get("operatorLabel") || "VTDD Operator",
-    githubAppRole: url2.searchParams.get("githubAppRole") || "legacy",
+    returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
+    dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
+    operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
+    operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
+    githubAppRole: url.searchParams.get("githubAppRole") || "legacy",
     syncEnabled,
     syncMessage: syncEnabled ? "approvalGrantId \u304C\u53D6\u5F97\u6E08\u307F\u306A\u3089\u5B9F\u884C\u3067\u304D\u307E\u3059\u3002desktop helper bridge \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002" : "desktop maintenance required: local secret sync bridge \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002"
   });
@@ -63411,11 +63411,11 @@ function normalizeOptionalHttpUrl(value) {
     return "";
   }
   try {
-    const url2 = new URL(text);
-    if (url2.protocol !== "http:" && url2.protocol !== "https:") {
+    const url = new URL(text);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
       return "";
     }
-    return url2.href.replace(/\/$/, "");
+    return url.href.replace(/\/$/, "");
   } catch {
     return "";
   }
@@ -63426,15 +63426,15 @@ function normalizeOperatorReturnUrl(value) {
     return "";
   }
   try {
-    const url2 = new URL(text);
-    if (url2.protocol !== "https:") {
+    const url = new URL(text);
+    if (url.protocol !== "https:") {
       return "";
     }
-    const hostname = url2.hostname.toLowerCase();
+    const hostname = url.hostname.toLowerCase();
     if (hostname !== "chatgpt.com" && hostname !== "chat.openai.com") {
       return "";
     }
-    return url2.href;
+    return url.href;
   } catch {
     return "";
   }
@@ -64771,10 +64771,10 @@ function parseBooleanQueryParam(value) {
   const normalized = normalize7(value);
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
-function buildRetrieveRuntimeTruth(url2) {
-  const currentState = normalizeText32(url2.searchParams.get("currentState"));
-  const source = normalizeText32(url2.searchParams.get("runtimeTruthSource"));
-  const checkedAt = normalizeText32(url2.searchParams.get("checkedAt"));
+function buildRetrieveRuntimeTruth(url) {
+  const currentState = normalizeText32(url.searchParams.get("currentState"));
+  const source = normalizeText32(url.searchParams.get("runtimeTruthSource"));
+  const checkedAt = normalizeText32(url.searchParams.get("checkedAt"));
   if (!currentState && !source && !checkedAt) {
     return null;
   }
@@ -68200,14 +68200,14 @@ function normalizeIssue6(value) {
   }
   return numeric;
 }
-function readObservedSetupFailureFromUrl(url2) {
+function readObservedSetupFailureFromUrl(url) {
   return {
-    actionName: normalizeText32(url2.searchParams.get("actionName")),
-    httpStatus: normalizeIssue6(url2.searchParams.get("httpStatus")),
-    error: normalizeText32(url2.searchParams.get("error")),
-    reason: normalizeText32(url2.searchParams.get("reason")),
-    visibleBodyFields: normalizeText32(url2.searchParams.get("visibleBodyFields")),
-    missingBodyFields: normalizeText32(url2.searchParams.get("missingBodyFields"))
+    actionName: normalizeText32(url.searchParams.get("actionName")),
+    httpStatus: normalizeIssue6(url.searchParams.get("httpStatus")),
+    error: normalizeText32(url.searchParams.get("error")),
+    reason: normalizeText32(url.searchParams.get("reason")),
+    visibleBodyFields: normalizeText32(url.searchParams.get("visibleBodyFields")),
+    missingBodyFields: normalizeText32(url.searchParams.get("missingBodyFields"))
   };
 }
 function normalizeObject12(value) {
@@ -68560,11 +68560,11 @@ function normalizeDashboardUrl(value) {
     return "";
   }
   try {
-    const url2 = new URL(text);
-    if (url2.protocol !== "https:" && url2.protocol !== "http:") {
+    const url = new URL(text);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
       return "";
     }
-    return url2.toString();
+    return url.toString();
   } catch {
     return "";
   }
@@ -68854,9 +68854,9 @@ function formatDashboardRelativeTime(value, now = /* @__PURE__ */ new Date()) {
   }
   return `${Math.floor(months / 12)}\u5E74\u524D`;
 }
-async function renderDashboardGitHubTruthPage({ url: url2, env } = {}) {
-  const origin = normalize7(url2?.origin);
-  const repository = normalizeCanonicalRepositoryInput(url2?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+async function renderDashboardGitHubTruthPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const [issues, pulls, workflowRuns] = await Promise.all([
     retrieveGitHubReadPlane({
       resource: "issues",
@@ -68897,15 +68897,15 @@ async function renderDashboardGitHubTruthPage({ url: url2, env } = {}) {
     `
   });
 }
-async function renderDashboardPreflightPage({ url: url2, env } = {}) {
-  const origin = normalize7(url2?.origin);
-  const repository = normalizeCanonicalRepositoryInput(url2?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
-  const issueNumber = normalizeIssue6(url2?.searchParams?.get("issueNumber"));
-  const phase = normalizeText32(url2?.searchParams?.get("phase")) || "execution";
-  const currentSurface = normalizeText32(url2?.searchParams?.get("currentSurface")) || "dashboard";
+async function renderDashboardPreflightPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const issueNumber = normalizeIssue6(url?.searchParams?.get("issueNumber"));
+  const phase = normalizeText32(url?.searchParams?.get("phase")) || "execution";
+  const currentSurface = normalizeText32(url?.searchParams?.get("currentSurface")) || "dashboard";
   const startupPreflight = await buildStartupPreflight({
     repository,
-    ref: normalizeText32(url2?.searchParams?.get("ref")) || "main",
+    ref: normalizeText32(url?.searchParams?.get("ref")) || "main",
     issueNumber,
     phase,
     currentSurface,
@@ -68938,15 +68938,15 @@ async function renderDashboardPreflightPage({ url: url2, env } = {}) {
     `
   });
 }
-async function renderDashboardProgressPage({ url: url2, env } = {}) {
-  const origin = normalize7(url2?.origin);
-  const repository = normalizeCanonicalRepositoryInput(url2?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+async function renderDashboardProgressPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const progress = await retrieveRemoteCodexExecutionProgress({
-    executionId: url2.searchParams.get("executionId"),
+    executionId: url.searchParams.get("executionId"),
     repository,
-    issueNumber: url2.searchParams.get("issueNumber"),
-    branch: url2.searchParams.get("branch"),
-    executorTransport: url2.searchParams.get("executorTransport"),
+    issueNumber: url.searchParams.get("issueNumber"),
+    branch: url.searchParams.get("branch"),
+    executorTransport: url.searchParams.get("executorTransport"),
     env
   });
   return renderDashboardUtilityPage({
@@ -68961,14 +68961,14 @@ async function renderDashboardProgressPage({ url: url2, env } = {}) {
     `
   });
 }
-async function renderDashboardVpsRunnerPage({ url: url2, env } = {}) {
-  const origin = normalize7(url2?.origin);
-  const repository = normalizeCanonicalRepositoryInput(url2?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+async function renderDashboardVpsRunnerPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const status = await retrieveVpsRunnerHealthStatus({
-    executionId: url2.searchParams.get("executionId"),
+    executionId: url.searchParams.get("executionId"),
     repository,
-    issueNumber: url2.searchParams.get("issueNumber"),
-    branch: url2.searchParams.get("branch"),
+    issueNumber: url.searchParams.get("issueNumber"),
+    branch: url.searchParams.get("branch"),
     env
   });
   return renderDashboardUtilityPage({
@@ -68983,15 +68983,15 @@ async function renderDashboardVpsRunnerPage({ url: url2, env } = {}) {
     `
   });
 }
-async function renderDashboardMemoryPage({ url: url2, env } = {}) {
-  const origin = normalize7(url2?.origin);
-  const repository = normalizeCanonicalRepositoryInput(url2?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+async function renderDashboardMemoryPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const retrieved = await retrieveOperationalMemory(resolveMemoryProvider(env), {
-    text: normalizeText32(url2.searchParams.get("text")) || normalizeText32(url2.searchParams.get("q")),
-    recordId: normalizeText32(url2.searchParams.get("recordId")),
+    text: normalizeText32(url.searchParams.get("text")) || normalizeText32(url.searchParams.get("q")),
+    recordId: normalizeText32(url.searchParams.get("recordId")),
     repository,
-    limit: normalizeLimit7(url2.searchParams.get("limit"), 8),
-    runtimeTruth: buildRetrieveRuntimeTruth(url2)
+    limit: normalizeLimit7(url.searchParams.get("limit"), 8),
+    runtimeTruth: buildRetrieveRuntimeTruth(url)
   });
   return renderDashboardUtilityPage({
     title: "Operational RAG",
@@ -69005,14 +69005,14 @@ async function renderDashboardMemoryPage({ url: url2, env } = {}) {
     `
   });
 }
-async function renderDashboardSelfParityPage({ url: url2, env } = {}) {
-  const origin = normalize7(url2?.origin);
-  const repository = normalizeCanonicalRepositoryInput(url2?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+async function renderDashboardSelfParityPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const parity = await evaluateButlerSelfParity({
     repository,
-    ref: normalizeText32(url2.searchParams.get("ref")),
-    issueNumber: normalizeIssue6(url2.searchParams.get("issueNumber")),
-    pullNumber: normalizeIssue6(url2.searchParams.get("pullNumber")),
+    ref: normalizeText32(url.searchParams.get("ref")),
+    issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
+    pullNumber: normalizeIssue6(url.searchParams.get("pullNumber")),
     runtimeOrigin: origin,
     env
   });
@@ -69312,8 +69312,8 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     `
   });
 }
-function buildDashboardWebManifest(url2) {
-  const origin = normalize7(url2?.origin);
+function buildDashboardWebManifest(url) {
+  const origin = normalize7(url?.origin);
   return {
     name: "VTDD Butler",
     short_name: "VTDD",
@@ -69808,8 +69808,8 @@ function normalizeDashboardExternalUrl(value) {
     return "";
   }
   try {
-    const url2 = new URL(text);
-    return url2.protocol === "https:" ? url2.toString() : "";
+    const url = new URL(text);
+    return url.protocol === "https:" ? url.toString() : "";
   } catch {
     return "";
   }
@@ -69827,13 +69827,13 @@ function uniqueTextList2(value) {
 function shouldSubmitDashboardComposerShortcut(event) {
   return event && event.key === "Enter" && event.shiftKey !== true && event.isComposing !== true && (event.metaKey === true || event.ctrlKey === true);
 }
-async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventStore } = {}) {
+async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore } = {}) {
   const origin = normalize7(runtimeOrigin);
   const repositoryInput = normalizeDashboardRepositoryInput(
-    url2?.searchParams?.get("repositoryInput") || url2?.searchParams?.get("repository")
+    url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
-  const dashboardIssueNumber = normalizePositiveInteger10(url2?.searchParams?.get("issueNumber"));
-  const requestedChatThreadId = normalizeDashboardThreadId(url2?.searchParams?.get("threadId") || url2?.searchParams?.get("thread_id"));
+  const dashboardIssueNumber = normalizePositiveInteger10(url?.searchParams?.get("issueNumber"));
+  const requestedChatThreadId = normalizeDashboardThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
   const dashboardTargetLabel = repositoryInput ? `\u3053\u306E\u4F5C\u696D: ${repositoryInput}` : "\u4F5C\u696D\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">\u56FA\u5B9A\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u3053\u306E\u4F1A\u8A71\u3067 Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u4F5C\u696D\u3092\u3059\u308B\u9593\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002deploy \u5148\u3068\u627F\u8A8D\u5883\u754C\u306F repo \u3054\u3068\u306B\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>` : `<p><strong>\u4F5C\u696D\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
@@ -69850,7 +69850,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
   const chatThreadId = requestedChatThreadId || `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
   const currentDashboardReturnPath = withDashboardReturnThreadId(
-    sanitizeDashboardPreAuthReturnPath(`${url2?.pathname || "/dashboard"}${url2?.search || ""}`),
+    sanitizeDashboardPreAuthReturnPath(`${url?.pathname || "/dashboard"}${url?.search || ""}`),
     chatThreadId
   );
   const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(currentDashboardReturnPath)}`;
