@@ -521,9 +521,17 @@ export class DashboardChatRoom {
       return;
     }
     const store = resolveDashboardChatStore(this.env);
+    const messagesToAppend = await filterDashboardAppServerBridgeMessagesForAppend({
+      store,
+      threadId: normalized.threadId,
+      messages: normalized.messages
+    });
+    if (messagesToAppend.length === 0) {
+      return;
+    }
     const messages = store
-      ? await store.appendMany(normalized.threadId, normalized.messages)
-      : normalized.messages;
+      ? await store.appendMany(normalized.threadId, messagesToAppend)
+      : messagesToAppend;
     await this.broadcastThread({ threadId: normalized.threadId, messages });
   }
 
@@ -8846,7 +8854,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       )
     );
     transientStatus = messageStatus;
-    transientText = failureText;
+    transientText = buildDashboardAppServerFailureTransientText({ messageStatus, failureText });
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
     transientText = buildDashboardOwnerFacingTransientStatusText(input, {
@@ -8877,6 +8885,41 @@ function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {
     return "codex app-server の応答確認が長引いています。入力と文脈は Dashboard thread に保存済みです。再接続と状態確認を続けています。同じ thread で補足やキャンセル指示を送れます。遅れて返信が届いた場合は、この thread に追加します。";
   }
   return normalizedText || "codex app-server が返信前に失敗しました。同じ thread で続けるか、内容を短くしてもう一度送れます。";
+}
+
+function buildDashboardAppServerFailureTransientText({ messageStatus = "", failureText = "" } = {}) {
+  if (normalizeDashboardChatStatus(messageStatus) === "stalled") {
+    return "再接続と状態確認を続けています。入力と文脈は保持しています。";
+  }
+  return sanitizeDashboardChatText(failureText) || "app-server bridge の返信を待っています";
+}
+
+async function filterDashboardAppServerBridgeMessagesForAppend({ store, threadId, messages = [] } = {}) {
+  const normalizedMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
+  if (normalizedMessages.length === 0 || !store || typeof store.listThread !== "function") {
+    return normalizedMessages;
+  }
+  let recentMessages = [];
+  try {
+    recentMessages = await store.listThread(threadId, { limit: 1 });
+  } catch {
+    return normalizedMessages;
+  }
+  const latest = Array.isArray(recentMessages) ? recentMessages.at(-1) : null;
+  return normalizedMessages.filter((message) => !isDuplicateLatestStalledRecoveryMessage(message, latest));
+}
+
+function isDuplicateLatestStalledRecoveryMessage(message, latest) {
+  if (!message || !latest) {
+    return false;
+  }
+  return (
+    normalizeDashboardEventText(message.role).toLowerCase() === "system" &&
+    normalizeDashboardChatStatus(message.status) === "stalled" &&
+    normalizeDashboardEventText(latest.role).toLowerCase() === "system" &&
+    normalizeDashboardChatStatus(latest.status) === "stalled" &&
+    sanitizeDashboardChatText(message.text) === sanitizeDashboardChatText(latest.text)
+  );
 }
 
 const DASHBOARD_APP_SERVER_STAGE_TEXT = {

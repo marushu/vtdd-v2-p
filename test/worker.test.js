@@ -4030,7 +4030,53 @@ test("DashboardChatRoom persists app-server timeout as recoverable Japanese thre
   const failedStatus = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "transient_status");
   assert.ok(failedStatus);
   assert.equal(failedStatus.status, "stalled");
-  assert.equal(failedStatus.text, stored[0].text);
+  assert.equal(failedStatus.text, "再接続と状態確認を続けています。入力と文脈は保持しています。");
+});
+
+test("DashboardChatRoom dedupes repeated app-server stalled recovery messages", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const stalledEvent = {
+    type: "app_server_turn_failed",
+    status: "timeout",
+    threadId: "dashboard-main-unresolved",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 590,
+    text: "codex app-server turn timed out before completion"
+  };
+
+  await room.webSocketMessage(bridgeSocket, JSON.stringify(stalledEvent));
+  await room.webSocketMessage(bridgeSocket, JSON.stringify(stalledEvent));
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].role, "system");
+  assert.equal(stored[0].status, "stalled");
+  assert.match(stored[0].text, /応答確認が長引いています/);
+
+  const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
+  const threadBroadcasts = sentPayloads.filter((message) => message.type === "thread");
+  assert.equal(threadBroadcasts.length, 1);
+  assert.equal(threadBroadcasts[0].messages.length, 1);
+  const transientStatuses = sentPayloads.filter((message) => message.type === "transient_status");
+  assert.equal(transientStatuses.length, 2);
+  assert.deepEqual(
+    transientStatuses.map((message) => message.text),
+    [
+      "再接続と状態確認を続けています。入力と文脈は保持しています。",
+      "再接続と状態確認を続けています。入力と文脈は保持しています。"
+    ]
+  );
 });
 
 test("DashboardChatRoom sends app-server thinking status as transient UI state", async () => {

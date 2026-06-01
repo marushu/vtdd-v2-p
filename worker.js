@@ -57909,7 +57909,15 @@ var DashboardChatRoom = class {
       return;
     }
     const store = resolveDashboardChatStore(this.env);
-    const messages = store ? await store.appendMany(normalized.threadId, normalized.messages) : normalized.messages;
+    const messagesToAppend = await filterDashboardAppServerBridgeMessagesForAppend({
+      store,
+      threadId: normalized.threadId,
+      messages: normalized.messages
+    });
+    if (messagesToAppend.length === 0) {
+      return;
+    }
+    const messages = store ? await store.appendMany(normalized.threadId, messagesToAppend) : messagesToAppend;
     await this.broadcastThread({ threadId: normalized.threadId, messages });
   }
   async broadcastThread({ threadId, messages = null }) {
@@ -65221,7 +65229,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       )
     );
     transientStatus = messageStatus;
-    transientText = failureText;
+    transientText = buildDashboardAppServerFailureTransientText({ messageStatus, failureText });
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
     transientText = buildDashboardOwnerFacingTransientStatusText(input, {
@@ -65248,6 +65256,32 @@ function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {
     return "codex app-server \u306E\u5FDC\u7B54\u78BA\u8A8D\u304C\u9577\u5F15\u3044\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F Dashboard thread \u306B\u4FDD\u5B58\u6E08\u307F\u3067\u3059\u3002\u518D\u63A5\u7D9A\u3068\u72B6\u614B\u78BA\u8A8D\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002\u540C\u3058 thread \u3067\u88DC\u8DB3\u3084\u30AD\u30E3\u30F3\u30BB\u30EB\u6307\u793A\u3092\u9001\u308C\u307E\u3059\u3002\u9045\u308C\u3066\u8FD4\u4FE1\u304C\u5C4A\u3044\u305F\u5834\u5408\u306F\u3001\u3053\u306E thread \u306B\u8FFD\u52A0\u3057\u307E\u3059\u3002";
   }
   return normalizedText || "codex app-server \u304C\u8FD4\u4FE1\u524D\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u308B\u304B\u3001\u5185\u5BB9\u3092\u77ED\u304F\u3057\u3066\u3082\u3046\u4E00\u5EA6\u9001\u308C\u307E\u3059\u3002";
+}
+function buildDashboardAppServerFailureTransientText({ messageStatus = "", failureText = "" } = {}) {
+  if (normalizeDashboardChatStatus(messageStatus) === "stalled") {
+    return "\u518D\u63A5\u7D9A\u3068\u72B6\u614B\u78BA\u8A8D\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  return sanitizeDashboardChatText(failureText) || "app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059";
+}
+async function filterDashboardAppServerBridgeMessagesForAppend({ store, threadId, messages = [] } = {}) {
+  const normalizedMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
+  if (normalizedMessages.length === 0 || !store || typeof store.listThread !== "function") {
+    return normalizedMessages;
+  }
+  let recentMessages = [];
+  try {
+    recentMessages = await store.listThread(threadId, { limit: 1 });
+  } catch {
+    return normalizedMessages;
+  }
+  const latest = Array.isArray(recentMessages) ? recentMessages.at(-1) : null;
+  return normalizedMessages.filter((message) => !isDuplicateLatestStalledRecoveryMessage(message, latest));
+}
+function isDuplicateLatestStalledRecoveryMessage(message, latest) {
+  if (!message || !latest) {
+    return false;
+  }
+  return normalizeDashboardEventText(message.role).toLowerCase() === "system" && normalizeDashboardChatStatus(message.status) === "stalled" && normalizeDashboardEventText(latest.role).toLowerCase() === "system" && normalizeDashboardChatStatus(latest.status) === "stalled" && sanitizeDashboardChatText(message.text) === sanitizeDashboardChatText(latest.text);
 }
 var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   read_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
