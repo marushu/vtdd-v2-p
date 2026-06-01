@@ -58182,13 +58182,24 @@ var runtime_default = {
       }
     }
     if (request.method === "GET" && (url2.pathname === "/dashboard" || url2.pathname === "/orchestrator")) {
+      const dashboardAuth = await authorizeDashboardRequest({
+        request,
+        env,
+        apiSuffix: url2.pathname
+      });
+      const dashboardSessionHeaders = await createDashboardReadSessionCookieHeadersFromAuth({
+        request,
+        env,
+        dashboardAuth
+      });
       return html(
         200,
         await renderV2DashboardPage({
           runtimeOrigin: url2.origin,
           url: url2,
           dashboardEventStore: resolveDashboardEventStore(env)
-        })
+        }),
+        dashboardSessionHeaders
       );
     }
     if (request.method === "GET" && url2.pathname === "/dashboard/github") {
@@ -67844,6 +67855,34 @@ function buildDashboardPasskeySessionCookie(sessionRecord = {}) {
     "SameSite=Lax"
   ].join("; ");
 }
+async function createDashboardReadSessionCookieHeadersFromAuth({ request, env, dashboardAuth } = {}) {
+  if (dashboardAuth?.authType !== "cloudflare_access") {
+    return {};
+  }
+  if (parseCookieHeader(request?.headers?.get("cookie"))[DASHBOARD_PASSKEY_SESSION_COOKIE]) {
+    return {};
+  }
+  const provider = resolveMemoryProvider(env);
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return {};
+  }
+  const dashboardSession = createDashboardReadSessionRecord({
+    approvalGrant: {},
+    credentialId: normalizeText32(dashboardAuth.subject) || "cloudflare_access",
+    userAgent: request?.headers?.get("user-agent")
+  });
+  if (!dashboardSession.ok) {
+    return {};
+  }
+  const storedDashboardSession = await provider.store(dashboardSession.record);
+  if (!storedDashboardSession?.ok) {
+    return {};
+  }
+  return {
+    "set-cookie": buildDashboardPasskeySessionCookie(dashboardSession.record)
+  };
+}
 function parseCookieHeader(value) {
   const cookies = {};
   for (const part of normalizeText32(value).split(";")) {
@@ -71696,13 +71735,14 @@ function json(status, body, extraHeaders = {}) {
     }
   });
 }
-function html(status, body) {
+function html(status, body, extraHeaders = {}) {
   return new Response(body, {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
-      pragma: "no-cache"
+      pragma: "no-cache",
+      ...extraHeaders
     }
   });
 }
