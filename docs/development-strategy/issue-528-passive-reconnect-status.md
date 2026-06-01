@@ -32,7 +32,7 @@ worker HTML contract test で Dashboard ブラウザ側 heartbeat が raw `ping`
 
 ## 既に通っている経路
 
-Dashboard chat は HTTP fallback / refreshThread / draft persistence で入力保持と履歴復帰ができる。Issue #565 で empty status の余白除去、Issue #579/#654 で reconnect/auth recovery と fallback resume の実装・証跡がある。
+Dashboard chat は WebSocket live path、refreshThread、draft persistence で入力保持と履歴復帰を行う。HTTP persistence は会話 fallback ではない。Issue #565 で empty status の余白除去、Issue #579/#654 で reconnect/auth recovery の実装・証跡がある。
 
 ## 未確認の境界
 

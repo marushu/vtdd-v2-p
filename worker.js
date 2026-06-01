@@ -70235,7 +70235,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-message-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
@@ -70260,7 +70260,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
 
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
-      const messageEndpoint = form.dataset.messageEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
       const dashboardSignInUrl = ${JSON.stringify(dashboardSignInUrl)};
       const threadId = form.dataset.threadId;
@@ -70391,14 +70390,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
 
-      function setHttpFallbackReadyStatus() {
-        status.dataset.httpFallbackReady = "true";
-        status.dataset.websocketState = describeChatSocketState();
-        if (!isChatSocketOpen() && !pendingOwnerSend) {
-          setStatus("WebSocket \u306F\u672A\u63A5\u7D9A\u3067\u3059\u304C\u3001\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002\u518D\u63A5\u7D9A\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002", { temporary: true });
-        }
-      }
-
       function stopSocketHeartbeat() {
         if (!socketHeartbeatTimer) return;
         window.clearTimeout(socketHeartbeatTimer);
@@ -70447,6 +70438,32 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
 
       function buildReconnectStatus(prefix) {
         return prefix + " \u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002";
+      }
+
+      function buildOwnerPayload(pending) {
+        return {
+          type: "owner_message",
+          threadId,
+          clientMessageId: pending.clientMessageId,
+          repositoryInput,
+          text: pending.text,
+          issueNumber,
+          relatedIssue: issueNumber,
+          mediaReferences: pending.mediaReferences || []
+        };
+      }
+
+      function sendPendingOwnerMessage(reason) {
+        if (!pendingOwnerSend || !isChatSocketOpen()) return false;
+        try {
+          chatSocket.send(JSON.stringify(buildOwnerPayload(pendingOwnerSend)));
+          setStatus(reason || "\u63A5\u7D9A\u3057\u307E\u3057\u305F\u3002\u672A\u9001\u4FE1\u306E\u5165\u529B\u3092\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059\u3002", { thinking: true });
+          return true;
+        } catch (error) {
+          setStatus((error && error.message) || "WebSocket \u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u518D\u63A5\u7D9A\u5F8C\u306B\u518D\u9001\u3057\u307E\u3059\u3002");
+          scheduleReconnect();
+          return false;
+        }
       }
 
       function dropStaleSocketIfNeeded() {
@@ -71182,7 +71199,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
           });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
-            status.dataset.httpFallbackReady = "false";
             if (isAuthExpiredResponse(response, body)) {
               lastRefreshFailure = "\u518D\u30ED\u30B0\u30A4\u30F3\u304C\u5FC5\u8981";
               setDashboardSessionExpiredStatus();
@@ -71197,11 +71213,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             releasePendingOwnerSendFromThread(body.messages || []);
-            setHttpFallbackReadyStatus();
+            status.dataset.websocketState = describeChatSocketState();
             return { ok: true };
           }
         } catch {
-          status.dataset.httpFallbackReady = "false";
           lastRefreshFailure = "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF";
           setConnectionRecoveryStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
           return { ok: false, network: true };
@@ -71243,7 +71258,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
           }
           setStatus("Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002", { temporary: true });
           scheduleSocketHeartbeat();
-          refreshThread();
+          refreshThread().then(() => {
+            if (pendingOwnerSend) {
+              sendPendingOwnerMessage("\u63A5\u7D9A\u3057\u307E\u3057\u305F\u3002\u672A\u9001\u4FE1\u306E\u5165\u529B\u3092\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059\u3002");
+            }
+          });
         });
         chatSocket.addEventListener("message", (event) => {
           try {
@@ -71289,8 +71308,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         chatSocket.addEventListener("close", () => {
           stopSocketHeartbeat();
           if (pendingOwnerSend) {
-            releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
-            setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
+            setStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u518D\u63A5\u7D9A\u5F8C\u306B\u81EA\u52D5\u9001\u4FE1\u3057\u307E\u3059\u3002", { thinking: true });
           } else if (!dashboardSessionExpired) {
             setConnectionRecoveryStatus("\u63A5\u7D9A\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
@@ -71303,8 +71321,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         chatSocket.addEventListener("error", () => {
           stopSocketHeartbeat();
           if (pendingOwnerSend) {
-            releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
-            setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
+            setStatus("WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u518D\u63A5\u7D9A\u5F8C\u306B\u81EA\u52D5\u9001\u4FE1\u3057\u307E\u3059\u3002", { thinking: true });
           } else if (!dashboardSessionExpired) {
             setConnectionRecoveryStatus("\u63A5\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
@@ -71314,36 +71331,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
             scheduleReconnect();
           }
         });
-      }
-
-      async function sendOwnerMessageByHttp(payload, clientMessageId) {
-        if (!messageEndpoint) {
-          throw new Error("HTTP fallback endpoint is not configured");
-        }
-        const response = await fetch(messageEndpoint, {
-          method: "POST",
-          headers: {
-            "accept": "application/json",
-            "content-type": "application/json"
-          },
-          credentials: "same-origin",
-          body: JSON.stringify(payload)
-        });
-        const body = await response.json().catch(() => ({}));
-        if (isAuthExpiredResponse(response, body)) {
-          const error = new Error("dashboard session expired");
-          error.authExpired = true;
-          throw error;
-        }
-        if (!response.ok || !body.ok) {
-          throw new Error(body.reason || "dashboard chat fallback failed");
-        }
-        pendingSendRollbacks.delete(clientMessageId);
-        releasePendingOwnerSend(clientMessageId, { clearComposer: true });
-        renderThread(body.messages || [], { replace: false });
-        lastRefreshFailure = "";
-        setStatus("\u63A5\u7D9A\u304C\u4E0D\u5B89\u5B9A\u306A\u305F\u3081\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u518D\u63A5\u7D9A\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002", { temporary: true });
-        scheduleReconnect();
       }
 
       form.addEventListener("submit", async (event) => {
@@ -71363,9 +71350,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         persistDashboardDraft();
         if (submitButton) submitButton.disabled = true;
         setComposerLocked(true);
-        const willUseHttpFallback = !isChatSocketOpen();
-        if (willUseHttpFallback) {
-          setStatus("\u63A5\u7D9A\u304C\u4E0D\u5B89\u5B9A\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u305F\u307E\u307E\u4FDD\u5B58\u3057\u307E\u3059\u3002", { thinking: true });
+        const socketWasOpenAtSubmit = isChatSocketOpen();
+        if (!socketWasOpenAtSubmit) {
+          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u63A5\u7D9A\u5F8C\u306B\u9001\u4FE1\u3057\u307E\u3059\u3002", { thinking: true });
           scheduleReconnect();
         } else {
           setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
@@ -71389,46 +71376,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
           submitButton,
           timeoutId: window.setTimeout(() => {
             if (!pendingSendRollbacks.has(clientMessageId)) return;
-            const rollbackMediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
-            pendingSendRollbacks.delete(clientMessageId);
-            releasePendingOwnerSend(clientMessageId, { clearComposer: false });
-            rollbackAbandonedMedia(rollbackMediaReferences, clientMessageId).catch(() => {});
-            setStatus("\u9001\u4FE1\u78BA\u8A8D\u304C\u8FD4\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+            if (isChatSocketOpen()) {
+              sendPendingOwnerMessage("\u9001\u4FE1\u78BA\u8A8D\u304C\u8FD4\u3089\u306A\u3044\u305F\u3081\u3001\u540C\u3058\u5185\u5BB9\u3092\u518D\u9001\u3057\u3066\u3044\u307E\u3059\u3002");
+            } else {
+              setStatus("\u9001\u4FE1\u78BA\u8A8D\u304C\u8FD4\u308A\u307E\u305B\u3093\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u518D\u63A5\u7D9A\u5F8C\u306B\u540C\u3058\u5185\u5BB9\u3092\u518D\u9001\u3057\u307E\u3059\u3002");
+              scheduleReconnect();
+            }
           }, 30000)
         };
-        const ownerPayload = {
-          type: "owner_message",
-          threadId,
-          clientMessageId,
-          repositoryInput,
-          text,
-          issueNumber,
-          relatedIssue: issueNumber,
-          mediaReferences
-        };
         if (!isChatSocketOpen()) {
-          try {
-            await sendOwnerMessageByHttp(ownerPayload, clientMessageId);
-          } catch (error) {
-            pendingSendRollbacks.delete(clientMessageId);
-            releasePendingOwnerSend(clientMessageId, { clearComposer: false });
-            if (error && error.authExpired) {
-              setDashboardSessionExpiredStatus();
-            } else {
-              setStatus((error && error.message) || "WebSocket \u3068 HTTP fallback \u306E\u4E21\u65B9\u3067\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002");
-            }
-            textarea.focus({ preventScroll: true });
-          }
+          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u63A5\u7D9A\u5F8C\u306B\u9001\u4FE1\u3057\u307E\u3059\u3002", { thinking: true });
+          scheduleReconnect();
+          textarea.focus({ preventScroll: true });
           updateComposerReserve();
           return;
         }
         try {
-          chatSocket.send(JSON.stringify(ownerPayload));
+          chatSocket.send(JSON.stringify(buildOwnerPayload(pendingOwnerSend)));
         } catch (error) {
-          pendingSendRollbacks.delete(clientMessageId);
-          releasePendingOwnerSend(clientMessageId, { clearComposer: false });
-          await rollbackAbandonedMedia(mediaReferences, clientMessageId);
-          setStatus((error && error.message) || "\u9001\u4FE1\u306B\u5931\u6557\u3057\u305F\u305F\u3081\u3001\u4FDD\u5B58\u6E08\u307F\u6DFB\u4ED8\u3092\u7834\u68C4\u3057\u307E\u3057\u305F\u3002");
+          setStatus((error && error.message) || "WebSocket \u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u518D\u63A5\u7D9A\u5F8C\u306B\u518D\u9001\u3057\u307E\u3059\u3002");
+          scheduleReconnect();
           textarea.focus({ preventScroll: true });
           return;
         }

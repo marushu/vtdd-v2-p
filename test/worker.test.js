@@ -1260,7 +1260,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('class="icon-button"'), false);
   assert.equal(body.includes('aria-hidden="true">＋</span>'), false);
   assert.equal(body.includes('aria-hidden="true">♪</span>'), false);
-  assert.equal(body.includes('data-message-endpoint="https://example.com/v2/dashboard/chat/messages"'), true);
+  assert.equal(body.includes('data-message-endpoint="https://example.com/v2/dashboard/chat/messages"'), false);
   assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-unresolved"'), true);
   assert.equal(body.includes('data-socket-endpoint="wss://example.com/v2/dashboard/chat/dashboard-main-unresolved/ws"'), true);
   assert.equal(body.includes('data-dispatch-to-vps-runner="true"'), false);
@@ -1274,9 +1274,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("stopSocketHeartbeat();"), true);
   assert.equal(body.includes("function refreshThread()"), true);
   assert.equal(body.includes("function scheduleReconnect()"), true);
-  assert.equal(body.includes("function sendOwnerMessageByHttp("), true);
+  assert.equal(body.includes("function sendOwnerMessageByHttp("), false);
   assert.equal(body.includes("function isChatSocketOpen()"), true);
-  assert.equal(body.includes("function setHttpFallbackReadyStatus()"), true);
+  assert.equal(body.includes("function setHttpFallbackReadyStatus()"), false);
+  assert.equal(body.includes("function sendPendingOwnerMessage("), true);
   assert.equal(body.includes("function describeChatSocketState()"), true);
   assert.equal(body.includes("function setConnectionRecoveryStatus("), true);
   assert.equal(body.includes("function buildReconnectStatus("), true);
@@ -1300,20 +1301,23 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("if (refreshResult && refreshResult.authExpired)"), true);
   assert.equal(body.includes("connectThreadSocket();"), true);
   assert.equal(body.includes("window.clearTimeout(reconnectTimer)"), true);
-  assert.equal(body.includes("HTTP fallback"), true);
+  assert.equal(body.includes("HTTP fallback"), false);
   assert.equal(body.includes("Dashboard のログインが切れています。入力は残したまま再ログインしてください。"), true);
   assert.equal(body.includes("Passkey で再ログイン"), true);
   assert.equal(body.includes("dashboard_access"), true);
   assert.equal(body.includes("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。"), false);
   assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), false);
-  assert.equal(body.includes("接続が不安定です。入力は保持したまま保存します。"), true);
-  assert.equal(body.includes("接続が不安定なため保存しました。再接続を続けています。"), true);
-  assert.equal(body.includes("WebSocket は未接続ですが、送信できます。再接続を続けています。"), true);
-  assert.equal(body.includes('status.dataset.httpFallbackReady = "true"'), true);
-  assert.equal(body.includes('status.dataset.httpFallbackReady = "false"'), true);
-  assert.equal(body.includes("setHttpFallbackReadyStatus();"), true);
-  assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), true);
-  assert.equal(body.includes("refreshThread().then"), false);
+  assert.equal(body.includes("接続が不安定です。入力は保持したまま保存します。"), false);
+  assert.equal(body.includes("接続が不安定なため保存しました。再接続を続けています。"), false);
+  assert.equal(body.includes("WebSocket は未接続ですが、送信できます。再接続を続けています。"), false);
+  assert.equal(body.includes('status.dataset.httpFallbackReady = "true"'), false);
+  assert.equal(body.includes('status.dataset.httpFallbackReady = "false"'), false);
+  assert.equal(body.includes("setHttpFallbackReadyStatus();"), false);
+  assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), false);
+  assert.equal(body.includes("WebSocket 再接続中です。入力は保持し、接続後に送信します。"), true);
+  assert.equal(body.includes("接続しました。未送信の入力を送信しています。"), true);
+  assert.equal(body.includes("sendPendingOwnerMessage(\"接続しました。未送信の入力を送信しています。\")"), true);
+  assert.equal(body.includes("refreshThread().then"), true);
   assert.equal(body.includes("履歴の再取得に失敗しました。入力は保持しています。"), true);
   assert.equal(body.includes("再接続 \" + attempt + \"回目"), false);
   assert.equal(body.includes("最後の履歴取得"), false);
@@ -1441,8 +1445,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("await authReturnResumePromise;"), true);
   assert.equal(body.includes("authReturnResumePromise = null;"), true);
   assert.equal(body.includes("送信確認を待っています。入力は保存確認まで残します。"), true);
-  assert.equal(body.includes("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。"), true);
-  assert.equal(body.includes("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。"), true);
+  assert.equal(body.includes("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。"), false);
+  assert.equal(body.includes("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。"), false);
+  assert.equal(body.includes("WebSocket が切れました。入力は保持し、再接続後に自動送信します。"), true);
+  assert.equal(body.includes("送信確認が返りません。入力は保持し、再接続後に同じ内容を再送します。"), true);
   assert.equal(body.includes("messagesById.set(messageKey(message), message)"), true);
   assert.equal(body.includes("messagesById.clear()"), true);
   assert.equal(body.includes("message?.createdAt"), true);
@@ -3182,7 +3188,7 @@ test("DashboardChatRoom stores owner messages without pushing a VPS runner job",
   assert.match(reconnectStatus.text, /送信は保存済みです/);
 });
 
-test("DashboardChatRoom replays HTTP fallback owner messages when app-server bridge reconnects", async () => {
+test("DashboardChatRoom replays pending WebSocket owner messages when app-server bridge reconnects", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
   const storage = createMockDurableObjectStorage();
@@ -3204,7 +3210,7 @@ test("DashboardChatRoom replays HTTP fallback owner messages when app-server bri
       type: "owner_message",
       threadId: "dashboard-main-unresolved",
       clientMessageId: "dashboard_owner_message:http-resume-1",
-      text: "HTTP fallback で保存した後、bridge 復帰で同じ thread に流す"
+      text: "WebSocket で保持した後、bridge 復帰で同じ thread に流す"
     })
   );
 
@@ -3225,7 +3231,7 @@ test("DashboardChatRoom replays HTTP fallback owner messages when app-server bri
   assert.equal(turnRequest.type, "app_server_turn_requested");
   assert.equal(turnRequest.threadId, "dashboard-main-unresolved");
   assert.equal(turnRequest.messageId, "dashboard_owner_message:http-resume-1");
-  assert.equal(turnRequest.text, "HTTP fallback で保存した後、bridge 復帰で同じ thread に流す");
+  assert.equal(turnRequest.text, "WebSocket で保持した後、bridge 復帰で同じ thread に流す");
   assert.equal(turnRequest.appServer.startThreadMethod, "thread/start");
   const reconnectStatus = dashboardSocket.sent.map((message) => JSON.parse(message)).at(-1);
   assert.equal(reconnectStatus.type, "transient_status");

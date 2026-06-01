@@ -78,10 +78,11 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
   main/runtime truth was re-read and close evidence was posted. These are narrow
   Dashboard polish slices and do not close Issue #528, Issue #579, Issue #590,
   or Issue #654.
-- 2026-05-31 PR #690 merged Issue #654 reconnect/resume continuation. Production
-  Dashboard Butler live evidence confirmed normal send, same-thread response, and
-  no stale blocked message. Issue #654 is now a close-ready candidate, but
-  closure still requires human GO.
+- 2026-06-01 PR #712 exposed a completion-read drift: HTTP persistence had been
+  treated as owner-facing send readiness even though `/v2/dashboard/chat/messages`
+  is not the live app-server bridge path. Issue #654 is not close-ready until
+  Dashboard normal chat stays on WebSocket, preserves unacknowledged owner input,
+  and resends it after reconnect with mapped live evidence.
 - 2026-05-31 Issue #579 received production Dashboard Butler draft-retention and
   same-thread response evidence. Owner live evidence from 2026-05-30 16:00-19:00
   JST is accepted as practical Mac Chrome / Cloudflare Access stability evidence,
@@ -106,9 +107,9 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
 
 - Issue #590: app-server turn timeout remains active after Issue #637 no longer
   blocks iPhone/PWA-only privileged recovery.
-- Issue #654 closure pass: after the current root slice no longer needs
-  execution focus, close only if human GO is present and the mapped evidence
-  comments remain sufficient.
+- Issue #450 / Issue #654 reconnect-resend correction: remove conversation
+  claims from HTTP persistence, keep normal chat on WebSocket, and verify
+  unacknowledged owner messages are resent after reconnect.
 
 ## Root Blockers
 
@@ -196,6 +197,9 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
   remains open for production Dashboard Butler evidence.
 - PR #685 / Issue #654 removed stale fallback replies from normal Dashboard chat.
   Issue #654 remains open for reconnect/resume and bridge continuation.
+- PR #712 / Issue #528 was reclassified as a regression because it displayed
+  HTTP persistence as send-ready chat. Follow-up work must remove that owner-facing
+  claim and keep conversation completion on the WebSocket live path.
 - PR #686 / Issue #579 added local Dashboard PWA reconnect/auth evidence. Issue
   #579 remains open for production iPhone/PWA live evidence and attachment
   candidate recovery.
@@ -256,10 +260,10 @@ Evidence gaps are active. They are not deferred out of scope.
   that column. Attachment candidate/reselect UX belongs to Issue #498 / Issue
   #587 and should not keep #579 open by itself.
 - Issue #654: PR #685 removed the old blocked reply from normal Dashboard chat,
-  and PR #690 added reconnect/resume continuation for fallback-saved owner
-  messages. Production evidence confirmed normal send, no stale blocked message,
-  and same-thread app-server response. It is a close-ready candidate pending
-  human GO, not a fallback-redesign Now item.
+  and PR #690 added a Durable Object pending-drain slice, but the HTTP persistence
+  route still was not a live conversation path. Issue #654 remains incomplete
+  until WebSocket reconnect/resend is verified with owner-facing Dashboard Butler
+  evidence.
 - Issue #657: chief-butler interpretation confirmation is a process / traffic
   control gap and remains open until the protocol is repo/runtime-backed with
   mapped evidence.
