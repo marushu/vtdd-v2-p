@@ -212,6 +212,32 @@ function loadDashboardInlineChatHelpers(html) {
   );
 }
 
+function loadDashboardComposerRecoveryHelpers(html) {
+  const names = [
+    "setComposerLocked",
+    "withFollowUpInstruction",
+    "withPendingSendRecoveryInstruction",
+    "releaseComposerForFollowUp"
+  ];
+  const sources = names.map((name) => extractDashboardInlineFunction(html, name)).join("\n");
+  return Function(
+    `${sources}
+    const statusLog = [];
+    const textarea = { readOnly: true };
+    const mediaButton = { disabled: true };
+    const submitButton = { disabled: true };
+    const form = { querySelector(selector) { return selector === "button[type='submit']" ? submitButton : null; } };
+    let pendingOwnerSend = null;
+    function setStatus(text, options = {}) { statusLog.push({ text, options }); }
+    function updateComposerReserve() { statusLog.push({ reserveUpdated: true }); }
+    return {
+      releaseComposerForFollowUp,
+      setPendingOwnerSend(value) { pendingOwnerSend = value; },
+      getState() { return { textarea, mediaButton, submitButton, statusLog }; }
+    };`
+  )();
+}
+
 test("dashboard chat message text safely decodes command-like percent encoded lines", () => {
   assert.equal(
     normalizeDashboardChatMessageText("go:%0Adeploy%20production%0Aissue%20%23524"),
@@ -1318,6 +1344,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("WebSocket 再接続中です。入力は保持しています。接続後に自動送信します。"), true);
   assert.equal(body.includes("queuedWhileDisconnected: true"), true);
   assert.equal(body.includes("setComposerLocked(false);"), true);
+  assert.equal(body.includes("function releaseComposerForFollowUp("), true);
+  assert.equal(body.includes("このまま同じ thread に追加メッセージを送れます。"), true);
+  assert.equal(body.includes("function withPendingSendRecoveryInstruction("), true);
+  assert.equal(body.includes("送信保存を確認中のため入力欄は保持しています。確認後に同じ thread へ追加できます。"), true);
+  assert.equal(body.includes('body.status === "stalled"'), true);
+  assert.equal(body.includes('lastMessage?.status === "failed" || lastMessage?.status === "stalled"'), true);
   assert.equal(body.includes("接続しました。未送信の入力を送信しています。"), true);
   assert.equal(body.includes("sendPendingOwnerMessage(\"接続しました。未送信の入力を送信しています。\")"), true);
   assert.equal(body.includes("refreshThread().then"), true);
@@ -1818,6 +1850,42 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("setComposerLocked(true)"), true);
   assert.equal(body.includes("releasePendingOwnerSend(clientMessageId, { clearComposer: true })"), true);
   assert.equal(body.includes("owner_message_accepted"), true);
+});
+
+test("dashboard stalled recovery unlocks follow-up composer after saved sends only", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 200);
+  const helpers = loadDashboardComposerRecoveryHelpers(await response.text());
+
+  assert.equal(helpers.releaseComposerForFollowUp("進行イベントがしばらく届いていません。"), true);
+  let state = helpers.getState();
+  assert.equal(state.textarea.readOnly, false);
+  assert.equal(state.mediaButton.disabled, false);
+  assert.equal(state.submitButton.disabled, false);
+  assert.equal(
+    state.statusLog.some((entry) => String(entry.text || "").includes("このまま同じ thread に追加メッセージを送れます。")),
+    true
+  );
+  assert.equal(state.statusLog.some((entry) => entry.reserveUpdated === true), true);
+
+  state.textarea.readOnly = true;
+  state.mediaButton.disabled = true;
+  state.submitButton.disabled = true;
+  helpers.setPendingOwnerSend({ clientMessageId: "pending-owner-send" });
+  assert.equal(helpers.releaseComposerForFollowUp("進行イベントがしばらく届いていません。"), false);
+  state = helpers.getState();
+  assert.equal(state.textarea.readOnly, true);
+  assert.equal(state.mediaButton.disabled, true);
+  assert.equal(state.submitButton.disabled, true);
+  const latestStatus = state.statusLog.at(-1);
+  assert.equal(String(latestStatus.text || "").includes("進行イベントがしばらく届いていません。"), true);
+  assert.equal(String(latestStatus.text || "").includes("送信保存を確認中のため入力欄は保持しています。"), true);
+  assert.equal(latestStatus.options.thinking, true);
 });
 
 test("worker uploads dashboard media to R2 and stores D1 metadata reference only", async () => {
