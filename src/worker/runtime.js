@@ -9015,6 +9015,8 @@ const DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = new Set([
   "file_change",
   "tool_call",
   "web_search",
+  "waiting_approval",
+  "waiting_user_input",
   "implementation",
   "implement",
   "test",

@@ -4262,6 +4262,8 @@ test("DashboardChatRoom maps app-server progress stages to owner-facing transien
     "file_change",
     "tool_call",
     "web_search",
+    "waiting_approval",
+    "waiting_user_input",
     "implementation",
     "test",
     "pr_body",
