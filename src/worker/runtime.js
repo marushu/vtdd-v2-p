@@ -14551,6 +14551,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
 
+      function setHttpFallbackReadyStatus() {
+        status.dataset.httpFallbackReady = "true";
+        status.dataset.websocketState = describeChatSocketState();
+        if (!isChatSocketOpen() && !pendingOwnerSend) {
+          setStatus("WebSocket は未接続ですが、送信できます。再接続を続けています。", { temporary: true });
+        }
+      }
+
       function stopSocketHeartbeat() {
         if (!socketHeartbeatTimer) return;
         window.clearTimeout(socketHeartbeatTimer);
@@ -15334,6 +15342,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
+            status.dataset.httpFallbackReady = "false";
             if (isAuthExpiredResponse(response, body)) {
               lastRefreshFailure = "再ログインが必要";
               setDashboardSessionExpiredStatus();
@@ -15348,9 +15357,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             releasePendingOwnerSendFromThread(body.messages || []);
+            setHttpFallbackReadyStatus();
             return { ok: true };
           }
         } catch {
+          status.dataset.httpFallbackReady = "false";
           lastRefreshFailure = "ネットワーク";
           setConnectionRecoveryStatus("履歴の再取得に失敗しました。入力は保持しています。");
           return { ok: false, network: true };

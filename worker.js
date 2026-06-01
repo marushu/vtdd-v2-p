@@ -70391,6 +70391,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
 
+      function setHttpFallbackReadyStatus() {
+        status.dataset.httpFallbackReady = "true";
+        status.dataset.websocketState = describeChatSocketState();
+        if (!isChatSocketOpen() && !pendingOwnerSend) {
+          setStatus("WebSocket \u306F\u672A\u63A5\u7D9A\u3067\u3059\u304C\u3001\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002\u518D\u63A5\u7D9A\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002", { temporary: true });
+        }
+      }
+
       function stopSocketHeartbeat() {
         if (!socketHeartbeatTimer) return;
         window.clearTimeout(socketHeartbeatTimer);
@@ -71174,6 +71182,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
           });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
+            status.dataset.httpFallbackReady = "false";
             if (isAuthExpiredResponse(response, body)) {
               lastRefreshFailure = "\u518D\u30ED\u30B0\u30A4\u30F3\u304C\u5FC5\u8981";
               setDashboardSessionExpiredStatus();
@@ -71188,9 +71197,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             releasePendingOwnerSendFromThread(body.messages || []);
+            setHttpFallbackReadyStatus();
             return { ok: true };
           }
         } catch {
+          status.dataset.httpFallbackReady = "false";
           lastRefreshFailure = "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF";
           setConnectionRecoveryStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
           return { ok: false, network: true };
