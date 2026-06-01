@@ -14392,6 +14392,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const initialMarkup = log.innerHTML;
       let chatSocket = null;
       let reconnectTimer = null;
+      let socketHeartbeatTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
       let lastRefreshFailure = "";
@@ -14513,6 +14514,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
 
+      function stopSocketHeartbeat() {
+        if (!socketHeartbeatTimer) return;
+        window.clearTimeout(socketHeartbeatTimer);
+        socketHeartbeatTimer = null;
+      }
+
+      function scheduleSocketHeartbeat() {
+        stopSocketHeartbeat();
+        if (dashboardSessionExpired || !isChatSocketOpen()) return;
+        socketHeartbeatTimer = window.setTimeout(() => {
+          socketHeartbeatTimer = null;
+          if (!isChatSocketOpen()) return;
+          try {
+            chatSocket.send("ping");
+          } catch {}
+          scheduleSocketHeartbeat();
+        }, 25000);
+      }
+
       function describeChatSocketState() {
         if (!chatSocket) return "未接続";
         if (chatSocket.readyState === WebSocket.CONNECTING) return "接続中";
@@ -14528,6 +14548,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         status.dataset.reconnectAttempt = String(attempt);
         status.dataset.websocketState = describeChatSocketState();
         status.dataset.lastRefreshFailure = lastRefreshFailure || "";
+        status.dataset.recoveryMessage = message || "";
+        if (options.visible !== true) {
+          if (status.textContent.trim() === message || status.dataset.passiveRecoveryVisible === "true") {
+            setStatus("");
+          }
+          status.dataset.passiveRecoveryVisible = "false";
+          return;
+        }
+        status.dataset.passiveRecoveryVisible = "true";
         setStatus(message, { temporary: options.temporary !== false });
       }
 
@@ -14577,7 +14606,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         authReturnResumePromise = (async () => {
           dashboardSessionExpired = false;
-          setConnectionRecoveryStatus(reason || "再ログイン後の接続を復帰しています。入力は保持しています。", { temporary: false });
+          setConnectionRecoveryStatus(reason || "再ログイン後の接続を復帰しています。入力は保持しています。");
           dropStaleSocketIfNeeded();
           const refreshResult = await refreshThread();
           if (refreshResult && refreshResult.authExpired) {
@@ -15325,6 +15354,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             reconnectTimer = null;
           }
           setStatus("Dashboard thread 接続済み。", { temporary: true });
+          scheduleSocketHeartbeat();
           refreshThread();
         });
         chatSocket.addEventListener("message", (event) => {
@@ -15369,6 +15399,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         });
         chatSocket.addEventListener("close", () => {
+          stopSocketHeartbeat();
           if (pendingOwnerSend) {
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。");
@@ -15382,6 +15413,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         });
         chatSocket.addEventListener("error", () => {
+          stopSocketHeartbeat();
           if (pendingOwnerSend) {
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket 接続が失敗しました。入力は残しています。再接続後にもう一度送信できます。");

@@ -1371,7 +1371,8 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
     VTDD_RUNTIME_URL: "https://runtime.example",
     VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
     VTDD_DASHBOARD_CODEX_CWD: "/repo",
-    VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS: "0"
+    VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS: "0",
+    VTDD_DASHBOARD_BRIDGE_HEARTBEAT_MS: "30000"
   });
   assert.equal(parsed.runtimeUrl, "https://runtime.example");
   assert.equal(parsed.token, "secret-token");
@@ -1380,6 +1381,7 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
   assert.equal(parsed.sandboxMode, "");
   assert.equal(parsed.turnTimeoutMs, 1500);
   assert.equal(parsed.reconnectDelayMs, 1000);
+  assert.equal(parsed.heartbeatMs, 30000);
 });
 
 test("dashboard app-server bridge endpoint uses the dashboard app-server thread WebSocket", () => {
@@ -1508,6 +1510,60 @@ test("dashboard app-server bridge reconnects the dashboard WebSocket without rei
   assert.equal(initializeCount, 1);
   assert.equal(String(sockets[0].endpoint), "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main");
   assert.equal(String(sockets[1].endpoint), "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main");
+});
+
+test("dashboard app-server bridge sends heartbeat pings on an open socket", async () => {
+  const sockets = [];
+  class MockWebSocket {
+    constructor(endpoint, protocols) {
+      this.endpoint = endpoint;
+      this.protocols = protocols;
+      this.listeners = new Map();
+      this.sent = [];
+      sockets.push(this);
+    }
+
+    addEventListener(type, handler) {
+      if (!this.listeners.has(type)) {
+        this.listeners.set(type, new Set());
+      }
+      this.listeners.get(type).add(handler);
+    }
+
+    send(payload) {
+      this.sent.push(payload);
+    }
+
+    emit(type, event = {}) {
+      for (const handler of this.listeners.get(type) || []) {
+        handler(event);
+      }
+    }
+  }
+  const appServer = {
+    nextRequestId() {
+      return 1;
+    },
+    onNotification() {
+      return () => {};
+    },
+    async request() {
+      throw new Error("turn handling should not run in this heartbeat test");
+    }
+  };
+
+  const once = connectDashboardAppServerBridgeOnce({
+    endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
+    token: "secret-token",
+    appServer,
+    WebSocketImpl: MockWebSocket,
+    heartbeatMs: 1
+  });
+  assert.equal(sockets.length, 1);
+  sockets[0].emit("open");
+  await waitFor(() => sockets[0].sent.includes("ping"));
+  sockets[0].emit("close");
+  await once;
 });
 
 async function waitFor(predicate, { timeoutMs = 1000 } = {}) {

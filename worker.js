@@ -70233,6 +70233,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
       const initialMarkup = log.innerHTML;
       let chatSocket = null;
       let reconnectTimer = null;
+      let socketHeartbeatTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
       let lastRefreshFailure = "";
@@ -70354,6 +70355,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
 
+      function stopSocketHeartbeat() {
+        if (!socketHeartbeatTimer) return;
+        window.clearTimeout(socketHeartbeatTimer);
+        socketHeartbeatTimer = null;
+      }
+
+      function scheduleSocketHeartbeat() {
+        stopSocketHeartbeat();
+        if (dashboardSessionExpired || !isChatSocketOpen()) return;
+        socketHeartbeatTimer = window.setTimeout(() => {
+          socketHeartbeatTimer = null;
+          if (!isChatSocketOpen()) return;
+          try {
+            chatSocket.send("ping");
+          } catch {}
+          scheduleSocketHeartbeat();
+        }, 25000);
+      }
+
       function describeChatSocketState() {
         if (!chatSocket) return "\u672A\u63A5\u7D9A";
         if (chatSocket.readyState === WebSocket.CONNECTING) return "\u63A5\u7D9A\u4E2D";
@@ -70369,6 +70389,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         status.dataset.reconnectAttempt = String(attempt);
         status.dataset.websocketState = describeChatSocketState();
         status.dataset.lastRefreshFailure = lastRefreshFailure || "";
+        status.dataset.recoveryMessage = message || "";
+        if (options.visible !== true) {
+          if (status.textContent.trim() === message || status.dataset.passiveRecoveryVisible === "true") {
+            setStatus("");
+          }
+          status.dataset.passiveRecoveryVisible = "false";
+          return;
+        }
+        status.dataset.passiveRecoveryVisible = "true";
         setStatus(message, { temporary: options.temporary !== false });
       }
 
@@ -70418,7 +70447,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         }
         authReturnResumePromise = (async () => {
           dashboardSessionExpired = false;
-          setConnectionRecoveryStatus(reason || "\u518D\u30ED\u30B0\u30A4\u30F3\u5F8C\u306E\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002", { temporary: false });
+          setConnectionRecoveryStatus(reason || "\u518D\u30ED\u30B0\u30A4\u30F3\u5F8C\u306E\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
           dropStaleSocketIfNeeded();
           const refreshResult = await refreshThread();
           if (refreshResult && refreshResult.authExpired) {
@@ -71166,6 +71195,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
             reconnectTimer = null;
           }
           setStatus("Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002", { temporary: true });
+          scheduleSocketHeartbeat();
           refreshThread();
         });
         chatSocket.addEventListener("message", (event) => {
@@ -71210,6 +71240,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
           }
         });
         chatSocket.addEventListener("close", () => {
+          stopSocketHeartbeat();
           if (pendingOwnerSend) {
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
@@ -71223,6 +71254,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
           }
         });
         chatSocket.addEventListener("error", () => {
+          stopSocketHeartbeat();
           if (pendingOwnerSend) {
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");

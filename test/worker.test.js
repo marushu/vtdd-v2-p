@@ -1265,6 +1265,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('data-codex-goal="dashboard_chat_triage"'), false);
   assert.equal(body.includes('executorTransport: dispatchToVpsRunner ? "vps_runner" : undefined'), false);
   assert.equal(body.includes("new WebSocket(socketEndpoint)"), true);
+  assert.equal(body.includes("let socketHeartbeatTimer = null"), true);
+  assert.equal(body.includes("function scheduleSocketHeartbeat()"), true);
+  assert.equal(body.includes('chatSocket.send("ping")'), true);
+  assert.equal(body.includes("stopSocketHeartbeat();"), true);
   assert.equal(body.includes("function refreshThread()"), true);
   assert.equal(body.includes("function scheduleReconnect()"), true);
   assert.equal(body.includes("function sendOwnerMessageByHttp("), true);
@@ -1308,9 +1312,16 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("WebSocket: "), false);
   assert.equal(body.includes("status.dataset.reconnectAttempt"), true);
   assert.equal(body.includes("status.dataset.websocketState"), true);
+  assert.equal(body.includes("status.dataset.recoveryMessage"), true);
+  assert.equal(body.includes('if (options.visible !== true)'), true);
+  assert.equal(body.includes('status.dataset.passiveRecoveryVisible = "false"'), true);
   assert.equal(body.includes("接続を復帰しています。入力は保持しています。"), true);
   assert.equal(body.includes("setConnectionRecoveryStatus(message, options = {})"), true);
   assert.equal(body.includes("setStatus(message, { temporary: options.temporary !== false })"), true);
+  assert.equal(body.includes('setConnectionRecoveryStatus("接続が切れました。履歴を確認しながら復帰しています。");'), true);
+  assert.equal(body.includes('setConnectionRecoveryStatus("接続できませんでした。履歴を確認しながら復帰しています。");'), true);
+  assert.equal(body.includes('setConnectionRecoveryStatus("接続が切れました。履歴を確認しながら復帰しています。", { visible: true'), false);
+  assert.equal(body.includes('setConnectionRecoveryStatus("接続できませんでした。履歴を確認しながら復帰しています。", { visible: true'), false);
   assert.equal(body.includes('setStatus("Dashboard thread 接続済み。", { temporary: true })'), true);
   assert.equal(body.includes('setStatus("");'), true);
   assert.equal(body.includes('document.addEventListener("visibilitychange", async () => {'), true);
