@@ -1517,6 +1517,54 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(aliasBody.includes("WebSocket"), true);
 });
 
+test("worker issues dashboard read session cookie for Access-authenticated dashboard HTML", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("set-cookie"), /vtdd_dashboard_session=dashboard-session%3A/);
+  assert.match(response.headers.get("set-cookie"), /HttpOnly/);
+  assert.match(response.headers.get("set-cookie"), /Max-Age=28800/);
+});
+
+test("worker accepts Access-backed dashboard read session cookie for dashboard chat WebSocket auth", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const dashboardResponse = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+  const cookie = dashboardResponse.headers.get("set-cookie")?.match(/vtdd_dashboard_session=[^;]+/)?.[0] || "";
+  assert.notEqual(cookie, "");
+
+  const rooms = createMockDashboardChatRoomNamespace();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p/ws", {
+      headers: { cookie }
+    }),
+    {
+      MEMORY_PROVIDER: provider,
+      DASHBOARD_CHAT_ROOMS: rooms.namespace
+    }
+  );
+
+  assert.equal(response.status, 426);
+  const body = await response.json();
+  assert.equal(body.error, "websocket_upgrade_required");
+});
+
 test("served dashboard inline chat renderer executes decode, link, wrap, and copy behavior", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/dashboard", {
