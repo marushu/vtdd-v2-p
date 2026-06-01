@@ -70657,6 +70657,32 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (mediaButton) mediaButton.disabled = locked === true;
       }
 
+      function withFollowUpInstruction(text) {
+        const base = String(text || "").trim();
+        const instruction = "\u3053\u306E\u307E\u307E\u540C\u3058 thread \u306B\u8FFD\u52A0\u30E1\u30C3\u30BB\u30FC\u30B8\u3092\u9001\u308C\u307E\u3059\u3002";
+        if (!base) return instruction;
+        return base.includes("\u8FFD\u52A0\u30E1\u30C3\u30BB\u30FC\u30B8\u3092\u9001\u308C\u307E\u3059") ? base : base + " " + instruction;
+      }
+
+      function withPendingSendRecoveryInstruction(text) {
+        const base = String(text || "").trim() || "codex app-server \u304B\u3089\u9032\u884C\u30A4\u30D9\u30F3\u30C8\u304C\u3057\u3070\u3089\u304F\u5C4A\u3044\u3066\u3044\u307E\u305B\u3093\u3002";
+        const instruction = "\u9001\u4FE1\u4FDD\u5B58\u3092\u78BA\u8A8D\u4E2D\u306E\u305F\u3081\u5165\u529B\u6B04\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002\u78BA\u8A8D\u5F8C\u306B\u540C\u3058 thread \u3078\u8FFD\u52A0\u3067\u304D\u307E\u3059\u3002";
+        return base.includes("\u9001\u4FE1\u4FDD\u5B58\u3092\u78BA\u8A8D\u4E2D") ? base : base + " " + instruction;
+      }
+
+      function releaseComposerForFollowUp(text) {
+        if (pendingOwnerSend) {
+          setStatus(withPendingSendRecoveryInstruction(text), { thinking: true });
+          return false;
+        }
+        const submitButton = form.querySelector("button[type='submit']");
+        setComposerLocked(false);
+        if (submitButton) submitButton.disabled = false;
+        setStatus(withFollowUpInstruction(text));
+        updateComposerReserve();
+        return true;
+      }
+
       function isChatSocketOpen() {
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
@@ -71558,17 +71584,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
                 setStatus("\u8FD4\u4FE1\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002", { temporary: true });
-              } else if (lastMessage?.status === "failed") {
-                setStatus(lastMessage.text || "\u5FDC\u7B54\u751F\u6210\u304C\u6642\u9593\u5207\u308C\u306B\u306A\u308A\u307E\u3057\u305F\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002");
+              } else if (lastMessage?.status === "failed" || lastMessage?.status === "stalled") {
+                releaseComposerForFollowUp(lastMessage.text || "\u5FDC\u7B54\u751F\u6210\u304C\u6642\u9593\u5207\u308C\u306B\u306A\u308A\u307E\u3057\u305F\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002");
               } else if (releasedFromThread) {
                 setStatus("\u9001\u4FE1\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", { thinking: true });
               }
             } else if (body.type === "transient_status" && body.ok) {
               const isThinking = body.status === "thinking";
-              setStatus(body.text || (isThinking ? "codex app-server \u304C\u5FDC\u7B54\u3092\u751F\u6210\u3057\u3066\u3044\u307E\u3059" : "codex app-server \u306E\u5FDC\u7B54\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002"), {
-                thinking: isThinking,
-                temporary: !isThinking
-              });
+              if (body.status === "stalled") {
+                releaseComposerForFollowUp(body.text || "codex app-server \u304B\u3089\u9032\u884C\u30A4\u30D9\u30F3\u30C8\u304C\u3057\u3070\u3089\u304F\u5C4A\u3044\u3066\u3044\u307E\u305B\u3093\u3002");
+              } else {
+                setStatus(body.text || (isThinking ? "codex app-server \u304C\u5FDC\u7B54\u3092\u751F\u6210\u3057\u3066\u3044\u307E\u3059" : "codex app-server \u306E\u5FDC\u7B54\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002"), {
+                  thinking: isThinking,
+                  temporary: !isThinking
+                });
+              }
             } else if (body.type === "owner_message_accepted" && body.ok) {
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
               if (clientMessageId) {

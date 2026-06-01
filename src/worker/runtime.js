@@ -14827,6 +14827,32 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (mediaButton) mediaButton.disabled = locked === true;
       }
 
+      function withFollowUpInstruction(text) {
+        const base = String(text || "").trim();
+        const instruction = "このまま同じ thread に追加メッセージを送れます。";
+        if (!base) return instruction;
+        return base.includes("追加メッセージを送れます") ? base : base + " " + instruction;
+      }
+
+      function withPendingSendRecoveryInstruction(text) {
+        const base = String(text || "").trim() || "codex app-server から進行イベントがしばらく届いていません。";
+        const instruction = "送信保存を確認中のため入力欄は保持しています。確認後に同じ thread へ追加できます。";
+        return base.includes("送信保存を確認中") ? base : base + " " + instruction;
+      }
+
+      function releaseComposerForFollowUp(text) {
+        if (pendingOwnerSend) {
+          setStatus(withPendingSendRecoveryInstruction(text), { thinking: true });
+          return false;
+        }
+        const submitButton = form.querySelector("button[type='submit']");
+        setComposerLocked(false);
+        if (submitButton) submitButton.disabled = false;
+        setStatus(withFollowUpInstruction(text));
+        updateComposerReserve();
+        return true;
+      }
+
       function isChatSocketOpen() {
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
@@ -15728,17 +15754,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
                 setStatus("返信を受信しました。", { temporary: true });
-              } else if (lastMessage?.status === "failed") {
-                setStatus(lastMessage.text || "応答生成が時間切れになりました。同じ thread で続けられます。");
+              } else if (lastMessage?.status === "failed" || lastMessage?.status === "stalled") {
+                releaseComposerForFollowUp(lastMessage.text || "応答生成が時間切れになりました。同じ thread で続けられます。");
               } else if (releasedFromThread) {
                 setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
               }
             } else if (body.type === "transient_status" && body.ok) {
               const isThinking = body.status === "thinking";
-              setStatus(body.text || (isThinking ? "codex app-server が応答を生成しています" : "codex app-server の応答が完了しました。"), {
-                thinking: isThinking,
-                temporary: !isThinking
-              });
+              if (body.status === "stalled") {
+                releaseComposerForFollowUp(body.text || "codex app-server から進行イベントがしばらく届いていません。");
+              } else {
+                setStatus(body.text || (isThinking ? "codex app-server が応答を生成しています" : "codex app-server の応答が完了しました。"), {
+                  thinking: isThinking,
+                  temporary: !isThinking
+                });
+              }
             } else if (body.type === "owner_message_accepted" && body.ok) {
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
               if (clientMessageId) {
