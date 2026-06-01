@@ -136,6 +136,10 @@ not require a public inbound VPS API:
   known, and a short redacted stderr summary
 - Butler reads the queue comment, runner state/event comments, target branch,
   and target PR as GitHub runtime truth
+- after posting a bounded `vps_runner` queue comment, Dashboard Butler may send
+  a best-effort wakeup request to the connected Dashboard app-server bridge so
+  the user-owned VPS can run `systemctl --user start vtdd-vps-runner.service`
+  immediately instead of waiting for the next timer tick
 - queued/requested is not implementation success; if no runner pickup or
   branch/PR evidence appears after the grace period, progress becomes blocked
   with `vps_runner_pickup_not_observed`
@@ -318,6 +322,27 @@ The script is suitable for a later systemd timer/service wrapper, but systemd
 installation, Codex login, token placement, and credential storage remain
 user-owned runtime setup. They must not be represented as shared VTDD
 infrastructure or embedded in this public/core repository.
+
+### Immediate Wakeup and Timer Fallback
+
+The systemd timer remains the recovery fallback. Operators should keep
+`vtdd-vps-runner.timer` enabled so a missed wakeup, disconnected bridge, or
+temporary Worker/DO delivery failure does not strand queued work.
+
+When Dashboard Butler has a live app-server bridge for the same dashboard
+thread, the Worker can send a bounded `runner_wakeup_requested` message after a
+`vps_runner` queue comment is successfully posted. The bridge is allowed to run
+only this fixed non-root command:
+
+```sh
+systemctl --user start vtdd-vps-runner.service
+```
+
+The wakeup request does not carry arbitrary shell, command arguments, sudo,
+root-owned helper input, deploy authority, merge authority, or credential
+mutation authority. It is a latency improvement only. If it fails, the response
+must keep the GitHub queue state as `queued` and report the fallback as
+`vtdd-vps-runner.timer`.
 
 ## Optional API-backed Runner
 

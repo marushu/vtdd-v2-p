@@ -3510,6 +3510,49 @@ test("DashboardChatRoom routes VPS maintenance owner turns without an app-server
   assert.equal(proposalRecord.content.proposal.capability.id, "systemd.user.runner.status");
 });
 
+test("DashboardChatRoom sends runner wakeup requests only to connected app-server bridge", async () => {
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore() }
+  );
+
+  const response = await room.fetch(
+    new Request("https://dashboard-room.local/runner-wakeup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        executionId: "remote-codex-issue717",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 717,
+        queueCommentUrl: "https://github.com/marushu/vtdd-v2-p/issues/717#issuecomment-1"
+      })
+    })
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.wakeup.status, "requested");
+  assert.equal(body.wakeup.attempted, true);
+  assert.equal(body.wakeup.fallback, "vtdd-vps-runner.timer");
+  assert.equal(dashboardSocket.sent.length, 0);
+  assert.equal(bridgeSocket.sent.length, 1);
+  const wakeup = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(wakeup.type, "runner_wakeup_requested");
+  assert.equal(wakeup.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(wakeup.executionId, "remote-codex-issue717");
+  assert.equal(wakeup.repository, "marushu/vtdd-v2-p");
+  assert.equal(wakeup.issueNumber, 717);
+  assert.equal(wakeup.queueCommentUrl, "https://github.com/marushu/vtdd-v2-p/issues/717#issuecomment-1");
+});
+
 test("DashboardChatRoom attaches execution queue preflight to repository app-server turns", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
@@ -7711,6 +7754,7 @@ test("worker dispatches API-backed remote Codex execution when explicitly select
 
 test("worker dispatches VPS runner execution by posting a bounded queue comment", async () => {
   const calls = [];
+  const roomCalls = [];
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/execute", {
       method: "POST",
@@ -7734,6 +7778,7 @@ test("worker dispatches VPS runner execution by posting a bounded queue comment"
             issueTraceable: true,
             approvalScopeMatched: true,
             relatedIssue: 157,
+            dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p",
             summary: "Issue #157 bounded VPS runner handoff"
           }
         },
@@ -7765,6 +7810,27 @@ test("worker dispatches VPS runner execution by posting a bounded queue comment"
     }),
     {
       ...gatewayAuthEnv,
+      DASHBOARD_CHAT_ROOMS: {
+        getByName(name) {
+          return {
+            async fetch(input) {
+              roomCalls.push({ name, input });
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  wakeup: {
+                    status: "requested",
+                    attempted: true,
+                    fallback: "vtdd-vps-runner.timer",
+                    reason: "runner wakeup request sent to app-server bridge"
+                  }
+                }),
+                { status: 202, headers: { "content-type": "application/json" } }
+              );
+            }
+          };
+        }
+      },
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
       GITHUB_API_FETCH: async (url, init) => {
         calls.push({ url, init });
@@ -7806,7 +7872,21 @@ test("worker dispatches VPS runner execution by posting a bounded queue comment"
   assert.equal(body.execution.branch, "codex/issue-157-vps-worker-dispatch");
   assert.equal(body.execution.queueCommentId, 15701);
   assert.equal(body.execution.queueCommentUrl, "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-15701");
+  assert.deepEqual(body.execution.wakeup, {
+    status: "requested",
+    attempted: true,
+    fallback: "vtdd-vps-runner.timer",
+    reason: "runner wakeup request sent to app-server bridge"
+  });
   assert.equal(calls.length, 2);
+  assert.equal(roomCalls.length, 1);
+  assert.equal(roomCalls[0].name, "dashboard-main-marushu-vtdd-v2-p");
+  const wakeupPayload = await roomCalls[0].input.json();
+  assert.equal(wakeupPayload.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(wakeupPayload.executionId, body.execution.executionId);
+  assert.equal(wakeupPayload.repository, "sample-org/vtdd-v2");
+  assert.equal(wakeupPayload.issueNumber, 157);
+  assert.equal(wakeupPayload.queueCommentUrl, "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-15701");
   const queueCall = calls.find((call) => String(call.url).includes("/issues/157/comments"));
   assert.equal(queueCall.init.method, "POST");
   const queueBody = JSON.parse(queueCall.init.body).body;

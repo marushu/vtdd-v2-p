@@ -57529,6 +57529,50 @@ var DashboardChatRoom = class {
       });
       return json(202, { ok: true, threadId: threadId2 });
     }
+    if (request.method === "POST" && url.pathname === "/runner-wakeup") {
+      const payload = await readJson(request);
+      const threadId2 = normalizeDashboardThreadId(payload.threadId || payload.thread_id);
+      if (!threadId2) {
+        return json(422, {
+          ok: false,
+          error: "thread_id_required",
+          reason: "threadId is required"
+        });
+      }
+      const bridgeSockets = this.connectedAppServerBridgeSockets(threadId2);
+      if (bridgeSockets.length === 0) {
+        return json(202, {
+          ok: true,
+          wakeup: {
+            status: "unavailable",
+            attempted: false,
+            fallback: "vtdd-vps-runner.timer",
+            reason: "app-server bridge socket is not connected"
+          }
+        });
+      }
+      const message = {
+        type: "runner_wakeup_requested",
+        schema: "vtdd.dashboard.app_server_bridge.v1",
+        requestId: createDashboardRequestId("runner-wakeup"),
+        threadId: threadId2,
+        executionId: normalizeDashboardEventText(payload.executionId || payload.execution_id),
+        repository: normalizeCanonicalRepositoryInput(payload.repository),
+        issueNumber: normalizePositiveInteger10(payload.issueNumber || payload.issue_number),
+        queueCommentUrl: normalizeDashboardEventText(payload.queueCommentUrl || payload.queue_comment_url),
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      const sent = this.sendSocket(bridgeSockets[0], message);
+      return json(202, {
+        ok: true,
+        wakeup: {
+          status: sent ? "requested" : "unavailable",
+          attempted: sent,
+          fallback: "vtdd-vps-runner.timer",
+          reason: sent ? "runner wakeup request sent to app-server bridge" : "failed to send runner wakeup request"
+        }
+      });
+    }
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return json(426, {
         ok: false,
@@ -58366,6 +58410,13 @@ var runtime_default = {
           blockedByRule: dispatched.blockedByRule ?? null,
           reason: dispatched.reason,
           issues: dispatched.issues ?? []
+        });
+      }
+      if (dispatched.execution?.transport === "vps_runner") {
+        dispatched.execution.wakeup = await requestDashboardVpsRunnerWakeup({
+          env,
+          request: requestValidation.request,
+          execution: dispatched.execution
         });
       }
       return json(202, {
@@ -64903,6 +64954,57 @@ function resolveDashboardChatRoomStub(env, threadId) {
   }
   return null;
 }
+async function requestDashboardVpsRunnerWakeup({ env, request, execution } = {}) {
+  const threadId = normalizeDashboardThreadId(
+    request?.handoff?.dashboardThreadId || request?.dashboardThreadId || execution?.dashboardThreadId
+  );
+  if (!threadId) {
+    return {
+      status: "unavailable",
+      attempted: false,
+      fallback: "vtdd-vps-runner.timer",
+      reason: "dashboardThreadId is not available"
+    };
+  }
+  const room = resolveDashboardChatRoomStub(env, threadId);
+  if (!room || typeof room.fetch !== "function") {
+    return {
+      status: "unavailable",
+      attempted: false,
+      fallback: "vtdd-vps-runner.timer",
+      reason: "DASHBOARD_CHAT_ROOMS Durable Object binding is not configured"
+    };
+  }
+  try {
+    const response = await room.fetch(
+      new Request("https://dashboard-room.local/runner-wakeup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          threadId,
+          executionId: execution?.executionId,
+          repository: execution?.targetRepository,
+          issueNumber: execution?.issueNumber,
+          queueCommentUrl: execution?.queueCommentUrl
+        })
+      })
+    );
+    const body = await readJsonResponseSafe(response);
+    return {
+      status: normalizeDashboardEventText(body?.wakeup?.status) || (response.ok ? "requested" : "failed"),
+      attempted: body?.wakeup?.attempted === true,
+      fallback: normalizeDashboardEventText(body?.wakeup?.fallback) || "vtdd-vps-runner.timer",
+      reason: normalizeDashboardEventText(body?.wakeup?.reason) || null
+    };
+  } catch (error2) {
+    return {
+      status: "failed",
+      attempted: true,
+      fallback: "vtdd-vps-runner.timer",
+      reason: sanitizeDashboardChatText(error2?.message || "runner wakeup request failed")
+    };
+  }
+}
 async function resolveDashboardChatRepository({ payload, env }) {
   const input = normalizeObject12(payload);
   const text = input.text || input.message || input.body;
@@ -68182,6 +68284,13 @@ function isSameOriginBrowserRequest(request) {
 async function readJson(request) {
   try {
     return await request.json();
+  } catch {
+    return {};
+  }
+}
+async function readJsonResponseSafe(response) {
+  try {
+    return await response.json();
   } catch {
     return {};
   }
