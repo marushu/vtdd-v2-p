@@ -583,6 +583,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       threadId: context.dashboardThreadId,
       codexThreadId: params.threadId || context.codexThreadId || null,
       status: "thinking",
+      persistProgress: true,
       text: "codex app-server が応答を生成しています。"
     };
   }
@@ -603,6 +604,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       codexThreadId: params.threadId || context.codexThreadId || null,
       status: "thinking",
       stage,
+      persistProgress: shouldPersistAppServerProgressStage(stage),
       text: "codex app-server の実行状態が更新されました。"
     };
   }
@@ -615,6 +617,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       turnId: params.turnId || null,
       status: "thinking",
       stage: "planning",
+      persistProgress: true,
       text: "方針を整理しています。"
     };
   }
@@ -627,6 +630,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       turnId: params.turnId || null,
       status: "thinking",
       stage: "file_change",
+      persistProgress: true,
       text: "ファイル変更を確認しています。"
     };
   }
@@ -639,6 +643,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       turnId: params.turnId || null,
       status: "thinking",
       stage: "command",
+      persistProgress: true,
       text: "コマンドを実行しています。"
     };
   }
@@ -651,6 +656,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       turnId: params.turnId || null,
       status: "thinking",
       stage: "tool_call",
+      persistProgress: true,
       text: "外部ツールの結果を待っています。"
     };
   }
@@ -663,6 +669,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       turnId: params.turnId || null,
       status: "thinking",
       stage: mapAppServerItemToProgressStage(params.item),
+      persistProgress: shouldPersistAppServerProgressStage(mapAppServerItemToProgressStage(params.item)),
       text: "codex app-server の処理が進行しています。"
     };
   }
@@ -675,6 +682,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       turnId: params.turnId || null,
       status: "thinking",
       stage: "thinking",
+      persistProgress: true,
       text: "考えています。"
     };
   }
@@ -709,6 +717,32 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
     };
   }
   return null;
+}
+
+function shouldPersistAppServerProgressStage(stage = "") {
+  const normalized = String(stage || "").trim().toLowerCase().replaceAll("-", "_");
+  return [
+    "thinking",
+    "planning",
+    "hypothesis",
+    "target",
+    "verify",
+    "verification",
+    "command",
+    "file_change",
+    "tool_call",
+    "web_search",
+    "waiting_approval",
+    "waiting_user_input",
+    "implementation",
+    "test",
+    "tests",
+    "pr_body",
+    "pr_create",
+    "reviewer_wait",
+    "reviewer_revision",
+    "debug_slow_turn"
+  ].includes(normalized);
 }
 
 function mapAppServerItemToProgressStage(item = {}) {
@@ -861,6 +895,7 @@ export async function runDashboardDebugSlowTurn({
     relatedIssue,
     status: "thinking",
     stage: "debug_slow_turn",
+    persistProgress: true,
     text: `Issue #590 slow turn E2E を開始しました。指定待機時間: ${durationSeconds}秒。`,
     debugSlowTurn: {
       startedAt,
@@ -888,6 +923,7 @@ export async function runDashboardDebugSlowTurn({
       relatedIssue,
       status: "thinking",
       stage: "debug_slow_turn",
+      persistProgress: true,
       text: `Issue #590 slow turn E2E 継続中です。経過: ${Math.floor(elapsedMs / 1000)}秒 / ${durationSeconds}秒。`,
       debugSlowTurn: {
         startedAt,

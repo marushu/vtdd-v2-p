@@ -4114,6 +4114,83 @@ test("DashboardChatRoom sends app-server thinking status as transient UI state",
   assert.equal(status.text, "codex app-server が応答を生成しています。");
 });
 
+test("DashboardChatRoom persists opt-in app-server progress checkpoints", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "planning",
+      persistProgress: true,
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "raw plan event"
+    })
+  );
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].role, "butler");
+  assert.equal(stored[0].status, "thinking");
+  assert.equal(stored[0].repository, "marushu/vtdd-v2-p");
+  assert.equal(stored[0].relatedIssue, 590);
+  assert.equal(stored[0].text, "方針を整理しています。");
+  const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
+  assert.equal(sentPayloads[0].type, "transient_status");
+  assert.equal(sentPayloads[0].text, "方針を整理しています。");
+  assert.equal(sentPayloads[1].type, "thread");
+  assert.equal(sentPayloads[1].messages[0].text, "方針を整理しています。");
+});
+
+test("DashboardChatRoom dedupes repeated app-server progress checkpoints", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const progressEvent = {
+    type: "app_server_status",
+    status: "thinking",
+    stage: "command",
+    persistProgress: true,
+    threadId: "dashboard-main-unresolved",
+    codexThreadId: "codex-thread-450",
+    text: "raw command output"
+  };
+
+  await room.webSocketMessage(bridgeSocket, JSON.stringify(progressEvent));
+  await room.webSocketMessage(bridgeSocket, JSON.stringify(progressEvent));
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].text, "コマンドを実行しています。");
+  const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
+  assert.equal(sentPayloads.filter((message) => message.type === "thread").length, 1);
+  assert.equal(sentPayloads.filter((message) => message.type === "transient_status").length, 2);
+});
+
 test("DashboardChatRoom maps app-server progress stages to owner-facing transient status", async () => {
   const stageCases = [
     ["read_context", "既存 Issue / PR / docs を確認しています。"],
@@ -4122,6 +4199,9 @@ test("DashboardChatRoom maps app-server progress stages to owner-facing transien
     ["bounded_change_contract", "bounded change contract を確認しています。"],
     ["topic_branch", "topic branch を作成しています。"],
     ["planning", "方針を整理しています。"],
+    ["hypothesis", "仮説を整理しています。"],
+    ["target", "確認する箇所にあたりをつけています。"],
+    ["verify", "検証方法を確認しています。"],
     ["command", "コマンドを実行しています。"],
     ["file_change", "ファイル変更を確認しています。"],
     ["tool_call", "外部ツールの結果を待っています。"],
