@@ -647,7 +647,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       turnId: params.turnId || null,
       status: "thinking",
       stage: "tool_call",
-      text: params.message || "外部ツールの結果を待っています。"
+      text: "外部ツールの結果を待っています。"
     };
   }
   if (method === "item/started" || method === "item/completed") {
@@ -720,15 +720,8 @@ function mapAppServerItemToProgressStage(item = {}) {
 
 export function isAppServerActivityNotification(message) {
   const method = String(message?.method || "");
-  return [
+  const progressMethods = [
     "turn/started",
-    "turn/completed",
-    "thread/status/changed",
-    "hook/started",
-    "hook/completed",
-    "item/started",
-    "item/completed",
-    "rawResponseItem/completed",
     "item/agentMessage/delta",
     "item/plan/delta",
     "turn/plan/updated",
@@ -738,19 +731,19 @@ export function isAppServerActivityNotification(message) {
     "item/commandExecution/terminalInteraction",
     "item/fileChange/outputDelta",
     "item/fileChange/patchUpdated",
-    "serverRequest/resolved",
     "item/mcpToolCall/progress",
-    "mcpServer/startupStatus/updated",
     "item/reasoning/summaryTextDelta",
-    "item/reasoning/summaryPartAdded",
-    "item/reasoning/textDelta",
-    "thread/compacted",
-    "model/rerouted",
-    "model/verification",
-    "warning",
-    "guardianWarning",
-    "configWarning"
-  ].includes(method);
+    "item/reasoning/summaryPartAdded"
+  ];
+  if (progressMethods.includes(method)) {
+    return true;
+  }
+  if (method !== "item/started" && method !== "item/completed") {
+    return false;
+  }
+  const params = message?.params && typeof message.params === "object" ? message.params : {};
+  const stage = mapAppServerItemToProgressStage(params.item);
+  return ["command", "file_change", "tool_call", "web_search", "planning"].includes(stage);
 }
 
 function createAppServerFailureAlreadySentError(message) {
@@ -951,6 +944,61 @@ export class JsonLineAppServerClient {
   }
 }
 
+function createAppServerTurnActivityWatchdog({
+  activityQuietMs = DEFAULT_ACTIVITY_QUIET_MS,
+  turnTimeoutMs = 0,
+  onQuiet = () => {},
+  onStalled = () => {}
+} = {}) {
+  let quietHandle = null;
+  let stalledHandle = null;
+  let stopped = false;
+
+  const clearQuiet = () => {
+    if (!quietHandle) return;
+    clearTimeout(quietHandle);
+    quietHandle = null;
+  };
+  const clearStalled = () => {
+    if (!stalledHandle) return;
+    clearTimeout(stalledHandle);
+    stalledHandle = null;
+  };
+  const stop = () => {
+    stopped = true;
+    clearQuiet();
+    clearStalled();
+  };
+  const markActivity = () => {
+    if (stopped) return;
+    clearQuiet();
+    clearStalled();
+    const quietMs = Number(activityQuietMs);
+    const stalledMs = Number(turnTimeoutMs);
+    if (Number.isFinite(quietMs) && quietMs > 0 && (!Number.isFinite(stalledMs) || stalledMs <= 0 || quietMs < stalledMs)) {
+      quietHandle = setTimeout(() => {
+        quietHandle = null;
+        if (stopped) return;
+        void onQuiet();
+      }, quietMs);
+    }
+    if (!Number.isFinite(stalledMs) || stalledMs <= 0) {
+      return;
+    }
+    stalledHandle = setTimeout(() => {
+      stalledHandle = null;
+      if (stopped) return;
+      stop();
+      void onStalled();
+    }, stalledMs);
+  };
+
+  return {
+    markActivity,
+    stop
+  };
+}
+
 export async function handleDashboardTurnRequest({
   request,
   appServer,
@@ -997,51 +1045,24 @@ export async function handleDashboardTurnRequest({
   let activeTurnId = "";
   let turnSettled = false;
   let timedOut = false;
-  let quietHandle = null;
-  let timeoutHandle = null;
   let lateCompletionCleanupHandle = null;
   let cleanupNotifications = () => {};
   let resolveTurn = () => {};
   let rejectTurn = () => {};
-
-  const clearActivityWatchdog = () => {
-    clearTimeout(quietHandle);
-    clearTimeout(timeoutHandle);
-    quietHandle = null;
-    timeoutHandle = null;
-  };
-
-  const finishTurn = (callback) => {
-    if (turnSettled) return;
-    turnSettled = true;
-    clearActivityWatchdog();
-    callback();
-  };
-
-  const scheduleActivityWatchdog = () => {
-    clearActivityWatchdog();
-    if (turnSettled || timedOut) return;
-    const quietMs = Number(activityQuietMs);
-    const stalledMs = Number(turnTimeoutMs);
-    if (Number.isFinite(quietMs) && quietMs > 0 && (!Number.isFinite(stalledMs) || stalledMs <= 0 || quietMs < stalledMs)) {
-      quietHandle = setTimeout(() => {
-        quietHandle = null;
-        if (turnSettled || timedOut) return;
-        void sendDashboardEvent({
-          type: "app_server_status",
-          schema: DEFAULT_SCHEMA,
-          threadId: dashboardThreadId,
-          codexThreadId: codexThreadId || null,
-          status: "quiet",
-          stage: "quiet",
-          text: APP_SERVER_TURN_QUIET_TEXT
-        });
-      }, quietMs);
-    }
-    if (!Number.isFinite(stalledMs) || stalledMs <= 0) {
-      return;
-    }
-    timeoutHandle = setTimeout(() => {
+  const activityWatchdog = createAppServerTurnActivityWatchdog({
+    activityQuietMs,
+    turnTimeoutMs,
+    onQuiet: () =>
+      sendDashboardEvent({
+        type: "app_server_status",
+        schema: DEFAULT_SCHEMA,
+        threadId: dashboardThreadId,
+        codexThreadId: codexThreadId || null,
+        status: "quiet",
+        stage: "quiet",
+        text: APP_SERVER_TURN_QUIET_TEXT
+      }),
+    onStalled: () => {
       timedOut = true;
       const timeoutEvent = buildAppServerTurnTimeoutEvent({
         dashboardThreadId,
@@ -1055,19 +1076,26 @@ export async function handleDashboardTurnRequest({
         cleanupNotifications();
       }, lateCompletionTimeoutMs);
       finishTurn(resolveTurn);
-    }, stalledMs);
+    }
+  });
+
+  const finishTurn = (callback) => {
+    if (turnSettled) return;
+    turnSettled = true;
+    activityWatchdog.stop();
+    callback();
   };
 
   const markAppServerActivity = () => {
     if (turnSettled || timedOut) return;
-    scheduleActivityWatchdog();
+    activityWatchdog.markActivity();
   };
 
   const turnCompletion = new Promise((resolve, reject) => {
     resolveTurn = resolve;
     rejectTurn = reject;
   });
-  scheduleActivityWatchdog();
+  activityWatchdog.markActivity();
   const unsubscribe = appServer.onNotification((message) => {
     if (!matchesAppServerTurnNotification(message, { codexThreadId, turnId: activeTurnId })) {
       return;
@@ -1189,7 +1217,7 @@ export async function handleDashboardTurnRequest({
     markAppServerActivity();
     await turnCompletion;
   } finally {
-    clearActivityWatchdog();
+    activityWatchdog.stop();
     if (!timedOut && typeof appServer.drainApprovalRequests === "function") {
       await appServer.drainApprovalRequests();
     }
