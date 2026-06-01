@@ -84,8 +84,8 @@ test("active issue execution queue names current open PR hygiene", () => {
 });
 
 test("active issue execution queue names the next automatic implementation lane", () => {
-  assert.equal(sectionBody("Now").includes("Issue #723: Dashboard Butler self-refresh and force cache reload"), true);
-  assert.equal(sectionBody("Next").includes("Issue #590: app-server turn timeout / silent wait recovery"), true);
+  assert.equal(sectionBody("Now").includes("Issue #590: app-server turn timeout / silent wait recovery"), true);
+  assert.equal(doc.includes("PR #724 merged and deploy-production succeeded for Issue #723"), true);
   assert.equal(sectionBody("Next").includes("Issue #637: iPhone/PWA-complete VPS privileged maintenance"), true);
   assert.equal(sectionBody("Evidence Gaps").includes("Issue #606: PR #627 merged and production deployed"), true);
   assert.equal(
