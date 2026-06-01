@@ -25,8 +25,10 @@ import {
   matchesAppServerTurnNotification,
   materializeDashboardMediaReferences,
   parseBridgeArgs,
+  parseDashboardDebugSlowTurnRequest,
   postOwnerActionRequiredEvent,
-  runDashboardAppServerBridge
+  runDashboardAppServerBridge,
+  runDashboardDebugSlowTurn
 } from "../scripts/run-dashboard-app-server-bridge.mjs";
 
 test("dashboard app-server bridge builds initialize and thread requests from Codex app-server protocol", () => {
@@ -1232,6 +1234,126 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
   assert.doesNotMatch(timeoutEvent.text, /timed out before completion/);
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(handlers.size, 0);
+});
+
+test("dashboard app-server bridge parses Issue #590 debug slow turn duration from natural language", () => {
+  assert.deepEqual(
+    parseDashboardDebugSlowTurnRequest({
+      relatedIssue: 590,
+      text: "Issue #590 の slow turn を 3分で実行して"
+    }),
+    {
+      enabled: true,
+      ok: true,
+      durationSeconds: 180
+    }
+  );
+
+  assert.deepEqual(
+    parseDashboardDebugSlowTurnRequest({
+      text: "Issue #590 timeout E2E を 45秒で実行"
+    }),
+    {
+      enabled: true,
+      ok: true,
+      durationSeconds: 45
+    }
+  );
+
+  assert.equal(parseDashboardDebugSlowTurnRequest({ text: "普通に返信して" }).enabled, false);
+  assert.equal(parseDashboardDebugSlowTurnRequest({ relatedIssue: 498, text: "slow turn を 3分で実行" }).enabled, false);
+  assert.equal(parseDashboardDebugSlowTurnRequest({ relatedIssue: 590, text: "slow turn を 11分で実行" }).ok, false);
+});
+
+test("dashboard app-server bridge runs Issue #590 debug slow turn without starting Codex", async () => {
+  const events = [];
+  let requestCount = 0;
+  const appServer = {
+    nextRequestId() {
+      return 1;
+    },
+    onNotification() {
+      return () => {};
+    },
+    async request() {
+      requestCount += 1;
+      throw new Error("debug slow turn must not call codex app-server");
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "Issue #590 の slow turn を 10秒で実行して"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    debugSlowTurnDelayImpl: async () => {},
+    debugSlowTurnProgressIntervalMs: 1000
+  });
+
+  assert.equal(requestCount, 0);
+  assert.equal(events[0].type, "app_server_status");
+  assert.equal(events[0].stage, "debug_slow_turn");
+  assert.match(events[0].text, /slow turn E2E を開始/);
+  assert.ok(events.some((event) => event.type === "app_server_status" && /継続中/.test(event.text)));
+  const reply = events.find((event) => event.type === "app_server_reply");
+  assert.ok(reply);
+  assert.equal(reply.threadId, "dashboard-main");
+  assert.equal(reply.repository, "marushu/vtdd-v2-p");
+  assert.equal(reply.relatedIssue, 590);
+  assert.match(reply.text, /low turn E2E が完了/);
+  assert.match(reply.text, /root \/ sudo \/ deploy \/ credential \/ repository mutation は実行していません/);
+});
+
+test("dashboard app-server bridge rejects out-of-range Issue #590 debug slow turn duration", async () => {
+  const events = [];
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "Issue #590 の slow turn を 0秒で実行して"
+    },
+    appServer: {
+      nextRequestId() {
+        throw new Error("must not call codex app-server");
+      }
+    },
+    sendDashboardEvent: async (event) => events.push(event)
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "app_server_turn_failed");
+  assert.equal(events[0].status, "invalid_debug_slow_turn_duration");
+  assert.match(events[0].text, /10秒から 600秒まで/);
+});
+
+test("dashboard app-server bridge can run debug slow turn with injected timing", async () => {
+  const events = [];
+  await runDashboardDebugSlowTurn({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590
+    },
+    sendDashboardEvent: async (event) => events.push(event),
+    durationSeconds: 10,
+    progressIntervalMs: 2500,
+    delayImpl: async () => {},
+    now: (() => {
+      const values = ["2026-06-02T00:00:00.000Z", "2026-06-02T00:00:10.000Z"];
+      return () => values.shift() || "2026-06-02T00:00:10.000Z";
+    })()
+  });
+
+  assert.equal(events[0].type, "app_server_status");
+  assert.equal(events[0].debugSlowTurn.lowRisk, true);
+  assert.ok(events.filter((event) => event.type === "app_server_status" && event.stage === "debug_slow_turn").length >= 2);
+  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.match(events.at(-1).text, /指定待機時間: 10秒/);
 });
 
 test("dashboard app-server bridge repeats quiet status before hard stalled timeout without ending the turn", async () => {
