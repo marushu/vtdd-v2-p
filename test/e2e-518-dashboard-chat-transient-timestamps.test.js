@@ -88,7 +88,7 @@ test("E2E-518 evidence doc records Dashboard timestamp and transient status run"
   assert.equal(doc.includes(["", "Users", "shuhei"].join("/") + "/"), false);
   assert.equal(doc.includes(["", "opt", "homebrew"].join("/") + "/"), false);
   assert.equal(doc.includes("does not deploy to Cloudflare"), true);
-  assert.equal(doc.includes("selected safe progress checkpoint persistence"), true);
+  assert.equal(doc.includes("generic progress stays transient-only"), true);
   assert.equal(doc.includes("does not close Issue `#518`"), true);
 });
 
@@ -118,7 +118,7 @@ test("E2E-518 dashboard route exposes timestamp renderer and transient status UI
   assert.equal(html.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-sample-org-vtdd-v2-p"'), true);
 });
 
-test("E2E-518 app-server stages update transient status, safe checkpoints persist, and final reply resets status", async () => {
+test("E2E-518 app-server stages update transient status without generic chat spam and final reply resets status", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -146,18 +146,12 @@ test("E2E-518 app-server stages update transient status, safe checkpoints persis
   );
 
   let stored = await store.listThread("dashboard-main-unresolved");
-  assert.equal(stored.length, 1);
-  assert.equal(stored[0].role, "butler");
-  assert.equal(stored[0].status, "thinking");
-  assert.equal(stored[0].text, "テストを実行しています。");
-  assert.equal(dashboardSocket.sent.length, 2);
+  assert.equal(stored.length, 0);
+  assert.equal(dashboardSocket.sent.length, 1);
   const transient = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(transient.type, "transient_status");
   assert.equal(transient.status, "thinking");
   assert.equal(transient.text, "テストを実行しています。");
-  const checkpointThread = JSON.parse(dashboardSocket.sent[1]);
-  assert.equal(checkpointThread.type, "thread");
-  assert.equal(checkpointThread.messages[0].text, "テストを実行しています。");
 
   await room.webSocketMessage(
     bridgeSocket,
@@ -171,15 +165,15 @@ test("E2E-518 app-server stages update transient status, safe checkpoints persis
   );
 
   stored = await store.listThread("dashboard-main-unresolved");
-  assert.equal(stored.length, 2);
-  assert.equal(stored[1].role, "butler");
-  assert.equal(stored[1].status, "replied");
-  assert.equal(dashboardSocket.sent.length, 4);
-  const finalStatus = JSON.parse(dashboardSocket.sent[2]);
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].role, "butler");
+  assert.equal(stored[0].status, "replied");
+  assert.equal(dashboardSocket.sent.length, 3);
+  const finalStatus = JSON.parse(dashboardSocket.sent[1]);
   assert.equal(finalStatus.type, "transient_status");
   assert.equal(finalStatus.status, "replied");
   assert.equal(finalStatus.text, "Dashboard thread 接続済み。");
-  const finalThread = JSON.parse(dashboardSocket.sent[3]);
+  const finalThread = JSON.parse(dashboardSocket.sent[2]);
   assert.equal(finalThread.type, "thread");
   assert.equal(finalThread.messages.at(-1).text, "PR #519 の残りを確認しました。");
 });

@@ -4114,7 +4114,7 @@ test("DashboardChatRoom sends app-server thinking status as transient UI state",
   assert.equal(status.text, "codex app-server が応答を生成しています。");
 });
 
-test("DashboardChatRoom persists opt-in app-server progress checkpoints", async () => {
+test("DashboardChatRoom keeps generic opt-in app-server progress transient-only", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -4144,20 +4144,14 @@ test("DashboardChatRoom persists opt-in app-server progress checkpoints", async 
   );
 
   const stored = await store.listThread("dashboard-main-unresolved");
-  assert.equal(stored.length, 1);
-  assert.equal(stored[0].role, "butler");
-  assert.equal(stored[0].status, "thinking");
-  assert.equal(stored[0].repository, "marushu/vtdd-v2-p");
-  assert.equal(stored[0].relatedIssue, 590);
-  assert.equal(stored[0].text, "方針を整理しています。");
+  assert.equal(stored.length, 0);
   const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
   assert.equal(sentPayloads[0].type, "transient_status");
   assert.equal(sentPayloads[0].text, "方針を整理しています。");
-  assert.equal(sentPayloads[1].type, "thread");
-  assert.equal(sentPayloads[1].messages[0].text, "方針を整理しています。");
+  assert.equal(sentPayloads.some((message) => message.type === "thread"), false);
 });
 
-test("DashboardChatRoom persists known safe app-server progress stages without bridge opt-in flag", async () => {
+test("DashboardChatRoom keeps generic app-server progress stages transient-only without bridge opt-in flag", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -4184,17 +4178,14 @@ test("DashboardChatRoom persists known safe app-server progress stages without b
   );
 
   const stored = await store.listThread("dashboard-main-unresolved");
-  assert.equal(stored.length, 1);
-  assert.equal(stored[0].role, "butler");
-  assert.equal(stored[0].status, "thinking");
-  assert.equal(stored[0].text, "ファイル変更を確認しています。");
-  assert.doesNotMatch(stored[0].text, /raw diff detail/);
+  assert.equal(stored.length, 0);
   const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
   assert.equal(sentPayloads[0].type, "transient_status");
-  assert.equal(sentPayloads[1].type, "thread");
+  assert.equal(sentPayloads[0].text, "ファイル変更を確認しています。");
+  assert.equal(sentPayloads.some((message) => message.type === "thread"), false);
 });
 
-test("DashboardChatRoom dedupes repeated app-server progress checkpoints", async () => {
+test("DashboardChatRoom does not append repeated generic app-server progress checkpoints", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -4221,10 +4212,9 @@ test("DashboardChatRoom dedupes repeated app-server progress checkpoints", async
   await room.webSocketMessage(bridgeSocket, JSON.stringify(progressEvent));
 
   const stored = await store.listThread("dashboard-main-unresolved");
-  assert.equal(stored.length, 1);
-  assert.equal(stored[0].text, "コマンドを実行しています。");
+  assert.equal(stored.length, 0);
   const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
-  assert.equal(sentPayloads.filter((message) => message.type === "thread").length, 1);
+  assert.equal(sentPayloads.filter((message) => message.type === "thread").length, 0);
   assert.equal(sentPayloads.filter((message) => message.type === "transient_status").length, 2);
 });
 
@@ -4253,24 +4243,7 @@ test("DashboardChatRoom maps app-server progress stages to owner-facing transien
     ["reviewer_wait", "CI / reviewer を待っています。"],
     ["reviewer_revision", "reviewer 指摘を反映しています。"]
   ];
-  const durableStages = new Set([
-    "planning",
-    "hypothesis",
-    "target",
-    "verify",
-    "command",
-    "file_change",
-    "tool_call",
-    "web_search",
-    "waiting_approval",
-    "waiting_user_input",
-    "implementation",
-    "test",
-    "pr_body",
-    "pr_create",
-    "reviewer_wait",
-    "reviewer_revision"
-  ]);
+  const durableStages = new Set(["waiting_approval", "waiting_user_input"]);
   for (const [stage, expectedText] of stageCases) {
     const store = createInMemoryDashboardChatStore();
     const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");

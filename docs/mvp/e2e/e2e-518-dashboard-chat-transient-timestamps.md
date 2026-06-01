@@ -11,8 +11,8 @@ Goal:
 - confirm Dashboard Butler chat messages show subtle timestamps
 - confirm owner / Butler / system timestamps fit in an iPhone-width layout
 - confirm app-server progress stages are mapped to owner-facing Japanese transient status
-- confirm transient progress still updates composer status while selected safe
-  stages may also persist as short Butler progress checkpoints
+- confirm generic progress stays transient-only so chat history is not filled with
+  low-information progress checkpoints
 - confirm final app-server replies return transient status to the normal connected state
 
 Non-goals:
@@ -32,8 +32,8 @@ node --test test/worker.test.js
 Observed result on 2026-05-26:
 - passed
 - confirms Dashboard inline chat renderer contains `message-meta` timestamp rendering
-- confirms `transient_status` is handled as composer status, and selected safe
-  stages can also create short Butler progress checkpoints
+- confirms `transient_status` is handled as composer status, and generic progress
+  stages do not create durable Butler chat messages
 - confirms `app_server_reply` is persisted as a Butler message and also returns transient status to `Dashboard thread 接続済み。`
 - confirms app-server stages map to owner-facing Japanese transient labels:
   - `既存 Issue / PR / docs を確認しています。`
@@ -81,7 +81,7 @@ Screenshot hash:
 ## Current Reading
 
 Issue `#518` now has code-level evidence for timestamp rendering, transient
-status rendering, selected safe progress checkpoint persistence,
-owner-facing stage mapping, and final connected-state reset.
+status rendering, generic progress stays transient-only, owner-facing stage
+mapping, and final connected-state reset.
 It also has mobile-width visual evidence for timestamp layout. This is not a
 production deploy claim and does not close the Issue by itself.
