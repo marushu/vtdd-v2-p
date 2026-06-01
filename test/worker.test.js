@@ -1114,6 +1114,7 @@ test("worker does not expose dashboard notification details before Access auth",
 });
 
 test("worker ignores stale dashboard passkey cookie when Cloudflare Access owner identity is valid", async () => {
+  const provider = createInMemoryMemoryProvider();
   const response = await worker.fetch(
     new Request("https://example.com/dashboard", {
       headers: {
@@ -1123,11 +1124,13 @@ test("worker ignores stale dashboard passkey cookie when Cloudflare Access owner
     }),
     {
       ...dashboardAccessEnv,
-      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+      MEMORY_PROVIDER: provider
     }
   );
 
   assert.equal(response.status, 200);
+  assert.match(response.headers.get("set-cookie"), /vtdd_dashboard_session=dashboard-session%3A/);
+  assert.match(response.headers.get("set-cookie"), /Max-Age=28800/);
   const body = await response.text();
   assert.equal(body.includes("VTDD v2 Dashboard"), true);
   assert.equal(body.includes("dashboard session was not found"), false);
