@@ -3946,11 +3946,13 @@ test("DashboardChatRoom persists app-server timeout as recoverable Japanese thre
   const stored = await store.listThread("dashboard-main-unresolved");
   assert.equal(stored.length, 1);
   assert.equal(stored[0].role, "system");
-  assert.equal(stored[0].status, "failed");
+  assert.equal(stored[0].status, "stalled");
   assert.equal(stored[0].repository, "marushu/vtdd-v2-p");
   assert.equal(stored[0].relatedIssue, 590);
-  assert.match(stored[0].text, /応答生成が時間切れ/);
-  assert.match(stored[0].text, /同じ thread で続ける/);
+  assert.match(stored[0].text, /応答が遅れています/);
+  assert.match(stored[0].text, /同じ内容でもう一度実行する/);
+  assert.match(stored[0].text, /短くして再送/);
+  assert.match(stored[0].text, /遅れて返信が届いた場合/);
   assert.doesNotMatch(stored[0].text, /timed out before completion/);
 
   const broadcast = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "thread");
@@ -3959,7 +3961,7 @@ test("DashboardChatRoom persists app-server timeout as recoverable Japanese thre
 
   const failedStatus = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "transient_status");
   assert.ok(failedStatus);
-  assert.equal(failedStatus.status, "failed");
+  assert.equal(failedStatus.status, "stalled");
   assert.equal(failedStatus.text, stored[0].text);
 });
 
