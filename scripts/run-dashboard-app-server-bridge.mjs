@@ -11,11 +11,11 @@ const APP_SERVER_FAILURE_ALREADY_SENT = Symbol("appServerFailureAlreadySent");
 const DEFAULT_APP_SERVER_ERROR_TEXT =
   "codex app-server が応答生成中に失敗しました。画像を解析できなかった可能性があります。もう一度送るか、画像なしで内容を短く説明してください。";
 const APP_SERVER_TURN_TIMEOUT_TEXT =
-  "codex app-server から進行イベントがしばらく届いていません。この依頼は Dashboard thread に保存済みです。待つ、同じ内容でもう一度実行する、短くして再送する、キャンセルする、のいずれかで復旧できます。遅れて返信が届いた場合は、この thread に追加します。";
+  "codex app-server の応答確認が長引いています。入力と文脈は Dashboard thread に保存済みです。再接続と状態確認を続けています。同じ thread で補足やキャンセル指示を送れます。遅れて返信が届いた場合は、この thread に追加します。";
 const APP_SERVER_TURN_QUIET_TEXT =
-  "codex app-server から進行イベントがしばらく届いていません。処理中の可能性があります。接続と実行状態を確認しています。";
+  "接続と実行状態を確認中です。入力と文脈は保持しています。";
 const DASHBOARD_MEDIA_TMP_DIR = "vtdd-dashboard-media";
-const DEFAULT_TURN_TIMEOUT_MS = 2 * 60 * 1000;
+const DEFAULT_TURN_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_ACTIVITY_QUIET_MS = 90 * 1000;
 
 export function buildAppServerInitializeRequest(id = 1) {
@@ -742,7 +742,12 @@ export function isAppServerActivityNotification(message) {
   const params = message?.params && typeof message.params === "object" ? message.params : {};
   if (method === "thread/status/changed") {
     const activeFlags = Array.isArray(params.status?.activeFlags) ? params.status.activeFlags : [];
-    return activeFlags.includes("waitingOnApproval") || activeFlags.includes("waitingOnUserInput");
+    const statusType = String(params.status?.type || params.status || "");
+    return (
+      statusType === "active" ||
+      activeFlags.includes("waitingOnApproval") ||
+      activeFlags.includes("waitingOnUserInput")
+    );
   }
   if (method !== "item/started" && method !== "item/completed") {
     return false;
@@ -980,12 +985,18 @@ function createAppServerTurnActivityWatchdog({
     clearStalled();
     const quietMs = Number(activityQuietMs);
     const stalledMs = Number(turnTimeoutMs);
-    if (Number.isFinite(quietMs) && quietMs > 0 && (!Number.isFinite(stalledMs) || stalledMs <= 0 || quietMs < stalledMs)) {
+    const scheduleQuiet = () => {
       quietHandle = setTimeout(() => {
         quietHandle = null;
         if (stopped) return;
         void onQuiet();
+        if (stopped) return;
+        if (Number.isFinite(stalledMs) && stalledMs > 0 && quietMs >= stalledMs) return;
+        scheduleQuiet();
       }, quietMs);
+    };
+    if (Number.isFinite(quietMs) && quietMs > 0 && (!Number.isFinite(stalledMs) || stalledMs <= 0 || quietMs < stalledMs)) {
+      scheduleQuiet();
     }
     if (!Number.isFinite(stalledMs) || stalledMs <= 0) {
       return;
