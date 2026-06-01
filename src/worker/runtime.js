@@ -8874,7 +8874,7 @@ function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {
     normalizedStatus === "timeout" ||
     /timed out before completion/i.test(normalizedText)
   ) {
-    return "codex app-server から進行イベントがしばらく届いていません。この依頼は Dashboard thread に保存済みです。待つ、同じ内容でもう一度実行する、短くして再送する、キャンセルする、のいずれかで復旧できます。遅れて返信が届いた場合は、この thread に追加します。";
+    return "codex app-server の応答確認が長引いています。入力と文脈は Dashboard thread に保存済みです。再接続と状態確認を続けています。同じ thread で補足やキャンセル指示を送れます。遅れて返信が届いた場合は、この thread に追加します。";
   }
   return normalizedText || "codex app-server が返信前に失敗しました。同じ thread で続けるか、内容を短くしてもう一度送れます。";
 }
@@ -8897,7 +8897,7 @@ const DASHBOARD_APP_SERVER_STAGE_TEXT = {
   web_search: "必要な情報を確認しています。",
   waiting_approval: "承認待ちです。",
   waiting_user_input: "確認が必要です。",
-  quiet: "しばらく進行イベントが届いていません。処理中の可能性があります。",
+  quiet: "接続と実行状態を確認中です。入力と文脈は保持しています。",
   thinking: "考えています。",
   implementation: "実装に入っています。",
   implement: "実装に入っています。",
@@ -14835,7 +14835,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function withPendingSendRecoveryInstruction(text) {
-        const base = String(text || "").trim() || "codex app-server から進行イベントがしばらく届いていません。";
+        const base = String(text || "").trim() || "接続と実行状態を確認中です。";
         const instruction = "送信保存を確認中のため入力欄は保持しています。確認後に同じ thread へ追加できます。";
         return base.includes("送信保存を確認中") ? base : base + " " + instruction;
       }
@@ -15762,7 +15762,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             } else if (body.type === "transient_status" && body.ok) {
               const isThinking = body.status === "thinking";
               if (body.status === "stalled") {
-                releaseComposerForFollowUp(body.text || "codex app-server から進行イベントがしばらく届いていません。");
+                releaseComposerForFollowUp(body.text || "接続と実行状態を確認中です。");
               } else {
                 setStatus(body.text || (isThinking ? "codex app-server が応答を生成しています" : "codex app-server の応答が完了しました。"), {
                   thinking: isThinking,

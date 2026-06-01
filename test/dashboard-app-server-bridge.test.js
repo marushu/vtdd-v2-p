@@ -1222,7 +1222,9 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
   assert.equal(timeoutEvent.threadId, "dashboard-main");
   assert.equal(timeoutEvent.repository, "marushu/vtdd-v2-p");
   assert.equal(timeoutEvent.relatedIssue, 590);
-  assert.match(timeoutEvent.text, /この依頼は Dashboard thread に保存済み/);
+  assert.match(timeoutEvent.text, /応答確認が長引いています/);
+  assert.match(timeoutEvent.text, /入力と文脈は Dashboard thread に保存済み/);
+  assert.match(timeoutEvent.text, /補足やキャンセル指示/);
   assert.deepEqual(timeoutEvent.recovery.actions, ["wait", "retry", "shorten_and_resend", "cancel"]);
   assert.equal(timeoutEvent.recovery.status, "stalled");
   assert.equal(timeoutEvent.recovery.retryable, true);
@@ -1232,7 +1234,7 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
   assert.equal(handlers.size, 0);
 });
 
-test("dashboard app-server bridge sends quiet status before stalled timeout without ending the turn", async () => {
+test("dashboard app-server bridge repeats quiet status before hard stalled timeout without ending the turn", async () => {
   const events = [];
   let nextId = 1;
   const appServer = {
@@ -1265,15 +1267,17 @@ test("dashboard app-server bridge sends quiet status before stalled timeout with
     appServer,
     sendDashboardEvent: async (event) => events.push(event),
     cwd: "/repo",
-    activityQuietMs: 1,
-    turnTimeoutMs: 20,
+    activityQuietMs: 3,
+    turnTimeoutMs: 18,
     lateCompletionTimeoutMs: 1
   });
 
-  const quietEvent = events.find((event) => event.type === "app_server_status" && event.status === "quiet");
+  const quietEvents = events.filter((event) => event.type === "app_server_status" && event.status === "quiet");
+  const quietEvent = quietEvents[0];
   assert.ok(quietEvent);
+  assert.ok(quietEvents.length >= 2);
   assert.equal(quietEvent.stage, "quiet");
-  assert.match(quietEvent.text, /進行イベントがしばらく届いていません/);
+  assert.match(quietEvent.text, /接続と実行状態を確認中/);
   assert.equal(events.filter((event) => event.type === "app_server_turn_failed").length, 1);
 });
 
@@ -1353,7 +1357,7 @@ test("dashboard app-server bridge resets stalled timeout when app-server activit
   assert.equal(events.at(-1).text, "テストまで完了しました。");
 });
 
-test("dashboard app-server bridge does not reset stalled timeout for non-progress notifications", async () => {
+test("dashboard app-server bridge treats active thread status as activity", async () => {
   const events = [];
   const handlers = new Set();
   let nextId = 1;
@@ -1383,6 +1387,84 @@ test("dashboard app-server bridge does not reset stalled timeout for non-progres
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
       relatedIssue: 590,
+      text: "active status を確認して"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    activityQuietMs: 0,
+    turnTimeoutMs: 40
+  });
+
+  await waitFor(() => handlers.size === 1);
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  for (const handler of handlers) {
+    handler({
+      method: "thread/status/changed",
+      params: {
+        threadId: "codex-thread-non-progress",
+        turnId: "turn-non-progress",
+        status: { type: "active", activeFlags: [] }
+      }
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
+
+  for (const handler of handlers) {
+    handler({
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-non-progress",
+        turnId: "turn-non-progress",
+        delta: "active status を活動として扱いました。"
+      }
+    });
+    handler({
+      method: "turn/completed",
+      params: {
+        threadId: "codex-thread-non-progress",
+        turn: { id: "turn-non-progress", status: "completed" }
+      }
+    });
+  }
+  await pending;
+
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
+  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.equal(events.at(-1).text, "active status を活動として扱いました。");
+});
+
+test("dashboard app-server bridge does not reset stalled timeout for non-progress notifications", async () => {
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-warning" } };
+      }
+      if (message.method === "turn/start") {
+        return { turn: { id: "turn-warning" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  const pending = handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
       text: "止まったかどうか確認して"
     },
     appServer,
@@ -1397,18 +1479,10 @@ test("dashboard app-server bridge does not reset stalled timeout for non-progres
   await new Promise((resolve) => setTimeout(resolve, 15));
   for (const handler of handlers) {
     handler({
-      method: "thread/status/changed",
-      params: {
-        threadId: "codex-thread-non-progress",
-        turnId: "turn-non-progress",
-        status: { type: "active", activeFlags: [] }
-      }
-    });
-    handler({
       method: "warning",
       params: {
-        threadId: "codex-thread-non-progress",
-        turnId: "turn-non-progress",
+        threadId: "codex-thread-warning",
+        turnId: "turn-warning",
         message: "non-progress warning"
       }
     });
@@ -1730,7 +1804,7 @@ test("dashboard app-server bridge args require a dashboard thread id for runtime
   });
   assert.equal(parsed.threadId, "");
   assert.equal(parsed.sandboxMode, "danger-full-access");
-  assert.equal(parsed.turnTimeoutMs, 120000);
+  assert.equal(parsed.turnTimeoutMs, 600000);
   assert.equal(parsed.activityQuietMs, 90000);
 });
 
