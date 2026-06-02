@@ -603,28 +603,31 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(started.text, "codex app-server が応答を生成しています。");
 
   const plan = mapAppServerNotificationToDashboardEvent(
-    { method: "turn/plan/updated", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
+    { method: "turn/plan/updated", params: { threadId: "codex-thread-1", turnId: "turn-1", delta: "Issue #590 の runtime mapping を確認します。" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
   );
   assert.equal(plan.type, "app_server_status");
   assert.equal(plan.stage, "planning");
   assert.equal(plan.persistProgress, true);
+  assert.equal(plan.text, "方針を整理しています。\nIssue #590 の runtime mapping を確認します。");
 
   const command = mapAppServerNotificationToDashboardEvent(
-    { method: "item/commandExecution/outputDelta", params: { threadId: "codex-thread-1", turnId: "turn-1", delta: "npm test" } },
+    { method: "item/commandExecution/outputDelta", params: { threadId: "codex-thread-1", turnId: "turn-1", command: "node --test test/worker.test.js", delta: "250 tests passed" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
   );
   assert.equal(command.type, "app_server_status");
   assert.equal(command.stage, "command");
   assert.equal(command.persistProgress, true);
+  assert.equal(command.text, "コマンドを実行しています。 node --test test/worker.test.js\n250 tests passed");
 
   const diff = mapAppServerNotificationToDashboardEvent(
-    { method: "turn/diff/updated", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
+    { method: "turn/diff/updated", params: { threadId: "codex-thread-1", turnId: "turn-1", path: "src/worker/runtime.js", delta: "composer progress の重複 status を外します。" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
   );
   assert.equal(diff.type, "app_server_status");
   assert.equal(diff.stage, "file_change");
   assert.equal(diff.persistProgress, true);
+  assert.equal(diff.text, "ファイル変更を確認しています。 src/worker/runtime.js\ncomposer progress の重複 status を外します。");
 
   const toolProgress = mapAppServerNotificationToDashboardEvent(
     { method: "item/mcpToolCall/progress", params: { threadId: "codex-thread-1", turnId: "turn-1", message: "raw provider progress" } },

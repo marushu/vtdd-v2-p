@@ -623,7 +623,11 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       status: "thinking",
       stage: "planning",
       persistProgress: true,
-      text: "方針を整理しています。"
+      text: buildAppServerConcreteProgressText({
+        params,
+        prefix: "方針を整理しています。",
+        fallback: "方針を整理しています。"
+      })
     };
   }
   if (method === "turn/diff/updated" || method === "item/fileChange/patchUpdated" || method === "item/fileChange/outputDelta") {
@@ -636,7 +640,12 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       status: "thinking",
       stage: "file_change",
       persistProgress: true,
-      text: "ファイル変更を確認しています。"
+      text: buildAppServerConcreteProgressText({
+        params,
+        prefix: "ファイル変更を確認しています。",
+        fallback: "ファイル変更を確認しています。",
+        target: extractAppServerProgressTarget(params, ["path", "filePath", "file", "filename"])
+      })
     };
   }
   if (method === "command/exec/outputDelta" || method === "item/commandExecution/outputDelta") {
@@ -649,7 +658,12 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       status: "thinking",
       stage: "command",
       persistProgress: true,
-      text: "コマンドを実行しています。"
+      text: buildAppServerConcreteProgressText({
+        params,
+        prefix: "コマンドを実行しています。",
+        fallback: "コマンドを実行しています。",
+        target: extractAppServerProgressTarget(params, ["command", "cmd", "shellCommand"])
+      })
     };
   }
   if (method === "item/mcpToolCall/progress") {
@@ -688,7 +702,11 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       status: "thinking",
       stage: "thinking",
       persistProgress: true,
-      text: "考えています。"
+      text: buildAppServerConcreteProgressText({
+        params,
+        prefix: "考えを整理しています。",
+        fallback: "考えています。"
+      })
     };
   }
   if (method === "turn/completed") {
@@ -735,6 +753,54 @@ export function buildAppServerReplyDeltaProgressText({ accumulatedText = "", del
     return `…\n\n${tail.slice(paragraphStart + 2).trim()}`;
   }
   return `…${tail.trimStart()}`;
+}
+
+export function buildAppServerConcreteProgressText({
+  params = {},
+  prefix = "",
+  fallback = "",
+  target = "",
+  maxLength = 420
+} = {}) {
+  const cleanPrefix = normalizeBridgeText(prefix || fallback);
+  const cleanTarget = normalizeBridgeText(target);
+  const detail = buildAppServerProgressDetail(params, { maxLength });
+  const head = cleanTarget ? `${cleanPrefix} ${cleanTarget}` : cleanPrefix;
+  if (!detail) return head || normalizeBridgeText(fallback);
+  return [head || normalizeBridgeText(fallback), detail].filter(Boolean).join("\n");
+}
+
+function buildAppServerProgressDetail(params = {}, { maxLength = 420 } = {}) {
+  const candidates = [
+    params.delta,
+    params.text,
+    params.message,
+    params.summary,
+    params.output,
+    params.patch,
+    params.diff
+  ];
+  const raw = candidates.find((value) => String(value || "").trim());
+  if (!raw) return "";
+  const normalized = String(raw)
+    .replace(/\r\n?/g, "\n")
+    .replace(/\x1b\[[0-9;]*m/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+  if (!normalized) return "";
+  if (normalized.length <= maxLength) return normalized;
+  return `…${normalized.slice(-maxLength).trimStart()}`;
+}
+
+function extractAppServerProgressTarget(params = {}, keys = []) {
+  for (const key of keys) {
+    const direct = normalizeBridgeText(params?.[key]);
+    if (direct) return direct;
+    const itemValue = normalizeBridgeText(params?.item?.[key]);
+    if (itemValue) return itemValue;
+  }
+  return "";
 }
 
 function shouldPersistAppServerProgressStage(stage = "") {
