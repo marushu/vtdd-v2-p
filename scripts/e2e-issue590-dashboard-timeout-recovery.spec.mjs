@@ -186,3 +186,78 @@ test("Dashboard Butler shows app-server timeout as recoverable and keeps compose
     evidence: { statePath, screenshotPath }
   }));
 });
+
+test("Dashboard Butler transient progress card stays visible on mobile without adding chat bubbles", async ({
+  page,
+  browserName
+}) => {
+  await page.goto(dashboardUrl);
+
+  const beforeBubbleCount = await page.locator(".bubble").count();
+  await page.evaluate(() => {
+    const log = document.querySelector("#butler-chat-log");
+    if (!log) return;
+    const article = document.createElement("article");
+    article.className = "transient-progress-card thinking";
+    article.setAttribute("aria-live", "polite");
+    article.setAttribute("data-transient-progress", "true");
+    const title = document.createElement("div");
+    title.className = "progress-title";
+    title.textContent = "進行中";
+    const text = document.createElement("p");
+    text.className = "progress-text";
+    text.textContent =
+      "Issue #590 の production evidence、reviewer 指摘、deploy 後 E2E の残リスクを確認しています。通常チャット履歴には保存しません。";
+    article.append(title, text);
+    log.appendChild(article);
+    article.scrollIntoView({ block: "end" });
+  });
+
+  const card = page.locator("[data-transient-progress='true']");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("通常チャット履歴には保存しません");
+  await expect(page.locator(".bubble")).toHaveCount(beforeBubbleCount);
+
+  const layout = await page.evaluate(() => {
+    const card = document.querySelector("[data-transient-progress='true']");
+    const log = document.querySelector("#butler-chat-log");
+    const text = card?.querySelector(".progress-text");
+    const cardRect = card?.getBoundingClientRect();
+    const logRect = log?.getBoundingClientRect();
+    return {
+      viewportWidth: window.innerWidth,
+      cardLeft: cardRect?.left ?? 0,
+      cardRight: cardRect?.right ?? 0,
+      cardWidth: cardRect?.width ?? 0,
+      logWidth: logRect?.width ?? 0,
+      logScrollWidth: log?.scrollWidth ?? 0,
+      logClientWidth: log?.clientWidth ?? 0,
+      textScrollWidth: text?.scrollWidth ?? 0,
+      textClientWidth: text?.clientWidth ?? 0,
+      bubbleCount: document.querySelectorAll(".bubble").length,
+      transientCount: document.querySelectorAll("[data-transient-progress='true']").length
+    };
+  });
+  expect(layout.transientCount).toBe(1);
+  expect(layout.bubbleCount).toBe(beforeBubbleCount);
+  expect(layout.cardLeft).toBeGreaterThanOrEqual(0);
+  expect(layout.cardRight).toBeLessThanOrEqual(layout.viewportWidth);
+  expect(layout.cardWidth).toBeLessThanOrEqual(layout.logWidth);
+  expect(layout.logScrollWidth).toBeLessThanOrEqual(layout.logClientWidth + 1);
+  expect(layout.textScrollWidth).toBeLessThanOrEqual(layout.textClientWidth + 1);
+
+  const statePath = path.join(evidenceDir, `issue590-dashboard-transient-progress-card-${browserName}-state.json`);
+  const screenshotPath = path.join(evidenceDir, `issue590-dashboard-transient-progress-card-${browserName}-390x844.png`);
+  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout }, null, 2));
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  console.log(JSON.stringify({
+    ok: true,
+    browserName,
+    verified: [
+      "transient progress card is visible in 390x844 mobile viewport",
+      "transient progress card does not append durable chat bubbles",
+      "progress text wraps without horizontal overflow"
+    ],
+    evidence: { statePath, screenshotPath }
+  }));
+});

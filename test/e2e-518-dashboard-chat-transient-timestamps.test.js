@@ -114,7 +114,11 @@ test("E2E-518 dashboard route exposes timestamp renderer and transient status UI
   assert.equal(html.includes(".message-meta { margin-top: 6px;"), true);
   assert.equal(html.includes("function formatMessageTimestamp("), true);
   assert.equal(html.includes('body.type === "transient_status"'), true);
-  assert.equal(html.includes('appendMessage(message)'), true);
+  assert.equal(html.includes(".transient-progress-card"), true);
+  assert.equal(html.includes("function updateTransientProgress(text, options = {})"), true);
+  assert.equal(html.includes("function clearTransientProgress()"), true);
+  assert.equal(html.includes("function appendMessage(message, target = log, options = {})"), true);
+  assert.equal(html.includes("appendMessage(message, fragment, { scroll: false })"), true);
   assert.equal(html.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-sample-org-vtdd-v2-p"'), true);
 });
 

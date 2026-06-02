@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "browserName": "chromium",
+  "layout": {
+    "viewportWidth": 390,
+    "cardLeft": 14,
+    "cardRight": 320.234375,
+    "cardWidth": 306.234375,
+    "logWidth": 370,
+    "logScrollWidth": 370,
+    "logClientWidth": 370,
+    "textScrollWidth": 280,
+    "textClientWidth": 280,
+    "bubbleCount": 3,
+    "transientCount": 1
+  }
+}
