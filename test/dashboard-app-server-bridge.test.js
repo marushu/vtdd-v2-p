@@ -570,6 +570,21 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(delta.threadId, "dashboard-main");
   assert.equal(delta.codexThreadId, "codex-thread-1");
   assert.equal(delta.text, "返答");
+  assert.equal(delta.progressText, "返答");
+
+  const accumulatedDelta = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        delta: "次を確認します。"
+      }
+    },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1", accumulatedText: "Issue #590 を確認しています。\n\n" }
+  );
+  assert.equal(accumulatedDelta.text, "次を確認します。");
+  assert.equal(accumulatedDelta.progressText, "Issue #590 を確認しています。\n\n次を確認します。");
 
   const completed = mapAppServerNotificationToDashboardEvent(
     { method: "turn/completed", params: { threadId: "codex-thread-1" } },

@@ -567,13 +567,18 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
   const method = String(message?.method || "");
   const params = message?.params && typeof message.params === "object" ? message.params : {};
   if (method === "item/agentMessage/delta" && params.delta) {
+    const delta = String(params.delta);
     return {
       type: "app_server_reply_delta",
       schema: DEFAULT_SCHEMA,
       threadId: context.dashboardThreadId,
       codexThreadId: params.threadId || context.codexThreadId || null,
       turnId: params.turnId || null,
-      text: String(params.delta)
+      text: delta,
+      progressText: buildAppServerReplyDeltaProgressText({
+        accumulatedText: context.accumulatedText,
+        delta
+      })
     };
   }
   if (method === "turn/started") {
@@ -717,6 +722,19 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
     };
   }
   return null;
+}
+
+export function buildAppServerReplyDeltaProgressText({ accumulatedText = "", delta = "", maxLength = 1200 } = {}) {
+  const fullText = String(`${accumulatedText || ""}${delta || ""}`).replace(/\r\n?/g, "\n");
+  if (!fullText) return "";
+  const normalized = fullText.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (normalized.length <= maxLength) return normalized;
+  const tail = normalized.slice(-maxLength);
+  const paragraphStart = tail.indexOf("\n\n");
+  if (paragraphStart >= 0 && paragraphStart < Math.floor(maxLength / 2)) {
+    return `…\n\n${tail.slice(paragraphStart + 2).trim()}`;
+  }
+  return `…${tail.trimStart()}`;
 }
 
 function shouldPersistAppServerProgressStage(stage = "") {

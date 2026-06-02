@@ -65185,6 +65185,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const status = normalizeDashboardEventText(input.status).toLowerCase();
   const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
+  const progressText = sanitizeDashboardChatText(input.progressText || input.progress_text);
   let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger10(input.relatedIssue || input.issueNumber);
@@ -65192,6 +65193,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const messages = [];
   let transientStatus = "";
   if (eventType === "app_server_reply_delta") {
+    transientStatus = "thinking";
+    transientText = progressText || text;
   } else if (eventType === "app_server_reply") {
     if (text) {
       messages.push(
@@ -70287,12 +70290,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
-    .transient-progress-card { align-self: flex-start; width: min(760px, 88%); max-width: 100%; border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; background: var(--panel-strong); color: var(--text); box-shadow: 0 8px 30px var(--shadow); }
-    .transient-progress-card[hidden] { display: none; }
-    .transient-progress-card .progress-title { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
-    .transient-progress-card .progress-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--link); box-shadow: 0 0 0 4px rgba(11, 107, 101, .12); }
-    .transient-progress-card .progress-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
-    .transient-progress-card.thinking .progress-title::before { animation: pulseProgress 1.25s ease-in-out infinite; }
     @keyframes pulseProgress { 0%, 100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
@@ -70304,6 +70301,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
     .pending-media, .message-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; max-width: 100%; overflow: hidden; }
     .pending-media:empty, .message-media:empty { display: none; }
+    .composer-progress { display: grid; gap: 4px; min-height: 0; padding: 0 16px; color: var(--muted); font-size: 13px; line-height: 1.5; overflow: hidden; }
+    .composer-progress[hidden] { display: none; }
+    .composer-progress .progress-title { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 850; }
+    .composer-progress .progress-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--link); box-shadow: 0 0 0 4px rgba(11, 107, 101, .12); }
+    .composer-progress .progress-text { margin: 0; max-height: min(9lh, 24dvh); overflow: auto; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+    .composer-progress.thinking .progress-title::before { animation: pulseProgress 1.25s ease-in-out infinite; }
     .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; overflow: hidden; }
     .media-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(48vw, 320px); }
     .media-thumb { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 10px; object-fit: cover; background: var(--border); }
@@ -70472,6 +70475,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
+        <div class="composer-progress" id="butler-transient-progress" aria-live="polite" hidden>
+          <span class="progress-title">\u9032\u884C\u4E2D</span>
+          <p class="progress-text"></p>
+        </div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
@@ -70488,6 +70495,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const log = document.getElementById("butler-chat-log");
       const textarea = document.getElementById("butler-message");
       const status = document.getElementById("butler-chat-status");
+      const progressPane = document.getElementById("butler-transient-progress");
       const mediaButton = document.getElementById("butler-media-button");
       const mediaInput = document.getElementById("butler-media-input");
       const pendingMedia = document.getElementById("butler-pending-media");
@@ -70744,8 +70752,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function ensureTransientProgressCard() {
         if (transientProgressCard && transientProgressCard.isConnected) return transientProgressCard;
-        const article = document.createElement("article");
-        article.className = "transient-progress-card";
+        if (progressPane) {
+          progressPane.setAttribute("data-transient-progress", "true");
+          transientProgressCard = progressPane;
+          return progressPane;
+        }
+        const article = document.createElement("div");
+        article.className = "composer-progress";
         article.setAttribute("aria-live", "polite");
         article.setAttribute("data-transient-progress", "true");
         const title = document.createElement("div");
@@ -70756,7 +70769,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         article.appendChild(title);
         article.appendChild(text);
         transientProgressCard = article;
-        log.appendChild(article);
+        form.insertBefore(article, form.querySelector(".composer-box") || status);
         return article;
       }
 
@@ -70793,7 +70806,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function clearTransientProgress() {
         transientProgressState = null;
         if (transientProgressCard) {
-          transientProgressCard.remove();
+          if (transientProgressCard === progressPane) {
+            transientProgressCard.hidden = true;
+            transientProgressCard.classList.remove("thinking");
+            const text = transientProgressCard.querySelector(".progress-text");
+            if (text) text.textContent = "";
+          } else {
+            transientProgressCard.remove();
+          }
           transientProgressCard = null;
         }
       }
