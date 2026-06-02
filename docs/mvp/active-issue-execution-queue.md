@@ -9,7 +9,7 @@ This file is not a scope reducer. Active Issues remain in scope unless the owner
 explicitly narrows the implementation window. This file records execution order,
 preemption decisions, blockers, and evidence gaps.
 
-Last rebuilt from GitHub runtime truth: 2026-05-31
+Last rebuilt from GitHub runtime truth: 2026-06-02
 
 ## Queue Policy
 
@@ -116,13 +116,21 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
   control resident in the main chat would be noisy. Issue #723 remains open
   until evidence is posted and close-readiness is judged, but it no longer
   needs to hold `Now`; Issue #590 resumes as the parent root.
+- 2026-06-02 PR #731 merged and deploy-production succeeded for Issue #590.
+  Owner production PWA evidence and app-server bridge production probing
+  confirmed low-information `考えています。` / `コマンドを実行しています。`
+  progress no longer pollutes durable chat history. Issue #590 remains `Now`
+  because the owner-facing long-turn experience is still incomplete: transient
+  progress must be visible without chat-history spam, and completion should
+  leave a readable final summary instead of a trail of low-value progress.
 
 ## Now
 
-- Issue #590: app-server turn timeout / silent wait recovery. Issue #723's
-  stale-client recovery support has production PWA evidence, so the queue
-  returns to the parent root: prove longer Dashboard Butler work can remain
-  observable and recoverable without fixed 2-minute conversation death.
+- Issue #590: app-server turn timeout / silent wait recovery. Fixed 2-minute
+  conversation death and durable low-information progress spam are mitigated in
+  production, but the remaining root blocker is owner-facing observability:
+  longer Dashboard Butler work must show transient progress without polluting
+  chat history, then leave a concise final summary.
 
 ## Next
 
@@ -244,10 +252,11 @@ Evidence gaps are active. They are not deferred out of scope.
   app-server bridge; ordinary conversation, follow-up continuity, timeout
   recovery, PWA recovery, readable final replies, and live owner-facing runtime
   truth remain incomplete.
-- Issue #590: PR #628/PR #633 provide partial timeout-recovery evidence, but
-  closure still needs mapped owner-facing production evidence that Dashboard
-  Butler reports timeout/late completion before/after state without leaving the
-  ordinary chat thread stuck.
+- Issue #590: PR #731 and production deploy evidence show low-information
+  progress no longer pollutes durable chat history. Closure still needs mapped
+  production owner-facing evidence for the remaining long-turn UX: transient
+  progress visibility, final summary replacement, same-thread follow-up /
+  cancel / interrupt handling, and clear late-completion behavior.
 - Issue #651: PR #652 merged a same-head conflicting reviewer evidence gate, but
   live/mapped E2E close-readiness evidence is still missing, so the Issue remains
   open.
