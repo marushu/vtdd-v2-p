@@ -1367,8 +1367,16 @@ export async function handleDashboardTurnRequest({
   }
 
   let codexThreadId = request.codexThreadId || null;
+  const resumedExistingThread = Boolean(codexThreadId);
   if (codexThreadId) {
     await appServer.request(buildAppServerThreadResumeRequest({ id: appServer.nextRequestId(), codexThreadId, cwd, sandboxMode }));
+    await sendDashboardEvent(
+      buildDashboardBridgeResumeStatusEvent({
+        dashboardThreadId,
+        codexThreadId,
+        messageId: request.messageId
+      })
+    );
   } else {
     const started = await appServer.request(buildAppServerThreadStartRequest({ id: appServer.nextRequestId(), cwd, sandboxMode }));
     codexThreadId = started?.thread?.id || null;
@@ -1555,6 +1563,15 @@ export async function handleDashboardTurnRequest({
     if (!activeTurnId && startedTurnId) {
       activeTurnId = startedTurnId;
     }
+    await sendDashboardEvent(
+      buildDashboardBridgeTurnStartedStatusEvent({
+        dashboardThreadId,
+        codexThreadId,
+        turnId: activeTurnId || startedTurnId,
+        messageId: request.messageId,
+        resumedExistingThread
+      })
+    );
     markAppServerActivity();
     await turnCompletion;
   } finally {
@@ -1637,6 +1654,86 @@ export function buildDashboardAppServerBridgeEndpoint(options = {}) {
   return endpoint;
 }
 
+export function buildDashboardBridgeConnectedEvent({ endpoint, threadId = "", cwd = process.cwd(), resumedAt = new Date().toISOString() } = {}) {
+  const dashboardThreadId =
+    normalizeBridgeText(threadId) ||
+    (() => {
+      try {
+        return normalizeBridgeText(new URL(String(endpoint || "")).searchParams.get("threadId"));
+      } catch {
+        return "";
+      }
+    })();
+  return {
+    type: "app_server_status",
+    schema: DEFAULT_SCHEMA,
+    threadId: dashboardThreadId,
+    status: "bridge_connected",
+    stage: "bridge_connected",
+    text: "app-server bridge が接続しました。保存済み文脈と未送信 owner message を同じ Dashboard thread で復帰できます。",
+    bridgeLifecycle: {
+      status: "connected",
+      threadId: dashboardThreadId || null,
+      cwd: normalizeBridgeText(cwd) || null,
+      connectedAt: normalizeBridgeText(resumedAt) || new Date().toISOString()
+    }
+  };
+}
+
+export function buildDashboardBridgeResumeStatusEvent({
+  dashboardThreadId = "",
+  codexThreadId = "",
+  messageId = "",
+  resumedAt = new Date().toISOString()
+} = {}) {
+  return {
+    type: "app_server_status",
+    schema: DEFAULT_SCHEMA,
+    threadId: dashboardThreadId,
+    codexThreadId: codexThreadId || null,
+    status: "resumed_existing_thread",
+    stage: "thread_resume",
+    text: "既存 Codex thread を resume しました。deploy 後 restart でも前の文脈から続けられます。",
+    bridgeLifecycle: {
+      status: "resumed_existing_thread",
+      dashboardThreadId: dashboardThreadId || null,
+      codexThreadId: codexThreadId || null,
+      messageId: messageId || null,
+      resumedAt: normalizeBridgeText(resumedAt) || new Date().toISOString()
+    }
+  };
+}
+
+export function buildDashboardBridgeTurnStartedStatusEvent({
+  dashboardThreadId = "",
+  codexThreadId = "",
+  turnId = "",
+  messageId = "",
+  resumedExistingThread = false,
+  startedAt = new Date().toISOString()
+} = {}) {
+  return {
+    type: "app_server_status",
+    schema: DEFAULT_SCHEMA,
+    threadId: dashboardThreadId,
+    codexThreadId: codexThreadId || null,
+    status: "turn_started",
+    stage: "turn_started",
+    text: resumedExistingThread
+      ? "復帰した Codex thread で turn を開始しました。進行中状態を同じ Dashboard thread に返します。"
+      : "Codex thread で turn を開始しました。進行中状態を同じ Dashboard thread に返します。",
+    bridgeLifecycle: {
+      status: "turn_started",
+      dashboardThreadId: dashboardThreadId || null,
+      codexThreadId: codexThreadId || null,
+      turnId: turnId || null,
+      messageId: messageId || null,
+      resumedExistingThread: Boolean(resumedExistingThread),
+      startedAt: normalizeBridgeText(startedAt) || new Date().toISOString()
+    }
+  };
+}
+
 export async function connectDashboardAppServerBridgeOnce({
   endpoint,
   token,
@@ -1695,7 +1792,10 @@ export async function connectDashboardAppServerBridgeOnce({
     socket.addEventListener("error", finish);
   });
 
-  socket.addEventListener("open", scheduleHeartbeat);
+  socket.addEventListener("open", () => {
+    scheduleHeartbeat();
+    safeSend(buildDashboardBridgeConnectedEvent({ endpoint, cwd }));
+  });
 
   socket.addEventListener("message", (event) => {
     let payload;
