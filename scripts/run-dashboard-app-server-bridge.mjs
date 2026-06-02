@@ -768,9 +768,10 @@ export function buildAppServerConcreteProgressText({
   const cleanPrefix = normalizeBridgeText(prefix || fallback);
   const cleanTarget = normalizeBridgeText(target);
   const detail = buildAppServerProgressDetail(params, { maxLength });
-  const head = cleanTarget ? `${cleanPrefix} ${cleanTarget}` : cleanPrefix;
-  if (!detail) return head || normalizeBridgeText(fallback);
-  return [head || normalizeBridgeText(fallback), detail].filter(Boolean).join("\n");
+  const head = cleanPrefix || normalizeBridgeText(fallback);
+  const targetLine = cleanTarget ? `対象: ${cleanTarget}` : "";
+  if (!detail) return [head, targetLine].filter(Boolean).join("\n");
+  return [head, targetLine, detail].filter(Boolean).join("\n");
 }
 
 function buildAppServerProgressDetail(params = {}, { maxLength = 420 } = {}) {
@@ -797,6 +798,8 @@ function buildAppServerProgressDetail(params = {}, { maxLength = 420 } = {}) {
 }
 
 function extractAppServerProgressTarget(params = {}, keys = []) {
+  const nestedTargets = collectAppServerProgressTargets(params);
+  if (nestedTargets.length > 0) return nestedTargets.join(", ");
   for (const key of keys) {
     const direct = normalizeBridgeText(params?.[key]);
     if (direct) return direct;
@@ -804,6 +807,32 @@ function extractAppServerProgressTarget(params = {}, keys = []) {
     if (itemValue) return itemValue;
   }
   return "";
+}
+
+function collectAppServerProgressTargets(params = {}) {
+  const targets = [];
+  const push = (value) => {
+    const normalized = normalizeBridgeText(value);
+    if (normalized && !targets.includes(normalized)) targets.push(normalized);
+  };
+  const visit = (value, depth = 0) => {
+    if (!value || depth > 3 || targets.length >= 6) return;
+    if (typeof value === "string") return;
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry, depth + 1);
+      return;
+    }
+    if (typeof value !== "object") return;
+    for (const key of ["path", "filePath", "file", "filename", "relativePath", "command", "cmd", "shellCommand"]) {
+      push(value[key]);
+    }
+    for (const key of ["paths", "files", "filenames", "changedFiles", "changes", "patches", "commandActions"]) {
+      visit(value[key], depth + 1);
+    }
+  };
+  visit(params, 0);
+  visit(params?.item, 0);
+  return targets;
 }
 
 export function formatAppServerProgressNarration(value = "") {

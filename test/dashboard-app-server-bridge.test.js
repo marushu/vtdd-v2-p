@@ -643,7 +643,7 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(command.type, "app_server_status");
   assert.equal(command.stage, "command");
   assert.equal(command.persistProgress, true);
-  assert.equal(command.text, "コマンドを実行しています。 node --test test/worker.test.js\n250 tests passed");
+  assert.equal(command.text, "コマンドを実行しています。\n対象: node --test test/worker.test.js\n250 tests passed");
 
   const diff = mapAppServerNotificationToDashboardEvent(
     { method: "turn/diff/updated", params: { threadId: "codex-thread-1", turnId: "turn-1", path: "src/worker/runtime.js", delta: "composer progress の重複 status を外します。" } },
@@ -652,7 +652,58 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(diff.type, "app_server_status");
   assert.equal(diff.stage, "file_change");
   assert.equal(diff.persistProgress, true);
-  assert.equal(diff.text, "ファイル変更を確認しています。 src/worker/runtime.js\ncomposer progress の重複 status を外します。");
+  assert.equal(diff.text, "ファイル変更を確認しています。\n対象: src/worker/runtime.js\ncomposer progress の重複 status を外します。");
+
+  const nestedDiff = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/fileChange/patchUpdated",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        item: {
+          files: [
+            { path: "scripts/run-dashboard-app-server-bridge.mjs" },
+            { path: "test/dashboard-app-server-bridge.test.js" }
+          ]
+        },
+        diff: "@@ -1 +1 @@\n-ざっくり\n+対象ファイル名も出す"
+      }
+    },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(
+    nestedDiff.text,
+    [
+      "ファイル変更を確認しています。",
+      "対象: scripts/run-dashboard-app-server-bridge.mjs, test/dashboard-app-server-bridge.test.js",
+      "@@ -1 +1 @@",
+      "-ざっくり",
+      "+対象ファイル名も出す"
+    ].join("\n")
+  );
+
+  const commandAction = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/commandExecution/outputDelta",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        item: {
+          commandActions: [{ command: "git diff -- src/worker/runtime.js" }]
+        },
+        output: "diff --git a/src/worker/runtime.js b/src/worker/runtime.js"
+      }
+    },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(
+    commandAction.text,
+    [
+      "コマンドを実行しています。",
+      "対象: git diff -- src/worker/runtime.js",
+      "diff --git a/src/worker/runtime.js b/src/worker/runtime.js"
+    ].join("\n")
+  );
 
   const toolProgress = mapAppServerNotificationToDashboardEvent(
     { method: "item/mcpToolCall/progress", params: { threadId: "codex-thread-1", turnId: "turn-1", message: "raw provider progress" } },

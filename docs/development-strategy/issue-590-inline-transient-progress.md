@@ -35,6 +35,7 @@ Issue #590 の残 blocker である owner-facing observability を進める。PR
 ## 既に通っている経路
 
 PR #731 で low-information progress は durable chat history を汚染しなくなった。PR #733 で transient progress card の受け皿は production deploy 済み。
+PR #734 の途中で、owner は「ざっくりした progress だけでは不十分、Codex 風にファイル名や diff/command の手がかりも見たい」と指摘した。bridge が受け取れる `path` / `files` / `commandActions` / `diff` / `patch` は transient progress の `対象:` 行と detail 行へ出す。
 
 ## 未確認の境界
 
@@ -46,6 +47,7 @@ Codex app-server が final answer と commentary/progress を protocol 上で明
 - accumulation を無制限に表示すると composer 周辺が重くなる。
 - card を chat log に残すと owner が望む「入力欄上の軽い表示」から外れる。
 - progress 更新時に chat log を最下部へ scroll すると、owner が過去ログを読んでいる最中に位置が奪われる。
+- app-server notification payload の file/command 位置が固定でない場合、直接 `path` だけを見ると対象ファイル名が出ない。
 - final reply に progress が混ざる問題は、今回の transient visibility だけでは完全に閉じない可能性がある。
 
 ## PR 前に確認すること
