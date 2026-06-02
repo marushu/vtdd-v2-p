@@ -14528,12 +14528,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
-    .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
-    .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
-    .bubble.has-copy-action { position: relative; }
+    .message-entry { display: grid; gap: 5px; align-self: stretch; max-width: min(760px, 88%); }
+    .message-entry.owner { justify-items: end; align-self: flex-end; }
+    .message-entry.butler, .message-entry.system { justify-items: start; }
+    .message-entry .bubble { max-width: 100%; }
+    .message-actions { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
+    .message-entry.owner .message-actions { justify-content: flex-end; }
+    .message-meta { color: inherit; font: inherit; line-height: inherit; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
-    .copy-message { position: absolute; top: -8px; right: -8px; z-index: 2; opacity: 0; pointer-events: none; transform: translateY(-2px) scale(.96); transition: opacity .16s ease, transform .16s ease; }
-    .bubble.has-copy-action:hover .copy-message, .bubble.has-copy-action:focus-within .copy-message, .bubble.actions-visible .copy-message, .copy-message:focus-visible { opacity: .92; pointer-events: auto; transform: translateY(0) scale(1); }
+    .copy-message { width: 28px; height: 28px; flex: 0 0 auto; opacity: .88; }
+    .copy-message:hover, .copy-message:focus-visible { opacity: 1; }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
     .copy-code:hover, .copy-code:focus-visible { opacity: 1; }
@@ -14544,7 +14548,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble.owner .message-body code { color: var(--owner-code-text); }
     .bubble.owner .message-body pre { background: var(--owner-code-bg); border-color: var(--owner-code-border); color: var(--owner-code-text); }
     .bubble.owner .message-body pre code { color: var(--owner-code-text); }
-    .bubble.owner .copy-message { top: -10px; left: -10px; right: auto; width: 28px; height: 28px; background: var(--panel-strong); color: var(--text); }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
@@ -15329,34 +15332,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function appendMessage(message, target = log, options = {}) {
+        const entry = document.createElement("div");
+        entry.className = "message-entry " + (message.role === "owner" ? "owner" : message.role === "system" ? "system" : "butler");
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
-        if (message.role === "owner") {
-          attachMessageActionReveal(article);
-          const copyButton = document.createElement("button");
-          copyButton.className = "copy-message";
-          copyButton.type = "button";
-          copyButton.textContent = "⧉";
-          copyButton.setAttribute("aria-label", "自分の発言をコピー");
-          copyButton.title = "自分の発言をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
-          article.appendChild(copyButton);
-        } else if (message.role === "butler") {
+        if (message.role === "butler") {
           const header = document.createElement("div");
           header.className = "bubble-header";
           const strong = document.createElement("strong");
           strong.textContent = "Butler";
           header.appendChild(strong);
-          const copyButton = document.createElement("button");
-          copyButton.className = "copy-message";
-          copyButton.type = "button";
-          copyButton.textContent = "⧉";
-          copyButton.setAttribute("aria-label", "返信をコピー");
-          copyButton.title = "返信をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
-          header.appendChild(copyButton);
           article.appendChild(header);
-          attachMessageActionReveal(article);
         } else if (message.role === "system") {
           const header = document.createElement("div");
           header.className = "bubble-header";
@@ -15373,26 +15359,31 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (media) {
           article.appendChild(media);
         }
+        entry.appendChild(article);
+        const actions = document.createElement("div");
+        actions.className = "message-actions";
         const timestamp = formatMessageTimestamp(message.createdAt || message.created_at);
         if (timestamp) {
           const meta = document.createElement("time");
           meta.className = "message-meta";
           meta.dateTime = normalizeDateTimeAttribute(message.createdAt || message.created_at);
           meta.textContent = timestamp;
-          article.appendChild(meta);
+          actions.appendChild(meta);
         }
-        target.appendChild(article);
+        const copyButton = document.createElement("button");
+        copyButton.className = "copy-message";
+        copyButton.type = "button";
+        copyButton.textContent = "⧉";
+        const copyLabel = message.role === "owner" ? "自分の発言をコピー" : message.role === "system" ? "システムメッセージをコピー" : "返信をコピー";
+        copyButton.setAttribute("aria-label", copyLabel);
+        copyButton.title = copyLabel;
+        copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
+        actions.appendChild(copyButton);
+        entry.appendChild(actions);
+        target.appendChild(entry);
         if (target === log && options.scroll !== false) {
           scrollToLatest();
         }
-      }
-
-      function attachMessageActionReveal(article) {
-        article.classList.add("has-copy-action");
-        article.addEventListener("click", (event) => {
-          if (event.target.closest("a, button, input, textarea, select, summary")) return;
-          article.classList.toggle("actions-visible");
-        });
       }
 
       function formatMessageTimestamp(value) {
