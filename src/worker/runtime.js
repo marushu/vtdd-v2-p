@@ -14531,6 +14531,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
+    .reply-context { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: min(100%, 680px); margin: 0 0 10px; padding: 8px 10px; border: 0; border-left: 3px solid var(--border); border-radius: 0 8px 8px 0; background: var(--soft); color: var(--muted); font: inherit; font-size: 12px; line-height: 1.45; text-align: left; cursor: pointer; }
+    .reply-context:hover, .reply-context:focus-visible { color: var(--text); background: var(--panel-strong); outline: none; }
+    .reply-context:focus-visible { box-shadow: 0 0 0 2px var(--link); }
+    .reply-context-label { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .04em; }
+    .reply-context-snippet { display: -webkit-box; max-width: 100%; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: inherit; overflow-wrap: anywhere; word-break: break-word; }
+    .reply-target-highlight { outline: 2px solid var(--link); outline-offset: 4px; transition: outline-color .22s ease; }
     .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
     .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
     .bubble.has-copy-action { position: relative; }
@@ -14787,8 +14793,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let pendingMediaItems = [];
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
+      const renderedMessagesById = new Map();
       let transientProgressCard = null;
       let transientProgressState = null;
+      let latestOwnerReplySource = null;
       let pendingOwnerSend = null;
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
@@ -15310,9 +15318,110 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return releasePendingOwnerSend(pendingClientMessageId, { clearComposer: true });
       }
 
+      function normalizeMessageId(value) {
+        const id = String(value || "").trim();
+        return id || "";
+      }
+
+      function getRenderedMessageId(message) {
+        if (!message) return "";
+        return normalizeMessageId(
+          message.messageId ||
+          message.message_id ||
+          message.clientMessageId ||
+          message.client_message_id
+        );
+      }
+
+      function getReplyTargetMessageId(message) {
+        if (!message) return "";
+        return normalizeMessageId(
+          message.replyToMessageId ||
+          message.reply_to_message_id ||
+          message.replyToClientMessageId ||
+          message.reply_to_client_message_id
+        );
+      }
+
+      function normalizeReplySnippetText(value) {
+        const text = normalizeMessageDisplayText(value || "")
+          .replace(/\\s+/g, " ")
+          .trim();
+        if (text.length <= 120) return text;
+        return text.slice(0, 117) + "...";
+      }
+
+      function snapshotReplySource(message) {
+        const messageId = getRenderedMessageId(message);
+        const text = normalizeReplySnippetText(message && message.text);
+        if (!messageId || !text) return null;
+        return { messageId, text };
+      }
+
+      function buildReplyContext(message) {
+        if (!message || message.role !== "butler") return null;
+        const explicitTargetId = getReplyTargetMessageId(message);
+        if (explicitTargetId && renderedMessagesById.has(explicitTargetId)) {
+          const target = renderedMessagesById.get(explicitTargetId);
+          return target && target.source ? target.source : null;
+        }
+        if (explicitTargetId) {
+          return { messageId: explicitTargetId, text: "返信元のメッセージ" };
+        }
+        return latestOwnerReplySource;
+      }
+
+      function focusReplySource(messageId) {
+        const rendered = renderedMessagesById.get(normalizeMessageId(messageId));
+        const target = rendered && rendered.article;
+        if (!target) return;
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+        target.classList.add("reply-target-highlight");
+        window.setTimeout(() => target.classList.remove("reply-target-highlight"), 1400);
+      }
+
+      function renderReplyContext(context) {
+        if (!context || !context.text) return null;
+        const button = document.createElement("button");
+        button.className = "reply-context";
+        button.type = "button";
+        button.setAttribute("aria-label", "返信元へ移動");
+        const label = document.createElement("span");
+        label.className = "reply-context-label";
+        label.textContent = "返信先";
+        const snippet = document.createElement("span");
+        snippet.className = "reply-context-snippet";
+        snippet.textContent = context.text;
+        button.appendChild(label);
+        button.appendChild(snippet);
+        if (context.messageId) {
+          button.addEventListener("click", () => focusReplySource(context.messageId));
+        }
+        return button;
+      }
+
+      function rememberRenderedMessage(message, article) {
+        const messageId = getRenderedMessageId(message);
+        if (!messageId) return;
+        const source = snapshotReplySource(message);
+        renderedMessagesById.set(messageId, { article, source });
+        if (message && message.role === "owner" && source) {
+          latestOwnerReplySource = source;
+        }
+      }
+
+      function resetRenderedReplyContext() {
+        renderedMessagesById.clear();
+        latestOwnerReplySource = null;
+      }
+
       function appendMessage(message, target = log, options = {}) {
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
+        const renderedMessageId = getRenderedMessageId(message);
+        if (renderedMessageId) {
+          article.dataset.messageId = renderedMessageId;
+        }
         if (message.role === "owner") {
           attachMessageActionReveal(article);
           const copyButton = document.createElement("button");
@@ -15347,6 +15456,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           header.appendChild(strong);
           article.appendChild(header);
         }
+        const replyContext = renderReplyContext(buildReplyContext(message));
+        if (replyContext) {
+          article.appendChild(replyContext);
+        }
         const body = document.createElement("div");
         body.className = "message-body";
         renderMessageText(body, normalizeMessageDisplayText(message.text || "（空のメッセージ）"));
@@ -15364,6 +15477,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           article.appendChild(meta);
         }
         target.appendChild(article);
+        rememberRenderedMessage(message, article);
         if (target === log && options.scroll !== false) {
           scrollToLatest();
         }
@@ -15950,6 +16064,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (replace) {
           messagesById.clear();
         }
+        resetRenderedReplyContext();
         if (!Array.isArray(messages) || messages.length === 0) {
           if (replace || messagesById.size === 0) {
             if (existingTransientProgressCard) {

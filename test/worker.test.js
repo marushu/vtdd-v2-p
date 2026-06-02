@@ -1428,6 +1428,18 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function renderMessageText("), true);
   assert.equal(body.includes("function renderInlineMarkdown("), true);
   assert.equal(body.includes('body.className = "message-body"'), true);
+  assert.equal(body.includes(".reply-context { display: grid;"), true);
+  assert.equal(body.includes("function buildReplyContext("), true);
+  assert.equal(body.includes("function renderReplyContext("), true);
+  assert.equal(body.includes("function focusReplySource("), true);
+  assert.equal(body.includes("function resetRenderedReplyContext("), true);
+  assert.equal(body.includes("replyToMessageId"), true);
+  assert.equal(body.includes("reply_to_message_id"), true);
+  assert.equal(body.includes("latestOwnerReplySource"), true);
+  assert.equal(body.includes("article.dataset.messageId = renderedMessageId"), true);
+  assert.equal(body.includes('label.textContent = "返信先"'), true);
+  assert.equal(body.includes('target.scrollIntoView({ block: "center", behavior: "smooth" })'), true);
+  assert.equal(body.includes("reply-target-highlight"), true);
   assert.equal(body.includes('meta.className = "message-meta"'), true);
   assert.equal(body.includes("function formatMessageTimestamp("), true);
   assert.equal(body.includes("hour: \"2-digit\""), true);
@@ -1502,6 +1514,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("送信確認が返りません。入力は保持し、再接続後に同じ内容を再送します。"), true);
   assert.equal(body.includes("messagesById.set(messageKey(message), message)"), true);
   assert.equal(body.includes("messagesById.clear()"), true);
+  assert.equal(body.includes("resetRenderedReplyContext()"), true);
   assert.equal(body.includes("message?.createdAt"), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: true })'), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
