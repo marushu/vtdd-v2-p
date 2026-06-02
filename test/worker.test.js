@@ -1246,6 +1246,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function clearTransientProgress()"), true);
   assert.equal(body.includes("function renderTransientProgress()"), true);
   assert.equal(body.includes("isLongRunningTransientStatus(options.status)"), true);
+  assert.equal(body.includes("function appendMessage(message, target = log, options = {})"), true);
+  assert.equal(body.includes("const fragment = document.createDocumentFragment()"), true);
+  assert.equal(body.includes("appendMessage(message, fragment, { scroll: false })"), true);
   assert.equal(body.includes("WebSocket"), true);
   assert.equal(body.includes("接続準備中: 送信できる状態になったらここで知らせます"), false);
   assert.equal(body.includes("class=\"connection-note\""), false);

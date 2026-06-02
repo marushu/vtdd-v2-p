@@ -15218,7 +15218,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return releasePendingOwnerSend(pendingClientMessageId, { clearComposer: true });
       }
 
-      function appendMessage(message) {
+      function appendMessage(message, target = log, options = {}) {
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
         if (message.role === "owner") {
@@ -15271,8 +15271,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           meta.textContent = timestamp;
           article.appendChild(meta);
         }
-        log.appendChild(article);
-        scrollToLatest();
+        target.appendChild(article);
+        if (target === log && options.scroll !== false) {
+          scrollToLatest();
+        }
       }
 
       function attachMessageActionReveal(article) {
@@ -15819,16 +15821,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function renderThread(messages, options = {}) {
         const replace = options.replace === true;
         const hadTransientProgress = Boolean(transientProgressState);
-        if (transientProgressCard) {
-          transientProgressCard.remove();
-          transientProgressCard = null;
-        }
+        const existingTransientProgressCard = hadTransientProgress && transientProgressCard
+          ? transientProgressCard
+          : null;
         if (replace) {
           messagesById.clear();
         }
         if (!Array.isArray(messages) || messages.length === 0) {
           if (replace || messagesById.size === 0) {
-            log.innerHTML = initialMarkup;
+            if (existingTransientProgressCard) {
+              log.replaceChildren(existingTransientProgressCard);
+              renderTransientProgress();
+            } else {
+              log.innerHTML = initialMarkup;
+            }
           }
           scrollToLatest();
           return;
@@ -15836,10 +15842,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         for (const message of messages) {
           messagesById.set(messageKey(message), message);
         }
-        log.replaceChildren();
+        const fragment = document.createDocumentFragment();
         for (const message of messagesById.values()) {
-          appendMessage(message);
+          appendMessage(message, fragment, { scroll: false });
         }
+        if (existingTransientProgressCard) {
+          fragment.appendChild(existingTransientProgressCard);
+        }
+        log.replaceChildren(fragment);
         if (hadTransientProgress) {
           renderTransientProgress();
         }

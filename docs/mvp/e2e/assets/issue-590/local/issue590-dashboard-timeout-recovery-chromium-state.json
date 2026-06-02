@@ -6,10 +6,10 @@
     "composerReadOnly": false,
     "stopStateButtonCount": 0,
     "timeoutBubbleTexts": [
-      "⧉app-server timeout 後もこの thread で続けられるか確認して。23:00",
-      "SYSTEMcodex app-server の応答生成が時間切れになりました。入力は Dashboard thread に保存済みです。同じ thread で続けるか、内容を短くしてもう一度送れます。23:01",
-      "Butler⧉遅れて app-server の最終返信が届きました。二重返信ではなく同じ thread の続きとして保存しています。23:02"
+      "⧉app-server timeout 後もこの thread で続けられるか確認して。5/30 23:00",
+      "SYSTEMcodex app-server の応答生成が時間切れになりました。入力は Dashboard thread に保存済みです。同じ thread で続けるか、内容を短くしてもう一度送れます。5/30 23:01",
+      "Butler⧉遅れて app-server の最終返信が届きました。二重返信ではなく同じ thread の続きとして保存しています。5/30 23:02"
     ],
-    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36"
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36"
   }
 }
