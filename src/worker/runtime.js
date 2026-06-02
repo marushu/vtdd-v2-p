@@ -14568,14 +14568,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-progress .progress-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--link); box-shadow: 0 0 0 4px rgba(11, 107, 101, .12); }
     .composer-progress .progress-text { margin: 0; max-height: min(9lh, 24dvh); overflow: auto; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .composer-progress.thinking .progress-title::before { animation: pulseProgress 1.25s ease-in-out infinite; }
-    .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; overflow: hidden; }
-    .media-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(48vw, 320px); }
-    .media-chip .media-label { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
-    .media-chip .media-kind { color: var(--text); font-weight: 700; max-width: min(26vw, 140px); }
-    .media-chip .media-retention { color: var(--muted); font-size: 11px; max-width: min(38vw, 220px); }
-    .media-thumb { width: 64px; height: 64px; flex: 0 0 auto; border-radius: 10px; object-fit: cover; background: var(--border); }
-    .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
-    .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
+    .media-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 76px; height: 76px; min-width: 76px; border: 1px solid var(--border); border-radius: 8px; padding: 0; color: var(--text); background: var(--soft); font: inherit; font-size: 12px; text-decoration: none; overflow: hidden; cursor: pointer; }
+    .media-chip:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+    .media-thumb { width: 100%; height: 100%; flex: 0 0 auto; border-radius: 7px; object-fit: cover; background: var(--border); }
+    .media-chip video.media-thumb { pointer-events: none; }
+    .media-fallback-label { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 999px; background: rgba(0, 0, 0, .62); color: #fff; font-weight: 800; text-align: center; line-height: 1.25; }
+    .media-remove { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 999px; background: rgba(0, 0, 0, .68); color: #fff; font: inherit; font-weight: 900; line-height: 1; padding: 0; cursor: pointer; }
+    .media-lightbox[hidden] { display: none; }
+    .media-lightbox { position: fixed; inset: 0; z-index: 30; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); background: rgba(0, 0, 0, .88); color: #fff; }
+    .media-lightbox-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+    .media-lightbox-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: 14px; font-weight: 800; }
+    .media-lightbox-close { width: 42px; height: 42px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .32); border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font: inherit; font-size: 24px; line-height: 1; cursor: pointer; }
+    .media-lightbox-body { min-height: 0; display: grid; place-items: center; overflow: auto; overscroll-behavior: contain; }
+    .media-lightbox-body img, .media-lightbox-body video { display: block; max-width: 100%; max-height: 100%; border-radius: 8px; background: #111; }
+    .media-lightbox-body video { width: min(100%, 960px); }
+    .media-lightbox-meta { min-height: 20px; color: rgba(255, 255, 255, .74); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
     .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
@@ -14751,6 +14758,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="composer-status" id="butler-chat-status">接続準備中です。送信できる状態になったら知らせます。</div>
       </form>
+      <div class="media-lightbox" id="butler-media-lightbox" role="dialog" aria-modal="true" aria-label="添付プレビュー" hidden>
+        <div class="media-lightbox-top">
+          <div class="media-lightbox-title" id="butler-media-lightbox-title"></div>
+          <button class="media-lightbox-close" id="butler-media-lightbox-close" type="button" aria-label="閉じる">×</button>
+        </div>
+        <div class="media-lightbox-body" id="butler-media-lightbox-body"></div>
+        <div class="media-lightbox-meta" id="butler-media-lightbox-meta"></div>
+      </div>
     </section>
   </main>
   <script>
@@ -14763,6 +14778,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const mediaButton = document.getElementById("butler-media-button");
       const mediaInput = document.getElementById("butler-media-input");
       const pendingMedia = document.getElementById("butler-pending-media");
+      const mediaLightbox = document.getElementById("butler-media-lightbox");
+      const mediaLightboxBody = document.getElementById("butler-media-lightbox-body");
+      const mediaLightboxTitle = document.getElementById("butler-media-lightbox-title");
+      const mediaLightboxMeta = document.getElementById("butler-media-lightbox-meta");
+      const mediaLightboxClose = document.getElementById("butler-media-lightbox-close");
       const freshnessPill = document.getElementById("dashboard-freshness-pill");
       const freshnessState = document.getElementById("dashboard-freshness-state");
       const refreshCheckButton = document.getElementById("dashboard-refresh-check-button");
@@ -14789,6 +14809,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const messagesById = new Map();
       let transientProgressCard = null;
       let transientProgressState = null;
+      let lastMediaLightboxTrigger = null;
       let pendingOwnerSend = null;
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
@@ -15284,6 +15305,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (textarea.value.trim() === pending.text) {
             textarea.value = "";
           }
+          if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
           revokePendingMediaPreviews();
           pendingMediaItems = [];
           renderPendingMedia();
@@ -15431,20 +15453,61 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return remainingDays >= 7 ? "7日後に削除" : "あと" + remainingDays + "日";
       }
 
-      function appendMediaLabel(chip, item) {
-        const label = document.createElement("span");
-        label.className = "media-label";
-        const kind = document.createElement("span");
-        kind.className = "media-kind";
-        kind.textContent = getMediaKindLabel(item);
-        const retention = document.createElement("span");
-        retention.className = "media-retention";
-        retention.textContent = formatMediaRetentionLabel(item);
-        label.title = item && item.filename ? item.filename : "";
-        label.appendChild(kind);
-        label.appendChild(retention);
-        chip.appendChild(label);
+      function openMediaLightbox(item, sourceUrl, trigger) {
+        if (!mediaLightbox || !mediaLightboxBody || !mediaLightboxTitle || !mediaLightboxMeta || !sourceUrl) return;
+        const mediaKind = getMediaContentKind(item);
+        mediaLightboxBody.replaceChildren();
+        mediaLightboxTitle.textContent = item && item.filename ? item.filename : getMediaKindLabel(item);
+        mediaLightboxMeta.textContent = formatMediaRetentionLabel(item);
+        if (mediaKind === "video") {
+          const video = document.createElement("video");
+          video.src = sourceUrl;
+          video.controls = true;
+          video.playsInline = true;
+          video.preload = "metadata";
+          video.setAttribute("aria-label", item && item.filename ? item.filename : "添付動画");
+          video.addEventListener("error", () => {
+            mediaLightboxMeta.textContent = "保存期間が切れたか、取得できません。必要なら再添付してください。";
+          }, { once: true });
+          mediaLightboxBody.appendChild(video);
+        } else if (mediaKind === "image") {
+          const image = document.createElement("img");
+          image.src = sourceUrl;
+          image.alt = item && item.filename ? item.filename : "添付画像";
+          image.addEventListener("error", () => {
+            mediaLightboxMeta.textContent = "保存期間が切れたか、取得できません。必要なら再添付してください。";
+          }, { once: true });
+          mediaLightboxBody.appendChild(image);
+        } else {
+          mediaLightboxMeta.textContent = "この添付はプレビューできません。";
+        }
+        lastMediaLightboxTrigger = trigger || document.activeElement;
+        mediaLightbox.hidden = false;
+        if (mediaLightboxClose) mediaLightboxClose.focus();
       }
+
+      function closeMediaLightbox() {
+        if (!mediaLightbox || !mediaLightboxBody) return;
+        mediaLightbox.hidden = true;
+        mediaLightboxBody.replaceChildren();
+        if (mediaLightboxTitle) mediaLightboxTitle.textContent = "";
+        if (mediaLightboxMeta) mediaLightboxMeta.textContent = "";
+        const trigger = lastMediaLightboxTrigger;
+        lastMediaLightboxTrigger = null;
+        if (trigger && typeof trigger.focus === "function") trigger.focus();
+      }
+
+      if (mediaLightboxClose) {
+        mediaLightboxClose.addEventListener("click", closeMediaLightbox);
+      }
+      if (mediaLightbox) {
+        mediaLightbox.addEventListener("click", (event) => {
+          if (event.target === mediaLightbox) closeMediaLightbox();
+        });
+      }
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
+      });
 
       function renderMediaReferences(references) {
         const list = Array.isArray(references) ? references : [];
@@ -15459,9 +15522,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const mediaKind = getMediaContentKind(reference);
           const isImage = mediaKind === "image";
           const isVideo = mediaKind === "video";
-          const chip = document.createElement(isVideo && downloadHref !== "#" ? "span" : "a");
+          const canPreview = (isImage || isVideo) && downloadHref !== "#";
+          const chip = document.createElement(canPreview ? "button" : "a");
           chip.className = "media-chip";
-          if (chip.tagName === "A") {
+          if (canPreview) {
+            chip.type = "button";
+            chip.addEventListener("click", () => openMediaLightbox(reference, downloadHref, chip));
+          } else if (chip.tagName === "A") {
             chip.href = downloadHref;
             chip.target = "_blank";
             chip.rel = "noreferrer";
@@ -15479,21 +15546,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             video.className = "media-thumb";
             video.src = downloadHref;
             video.muted = true;
-            video.controls = true;
             video.playsInline = true;
             video.preload = "metadata";
             video.setAttribute("aria-label", reference.filename || "添付動画");
             chip.appendChild(video);
             const icon = document.createElement("span");
+            icon.className = "media-fallback-label";
             icon.textContent = "動画";
             chip.appendChild(icon);
           } else {
             const icon = document.createElement("span");
+            icon.className = "media-fallback-label";
             icon.textContent = "添付";
             chip.appendChild(icon);
           }
           chip.title = reference.filename || reference.mediaId || "media";
-          appendMediaLabel(chip, reference);
           wrapper.appendChild(chip);
         }
         return wrapper;
@@ -15524,6 +15591,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         for (const item of pendingMediaItems) {
           const chip = document.createElement("span");
           chip.className = "media-chip";
+          chip.tabIndex = 0;
+          chip.setAttribute("role", "button");
+          chip.setAttribute("aria-label", (item.filename || "添付") + "を拡大表示");
+          chip.addEventListener("click", () => {
+            if (item.previewUrl) openMediaLightbox({ ...item, retentionLabel: "送信後7日で削除" }, item.previewUrl, chip);
+          });
+          chip.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            if (item.previewUrl) openMediaLightbox({ ...item, retentionLabel: "送信後7日で削除" }, item.previewUrl, chip);
+          });
           if (item.previewUrl) {
             chip.classList.add("pending-preview");
             const isVideo = getMediaContentKind(item) === "video";
@@ -15532,11 +15610,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               video.className = "media-thumb";
               video.src = item.previewUrl;
               video.muted = true;
-              video.controls = true;
               video.playsInline = true;
               video.preload = "metadata";
               video.setAttribute("aria-label", item.filename || "送信待ち動画");
               chip.appendChild(video);
+              const icon = document.createElement("span");
+              icon.className = "media-fallback-label";
+              icon.textContent = "動画";
+              chip.appendChild(icon);
             } else {
               const image = document.createElement("img");
               image.className = "media-thumb";
@@ -15544,24 +15625,29 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               image.alt = item.filename || "送信待ち画像";
               chip.appendChild(image);
             }
+          } else {
+            const icon = document.createElement("span");
+            icon.className = "media-fallback-label";
+            icon.textContent = "添付";
+            chip.appendChild(icon);
           }
           chip.title = item.filename || "attachment";
-          appendMediaLabel(chip, {
-            ...item,
-            retentionLabel: "送信後7日で削除"
-          });
           const remove = document.createElement("button");
           remove.className = "media-remove";
           remove.type = "button";
           remove.textContent = "×";
           remove.setAttribute("aria-label", "添付を外す");
-          remove.addEventListener("click", () => {
+          remove.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
             revokePendingMediaPreview(item);
             pendingMediaItems = pendingMediaItems.filter((candidate) => candidate.clientId !== item.clientId);
             renderPendingMedia();
             updateComposerReserve();
           });
-          chip.appendChild(label);
+          remove.addEventListener("keydown", (event) => {
+            event.stopPropagation();
+          });
           chip.appendChild(remove);
           pendingMedia.appendChild(chip);
         }
@@ -16277,6 +16363,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             const nextPendingMediaItems = [...pendingMediaItems, ...selectedItems];
             const retainedPendingMediaItems = nextPendingMediaItems.slice(-12);
             for (const dropped of nextPendingMediaItems.slice(0, Math.max(0, nextPendingMediaItems.length - 12))) {
+              if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
               revokePendingMediaPreview(dropped);
             }
             pendingMediaItems = retainedPendingMediaItems;
