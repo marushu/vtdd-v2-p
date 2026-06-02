@@ -55,6 +55,10 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(start.params.sandbox, undefined);
   assert.equal(start.params.experimentalRawEvents, false);
   assert.equal(start.params.persistExtendedHistory, false);
+  assert.match(start.params.developerInstructions, /concrete file, command, PR, reviewer state, merge state, deploy state/);
+  assert.match(start.params.developerInstructions, /ファイルの修正・変更が完了しました。現在コミット中です。/);
+  assert.match(start.params.developerInstructions, /マージされました。今回はデプロイが必要です。ここにデプロイURL。/);
+  assert.match(start.params.developerInstructions, /avoid one long paragraph of accumulated work/);
 
   const resume = buildAppServerThreadResumeRequest({ id: 12, codexThreadId: "codex-thread-1", cwd: "/repo" });
   assert.equal(resume.method, "thread/resume");
