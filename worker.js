@@ -58171,6 +58171,8 @@ var mediaObjectStoreCache = /* @__PURE__ */ new WeakMap();
 var MEDIA_UPLOAD_SOFT_LIMIT_BYTES = 5 * 1024 * 1024;
 var MEDIA_UPLOAD_HARD_LIMIT_BYTES = 20 * 1024 * 1024;
 var MEDIA_REFERENCE_LIMIT = 12;
+var MEDIA_DEFAULT_RETENTION_DAYS = 7;
+var MEDIA_DEFAULT_RETENTION_MS = MEDIA_DEFAULT_RETENTION_DAYS * 24 * 60 * 60 * 1e3;
 var runtime_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -62278,6 +62280,7 @@ async function handleMediaUploadRequest(request, env) {
     });
   }
   const now = (/* @__PURE__ */ new Date()).toISOString();
+  const expiresAt = buildMediaExpiresAt(now);
   const mediaId = `med_${crypto.randomUUID()}`;
   const objectKey = buildMediaObjectKey({ repository, createdAt: now, mediaId, filename });
   const arrayBuffer = await file.arrayBuffer();
@@ -62301,7 +62304,8 @@ async function handleMediaUploadRequest(request, env) {
       mediaId,
       repository: repository || "unscoped",
       visibility,
-      sha256: sha2562
+      sha256: sha2562,
+      expiresAt
     }
   });
   let record2 = null;
@@ -62323,7 +62327,8 @@ async function handleMediaUploadRequest(request, env) {
       ocrText: "",
       createdBy: dashboardAuth.email || dashboardAuth.login || dashboardAuth.authType || "dashboard",
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      expiresAt
     });
   } catch (error2) {
     await cleanupOrphanMediaObject(r2, objectKey);
@@ -62379,6 +62384,9 @@ async function handleMediaObjectRequest(request, env, mediaRoute) {
       error: "media_not_found",
       reason: "media object was not found"
     });
+  }
+  if (isExpiredMediaObjectRecord(record2)) {
+    return buildExpiredMediaResponse(record2);
   }
   if (!mediaRoute.download) {
     return json(200, {
@@ -62449,7 +62457,7 @@ async function handleMediaSearchRequest(request, url, env) {
   });
   return json(200, {
     ok: true,
-    media: records.map((record2) => toMediaReference(record2)).filter(Boolean),
+    media: records.filter((record2) => !isExpiredMediaObjectRecord(record2)).map((record2) => toMediaReference(record2)).filter(Boolean),
     rawBinaryReturned: false
   });
 }
@@ -65771,8 +65779,8 @@ function createD1MediaObjectStore(d1) {
         `INSERT OR REPLACE INTO vtdd_media_objects (
              id, repository, related_issue, related_pr, source_surface, source_event_id,
              object_key, filename, content_type, byte_size, sha256, visibility,
-             summary, ocr_text, created_by, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             summary, ocr_text, created_by, created_at, updated_at, expires_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         normalized.id,
         normalized.repository,
@@ -65790,7 +65798,8 @@ function createD1MediaObjectStore(d1) {
         normalized.ocrText,
         normalized.createdBy,
         normalized.createdAt,
-        normalized.updatedAt
+        normalized.updatedAt,
+        normalized.expiresAt
       ).run();
       return normalized;
     },
@@ -65846,7 +65855,11 @@ function createD1MediaObjectStore(d1) {
   function ensureSchema() {
     if (!schemaPromise) {
       schemaPromise = (async () => {
-        await d1.exec("CREATE TABLE IF NOT EXISTS vtdd_media_objects (id TEXT PRIMARY KEY, repository TEXT, related_issue INTEGER, related_pr INTEGER, source_surface TEXT NOT NULL, source_event_id TEXT, object_key TEXT NOT NULL, filename TEXT NOT NULL, content_type TEXT NOT NULL, byte_size INTEGER NOT NULL, sha256 TEXT NOT NULL, visibility TEXT NOT NULL, summary TEXT, ocr_text TEXT, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);");
+        await d1.exec("CREATE TABLE IF NOT EXISTS vtdd_media_objects (id TEXT PRIMARY KEY, repository TEXT, related_issue INTEGER, related_pr INTEGER, source_surface TEXT NOT NULL, source_event_id TEXT, object_key TEXT NOT NULL, filename TEXT NOT NULL, content_type TEXT NOT NULL, byte_size INTEGER NOT NULL, sha256 TEXT NOT NULL, visibility TEXT NOT NULL, summary TEXT, ocr_text TEXT, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT);");
+        try {
+          await d1.exec("ALTER TABLE vtdd_media_objects ADD COLUMN expires_at TEXT;");
+        } catch {
+        }
         await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_repo ON vtdd_media_objects(repository, created_at DESC);");
         await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_issue ON vtdd_media_objects(repository, related_issue, created_at DESC);");
         await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_pr ON vtdd_media_objects(repository, related_pr, created_at DESC);");
@@ -66645,6 +66658,45 @@ function buildMediaObjectKey({ repository, createdAt, mediaId, filename }) {
   const dd = String(date3.getUTCDate()).padStart(2, "0");
   return `media/${owner}/${name}/${yyyy}/${mm}/${dd}/${mediaId}/${sanitizeMediaFilename(filename)}`;
 }
+function buildMediaExpiresAt(createdAt) {
+  const created = Date.parse(normalizeIsoTimestamp(createdAt) || "");
+  const base = Number.isFinite(created) ? created : Date.now();
+  return new Date(base + MEDIA_DEFAULT_RETENTION_MS).toISOString();
+}
+function isExpiredMediaObjectRecord(record2, now = Date.now()) {
+  const normalized = normalizeMediaObjectRecord(record2);
+  if (!normalized) {
+    return false;
+  }
+  const expiresAt = Date.parse(normalized.expiresAt || "");
+  return Number.isFinite(expiresAt) && expiresAt <= now;
+}
+function buildExpiredMediaResponse(record2) {
+  const media = toMediaReference(record2);
+  return json(410, {
+    ok: false,
+    error: "media_expired",
+    reason: "\u3053\u306E\u6DFB\u4ED8\u306F\u4FDD\u5B58\u671F\u9593\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5FC5\u8981\u3067\u3042\u308C\u3070\u518D\u6DFB\u4ED8\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    ownerMessage: "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u671F\u9593\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5FC5\u8981\u3067\u3042\u308C\u3070\u518D\u6DFB\u4ED8\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    media,
+    rawBinaryReturned: false
+  });
+}
+function buildMediaRetentionLabel(expiresAt, now = Date.now()) {
+  const expires = Date.parse(normalizeIsoTimestamp(expiresAt) || "");
+  if (!Number.isFinite(expires)) {
+    return "";
+  }
+  const remainingMs = expires - now;
+  if (remainingMs <= 0) {
+    return "\u4FDD\u5B58\u671F\u9593\u5207\u308C";
+  }
+  const remainingDays = Math.max(1, Math.ceil(remainingMs / (24 * 60 * 60 * 1e3)));
+  if (remainingDays >= MEDIA_DEFAULT_RETENTION_DAYS) {
+    return `${MEDIA_DEFAULT_RETENTION_DAYS}\u65E5\u5F8C\u306B\u524A\u9664`;
+  }
+  return `\u3042\u3068${remainingDays}\u65E5`;
+}
 async function sha256ArrayBufferHex(arrayBuffer) {
   if (globalThis.crypto?.subtle) {
     const digest2 = await globalThis.crypto.subtle.digest("SHA-256", arrayBuffer);
@@ -66675,6 +66727,7 @@ function normalizeMediaObjectRecord(record2) {
     return null;
   }
   const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || (/* @__PURE__ */ new Date()).toISOString();
+  const expiresAt = normalizeIsoTimestamp(input.expiresAt || input.expires_at) || buildMediaExpiresAt(createdAt);
   return {
     id,
     repository: normalizeCanonicalRepositoryInput(input.repository) || null,
@@ -66692,7 +66745,8 @@ function normalizeMediaObjectRecord(record2) {
     ocrText: sanitizeDashboardChatText(input.ocrText || input.ocr_text),
     createdBy: sanitizeDashboardChatText(input.createdBy || input.created_by),
     createdAt,
-    updatedAt: normalizeIsoTimestamp(input.updatedAt || input.updated_at) || createdAt
+    updatedAt: normalizeIsoTimestamp(input.updatedAt || input.updated_at) || createdAt,
+    expiresAt
   };
 }
 function mediaObjectRecordFromRow(row) {
@@ -66713,7 +66767,8 @@ function mediaObjectRecordFromRow(row) {
     ocrText: row?.ocr_text,
     createdBy: row?.created_by,
     createdAt: row?.created_at,
-    updatedAt: row?.updated_at
+    updatedAt: row?.updated_at,
+    expiresAt: row?.expires_at
   });
 }
 function toMediaReference(record2) {
@@ -66736,6 +66791,8 @@ function toMediaReference(record2) {
     ocrText: normalized.ocrText || "",
     createdAt: normalized.createdAt,
     updatedAt: normalized.updatedAt,
+    expiresAt: normalized.expiresAt,
+    retentionLabel: buildMediaRetentionLabel(normalized.expiresAt),
     metadataUrl: `/v2/media/${normalized.id}`,
     downloadUrl: `/v2/media/${normalized.id}/download`
   };
@@ -66759,6 +66816,8 @@ function normalizeMediaReferences(value) {
       sha256: normalizeDashboardEventText(input.sha256).toLowerCase().slice(0, 64),
       visibility: normalizeMediaVisibility(input.visibility) || "private",
       summary: sanitizeDashboardChatText(input.summary),
+      expiresAt: normalizeIsoTimestamp(input.expiresAt || input.expires_at) || "",
+      retentionLabel: sanitizeDashboardChatText(input.retentionLabel || input.retention_label),
       metadataUrl: `/v2/media/${mediaId}`,
       downloadUrl: `/v2/media/${mediaId}/download`
     };
@@ -66787,6 +66846,13 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
         ok: false,
         error: "media_reference_not_found",
         reason: `media reference ${reference.mediaId} was not found`
+      };
+    }
+    if (isExpiredMediaObjectRecord(record2)) {
+      return {
+        ok: false,
+        error: "media_reference_expired",
+        reason: `media reference ${reference.mediaId} \u306F\u4FDD\u5B58\u671F\u9593\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5FC5\u8981\u3067\u3042\u308C\u3070\u518D\u6DFB\u4ED8\u3057\u3066\u304F\u3060\u3055\u3044\u3002`
       };
     }
     const media = toMediaReference(record2);
@@ -70309,7 +70375,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-progress.thinking .progress-title::before { animation: pulseProgress 1.25s ease-in-out infinite; }
     .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; overflow: hidden; }
     .media-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(48vw, 320px); }
-    .media-thumb { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 10px; object-fit: cover; background: var(--border); }
+    .media-chip .media-label { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
+    .media-chip .media-kind { color: var(--text); font-weight: 700; max-width: min(26vw, 140px); }
+    .media-chip .media-retention { color: var(--muted); font-size: 11px; max-width: min(38vw, 220px); }
+    .media-thumb { width: 64px; height: 64px; flex: 0 0 auto; border-radius: 10px; object-fit: cover; background: var(--border); }
     .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
@@ -71148,6 +71217,40 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "";
       }
 
+      function getMediaKindLabel(item) {
+        const kind = getMediaContentKind(item);
+        if (kind === "video") return "\u52D5\u753B";
+        if (kind === "image") return "\u753B\u50CF";
+        return "\u6DFB\u4ED8";
+      }
+
+      function formatMediaRetentionLabel(item) {
+        const explicit = String(item && item.retentionLabel || "").trim();
+        if (explicit) return explicit;
+        const expiresAt = String(item && item.expiresAt || "");
+        const expires = Date.parse(expiresAt);
+        if (!Number.isFinite(expires)) return "7\u65E5\u5F8C\u306B\u524A\u9664";
+        const remainingMs = expires - Date.now();
+        if (remainingMs <= 0) return "\u4FDD\u5B58\u671F\u9593\u5207\u308C";
+        const remainingDays = Math.max(1, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
+        return remainingDays >= 7 ? "7\u65E5\u5F8C\u306B\u524A\u9664" : "\u3042\u3068" + remainingDays + "\u65E5";
+      }
+
+      function appendMediaLabel(chip, item) {
+        const label = document.createElement("span");
+        label.className = "media-label";
+        const kind = document.createElement("span");
+        kind.className = "media-kind";
+        kind.textContent = getMediaKindLabel(item);
+        const retention = document.createElement("span");
+        retention.className = "media-retention";
+        retention.textContent = formatMediaRetentionLabel(item);
+        label.title = item && item.filename ? item.filename : "";
+        label.appendChild(kind);
+        label.appendChild(retention);
+        chip.appendChild(label);
+      }
+
       function renderMediaReferences(references) {
         const list = Array.isArray(references) ? references : [];
         if (list.length === 0) return null;
@@ -71194,14 +71297,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             icon.textContent = "\u6DFB\u4ED8";
             chip.appendChild(icon);
           }
-          const label = document.createElement(isVideo && downloadHref !== "#" ? "a" : "span");
-          label.textContent = reference.filename || reference.mediaId || "media";
-          if (label.tagName === "A") {
-            label.href = downloadHref;
-            label.target = "_blank";
-            label.rel = "noreferrer";
-          }
-          chip.appendChild(label);
+          chip.title = reference.filename || reference.mediaId || "media";
+          appendMediaLabel(chip, reference);
           wrapper.appendChild(chip);
         }
         return wrapper;
@@ -71253,8 +71350,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               chip.appendChild(image);
             }
           }
-          const label = document.createElement("span");
-          label.textContent = item.filename || "attachment";
+          chip.title = item.filename || "attachment";
+          appendMediaLabel(chip, {
+            ...item,
+            retentionLabel: "\u9001\u4FE1\u5F8C7\u65E5\u3067\u524A\u9664"
+          });
           const remove = document.createElement("button");
           remove.className = "media-remove";
           remove.type = "button";

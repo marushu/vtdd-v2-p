@@ -478,7 +478,8 @@ function createStrictMediaD1Binding() {
                   ocrText,
                   createdBy,
                   createdAt,
-                  updatedAt
+                  updatedAt,
+                  expiresAt
                 ] = params;
                 rows.set(id, {
                   id,
@@ -497,7 +498,8 @@ function createStrictMediaD1Binding() {
                   ocr_text: ocrText,
                   created_by: createdBy,
                   created_at: createdAt,
-                  updated_at: updatedAt
+                  updated_at: updatedAt,
+                  expires_at: expiresAt
                 });
               }
               return { success: true };
@@ -1834,6 +1836,9 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("createImageBitmap"), true);
   assert.equal(body.includes("className = \"media-thumb\""), true);
   assert.equal(body.includes("function getMediaContentKind("), true);
+  assert.equal(body.includes("function formatMediaRetentionLabel("), true);
+  assert.equal(body.includes("retentionLabel: \"送信後7日で削除\""), true);
+  assert.equal(body.includes("className = \"media-retention\""), true);
   assert.equal(body.includes("function isPreviewableMediaFile("), true);
   assert.equal(body.includes("const mediaKind = getMediaContentKind(reference)"), true);
   assert.equal(body.includes("getMediaContentKind(item) === \"video\""), true);
@@ -1847,7 +1852,7 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("const safeDownloadHref = referenceDownloadUrl.startsWith(\"/v2/media/\") ? referenceDownloadUrl : \"\""), true);
   assert.equal(body.includes("const downloadHref = mediaRouteHref || safeDownloadHref || \"#\""), true);
   assert.equal(body.includes("chip.href = downloadHref"), true);
-  assert.equal(body.includes("label.href = downloadHref"), true);
+  assert.equal(body.includes("appendMediaLabel(chip, reference)"), true);
   assert.equal(body.includes("const chip = document.createElement(isVideo && downloadHref !== \"#\" ? \"span\" : \"a\")"), true);
   assert.equal(body.includes("isImage && downloadHref !== \"#\""), true);
   assert.equal(body.includes("image.src = downloadHref"), true);
@@ -1937,9 +1942,14 @@ test("worker uploads dashboard media to R2 and stores D1 metadata reference only
   assert.equal(body.media.filename, "dashboard.png");
   assert.equal(body.media.contentType, "image/png");
   assert.equal(body.media.visibility, "private");
+  assert.equal(typeof body.media.expiresAt, "string");
+  assert.equal(body.media.retentionLabel, "7日後に削除");
+  assert.equal(Math.round((Date.parse(body.media.expiresAt) - Date.parse(body.media.createdAt)) / (24 * 60 * 60 * 1000)), 7);
   assert.equal(body.stored.rawBinaryReturned, false);
   assert.equal(JSON.stringify(body).includes("fake image bytes"), false);
   assert.equal(r2.objects.size, 1);
+  const storedObject = [...r2.objects.values()][0];
+  assert.equal(storedObject.options.customMetadata.expiresAt, body.media.expiresAt);
 
   const metadataResponse = await worker.fetch(
     new Request(`https://example.com${body.media.metadataUrl}`, {
@@ -1950,6 +1960,7 @@ test("worker uploads dashboard media to R2 and stores D1 metadata reference only
   assert.equal(metadataResponse.status, 200);
   const metadataBody = await metadataResponse.json();
   assert.equal(metadataBody.media.mediaId, body.media.mediaId);
+  assert.equal(metadataBody.media.expiresAt, body.media.expiresAt);
   assert.equal(metadataBody.media.objectKey, undefined);
   assert.equal(metadataBody.media.sourceEventId, undefined);
   assert.equal(JSON.stringify(metadataBody).includes("fake image bytes"), false);
@@ -1995,11 +2006,14 @@ test("worker uploads dashboard mp4 media to R2 and stores metadata reference onl
   assert.equal(body.media.filename, "broken-scroll.mp4");
   assert.equal(body.media.contentType, "video/mp4");
   assert.equal(body.media.visibility, "private");
+  assert.equal(typeof body.media.expiresAt, "string");
+  assert.equal(body.media.retentionLabel, "7日後に削除");
   assert.equal(body.stored.rawBinaryReturned, false);
   assert.equal(JSON.stringify(body).includes("ftypisom"), false);
   assert.equal(r2.objects.size, 1);
   const storedObject = [...r2.objects.values()][0];
   assert.equal(storedObject.options.httpMetadata.contentType, "video/mp4");
+  assert.equal(storedObject.options.customMetadata.expiresAt, body.media.expiresAt);
 
   const downloadResponse = await worker.fetch(
     new Request(`https://example.com${body.media.downloadUrl}`, {
@@ -2009,6 +2023,103 @@ test("worker uploads dashboard mp4 media to R2 and stores metadata reference onl
   );
   assert.equal(downloadResponse.status, 200);
   assert.equal(downloadResponse.headers.get("content-type"), "video/mp4");
+});
+
+test("worker returns owner-facing expiration for expired dashboard media", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  await mediaStore.put({
+    id: "med_expiredmedia",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 498,
+    sourceSurface: "dashboard_butler",
+    sourceEventId: "dashboard_owner_message:expired",
+    objectKey: "media/marushu/vtdd-v2-p/2026/05/23/med_expiredmedia/dashboard.png",
+    filename: "dashboard.png",
+    contentType: "image/png",
+    byteSize: 16,
+    sha256: "0123456789abcdef",
+    visibility: "private",
+    createdAt: "2026-05-23T00:00:00.000Z",
+    updatedAt: "2026-05-23T00:00:00.000Z",
+    expiresAt: "2026-05-30T00:00:00.000Z"
+  });
+  await r2.put("media/marushu/vtdd-v2-p/2026/05/23/med_expiredmedia/dashboard.png", new Uint8Array([1, 2, 3]));
+
+  const metadataResponse = await worker.fetch(
+    new Request("https://example.com/v2/media/med_expiredmedia", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(metadataResponse.status, 410);
+  const metadataBody = await metadataResponse.json();
+  assert.equal(metadataBody.error, "media_expired");
+  assert.equal(metadataBody.rawBinaryReturned, false);
+  assert.match(metadataBody.ownerMessage, /保存期間が切れました/);
+
+  const downloadResponse = await worker.fetch(
+    new Request("https://example.com/v2/media/med_expiredmedia/download", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(downloadResponse.status, 410);
+  const downloadBody = await downloadResponse.json();
+  assert.equal(downloadBody.error, "media_expired");
+  assert.equal(r2.objects.size, 1);
+});
+
+test("worker filters expired dashboard media from search and rejects expired chat references", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  await mediaStore.put({
+    id: "med_expiredref",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 498,
+    sourceSurface: "dashboard_butler",
+    sourceEventId: "dashboard_owner_message:expired-ref",
+    objectKey: "media/marushu/vtdd-v2-p/2026/05/23/med_expiredref/dashboard.png",
+    filename: "dashboard.png",
+    contentType: "image/png",
+    byteSize: 16,
+    sha256: "0123456789abcdef",
+    visibility: "private",
+    createdAt: "2026-05-23T00:00:00.000Z",
+    updatedAt: "2026-05-23T00:00:00.000Z",
+    expiresAt: "2026-05-30T00:00:00.000Z"
+  });
+
+  const searchResponse = await worker.fetch(
+    new Request("https://example.com/v2/media/search?repository=marushu%2Fvtdd-v2-p&relatedIssue=498", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(searchResponse.status, 200);
+  const searchBody = await searchResponse.json();
+  assert.equal(searchBody.media.length, 0);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: {
+        ...dashboardAccessHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 498,
+        text: "期限切れ添付を使う",
+        mediaReferences: [{ mediaId: "med_expiredref", filename: "dashboard.png", contentType: "image/png" }]
+      })
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "media_reference_expired");
+  assert.match(body.reason, /保存期間が切れました/);
 });
 
 test("worker rejects media upload without R2 binding before metadata drift", async () => {
@@ -2058,6 +2169,7 @@ test("worker uploads private dashboard media without repository for ordinary cha
   assert.equal(body.ok, true);
   assert.equal(body.media.repository, null);
   assert.equal(body.media.visibility, "private");
+  assert.equal(body.media.retentionLabel, "7日後に削除");
   assert.match(body.media.downloadUrl, /^\/v2\/media\/med_/);
   assert.equal(r2.objects.size, 1);
   const [objectKey, stored] = [...r2.objects.entries()][0];
@@ -2096,6 +2208,8 @@ test("worker creates media D1 schema without multiline exec truncation", async (
   );
   assert.ok(createTableStatement);
   assert.equal(createTableStatement.includes("\n"), false);
+  assert.equal(createTableStatement.includes("expires_at TEXT"), true);
+  assert.equal(d1.rows.values().next().value.expires_at, body.media.expiresAt);
 });
 
 test("worker rejects public or evidence media without resolved repository before R2 put", async () => {
@@ -2328,7 +2442,8 @@ test("worker rejects abandoned media rollback without exact source event scope",
     sha256: "0123456789abcdef",
     visibility: "private",
     createdAt: "2026-05-23T00:00:00.000Z",
-    updatedAt: "2026-05-23T00:00:00.000Z"
+    updatedAt: "2026-05-23T00:00:00.000Z",
+    expiresAt: "2999-01-01T00:00:00.000Z"
   });
   await r2.put("media/marushu/vtdd-v2-p/2026/05/23/med_rollbackscope/dashboard.png", new Uint8Array([1, 2, 3]));
 
@@ -2367,7 +2482,8 @@ test("worker allows rollback delete for private unscoped dashboard media from an
     sha256: "0123456789abcdef",
     visibility: "private",
     createdAt: "2026-05-23T00:00:00.000Z",
-    updatedAt: "2026-05-23T00:00:00.000Z"
+    updatedAt: "2026-05-23T00:00:00.000Z",
+    expiresAt: "2999-01-01T00:00:00.000Z"
   });
   await r2.put("media/_dashboard/unscoped/2026/05/23/med_unscopedrollback/dashboard.png", new Uint8Array([1, 2, 3]));
 
@@ -2424,7 +2540,8 @@ test("worker stores dashboard media references in chat without raw binary", asyn
     sha256: "0123456789abcdef",
     visibility: "private",
     createdAt: "2026-05-23T00:00:00.000Z",
-    updatedAt: "2026-05-23T00:00:00.000Z"
+    updatedAt: "2026-05-23T00:00:00.000Z",
+    expiresAt: "2999-01-01T00:00:00.000Z"
   });
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/messages", {
@@ -2477,7 +2594,8 @@ test("worker rejects chat media references outside the repository or issue conte
     sha256: "0123456789abcdef",
     visibility: "private",
     createdAt: "2026-05-23T00:00:00.000Z",
-    updatedAt: "2026-05-23T00:00:00.000Z"
+    updatedAt: "2026-05-23T00:00:00.000Z",
+    expiresAt: "2999-01-01T00:00:00.000Z"
   });
 
   const response = await worker.fetch(
