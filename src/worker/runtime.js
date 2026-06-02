@@ -14479,6 +14479,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
+    .transient-progress-card { align-self: flex-start; width: min(760px, 88%); max-width: 100%; border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; background: var(--panel-strong); color: var(--text); box-shadow: 0 8px 30px var(--shadow); }
+    .transient-progress-card[hidden] { display: none; }
+    .transient-progress-card .progress-title { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+    .transient-progress-card .progress-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--link); box-shadow: 0 0 0 4px rgba(11, 107, 101, .12); }
+    .transient-progress-card .progress-text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+    .transient-progress-card.thinking .progress-title::before { animation: pulseProgress 1.25s ease-in-out infinite; }
+    @keyframes pulseProgress { 0%, 100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
     .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); overflow: hidden; overscroll-behavior-x: none; }
@@ -14700,6 +14707,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let pendingMediaItems = [];
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
+      let transientProgressCard = null;
+      let transientProgressState = null;
       let pendingOwnerSend = null;
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
@@ -14912,6 +14921,72 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               setStatus("");
             }
           }, 2400);
+        }
+      }
+
+      function isLongRunningTransientStatus(statusValue) {
+        return [
+          "thinking",
+          "stalled",
+          "pending_app_server_bridge",
+          "waiting_approval",
+          "waiting_user_input"
+        ].includes(String(statusValue || ""));
+      }
+
+      function ensureTransientProgressCard() {
+        if (transientProgressCard && transientProgressCard.isConnected) return transientProgressCard;
+        const article = document.createElement("article");
+        article.className = "transient-progress-card";
+        article.setAttribute("aria-live", "polite");
+        article.setAttribute("data-transient-progress", "true");
+        const title = document.createElement("div");
+        title.className = "progress-title";
+        title.textContent = "進行中";
+        const text = document.createElement("p");
+        text.className = "progress-text";
+        article.appendChild(title);
+        article.appendChild(text);
+        transientProgressCard = article;
+        log.appendChild(article);
+        return article;
+      }
+
+      function renderTransientProgress() {
+        if (!transientProgressState) return;
+        const card = ensureTransientProgressCard();
+        card.hidden = false;
+        card.classList.toggle("thinking", transientProgressState.thinking === true);
+        const title = card.querySelector(".progress-title");
+        const text = card.querySelector(".progress-text");
+        if (title) {
+          title.textContent = transientProgressState.title || "進行中";
+        }
+        if (text) {
+          text.textContent = transientProgressState.text || "処理を続けています。";
+        }
+        scrollToLatest();
+      }
+
+      function updateTransientProgress(text, options = {}) {
+        const normalized = String(text || "").trim();
+        if (!normalized || !isLongRunningTransientStatus(options.status)) {
+          return;
+        }
+        transientProgressState = {
+          title: options.title || "進行中",
+          text: normalized,
+          status: String(options.status || ""),
+          thinking: options.thinking === true
+        };
+        renderTransientProgress();
+      }
+
+      function clearTransientProgress() {
+        transientProgressState = null;
+        if (transientProgressCard) {
+          transientProgressCard.remove();
+          transientProgressCard = null;
         }
       }
 
@@ -15743,6 +15818,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function renderThread(messages, options = {}) {
         const replace = options.replace === true;
+        const hadTransientProgress = Boolean(transientProgressState);
+        if (transientProgressCard) {
+          transientProgressCard.remove();
+          transientProgressCard = null;
+        }
         if (replace) {
           messagesById.clear();
         }
@@ -15759,6 +15839,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         log.replaceChildren();
         for (const message of messagesById.values()) {
           appendMessage(message);
+        }
+        if (hadTransientProgress) {
+          renderTransientProgress();
         }
         scrollToLatest();
       }
@@ -15846,8 +15929,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const releasedFromThread = releasePendingOwnerSendFromThread(body.messages || []);
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
+                clearTransientProgress();
                 setStatus("返信を受信しました。", { temporary: true });
               } else if (lastMessage?.status === "failed" || lastMessage?.status === "stalled") {
+                clearTransientProgress();
                 releaseComposerForFollowUp(lastMessage.text || "応答生成が時間切れになりました。同じ thread で続けられます。");
               } else if (releasedFromThread) {
                 setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
@@ -15855,9 +15940,24 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             } else if (body.type === "transient_status" && body.ok) {
               const isThinking = body.status === "thinking";
               if (body.status === "stalled") {
+                updateTransientProgress(body.text || "接続と実行状態を確認中です。", {
+                  status: body.status,
+                  thinking: true,
+                  title: "状態確認中"
+                });
                 releaseComposerForFollowUp(body.text || "接続と実行状態を確認中です。");
               } else {
-                setStatus(body.text || (isThinking ? "codex app-server が応答を生成しています" : "codex app-server の応答が完了しました。"), {
+                const transientText = body.text || (isThinking ? "codex app-server が応答を生成しています" : "codex app-server の応答が完了しました。");
+                if (isThinking) {
+                  updateTransientProgress(transientText, {
+                    status: body.status,
+                    thinking: true,
+                    title: "進行中"
+                  });
+                } else {
+                  clearTransientProgress();
+                }
+                setStatus(transientText, {
                   thinking: isThinking,
                   temporary: !isThinking
                 });

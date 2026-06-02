@@ -1240,6 +1240,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes(".mobile-drawer { position: fixed;"), true);
   assert.equal(body.includes(".menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }"), true);
   assert.equal(body.includes(".composer-status:empty"), true);
+  assert.equal(body.includes(".transient-progress-card"), true);
+  assert.equal(body.includes("data-transient-progress"), true);
+  assert.equal(body.includes("function updateTransientProgress(text, options = {})"), true);
+  assert.equal(body.includes("function clearTransientProgress()"), true);
+  assert.equal(body.includes("function renderTransientProgress()"), true);
+  assert.equal(body.includes("isLongRunningTransientStatus(options.status)"), true);
   assert.equal(body.includes("WebSocket"), true);
   assert.equal(body.includes("接続準備中: 送信できる状態になったらここで知らせます"), false);
   assert.equal(body.includes("class=\"connection-note\""), false);
@@ -1490,6 +1496,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('renderThread(body.messages || [], { replace: true })'), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
   assert.equal(body.includes('body.type === "transient_status"'), true);
+  assert.equal(body.includes("updateTransientProgress(transientText"), true);
+  assert.equal(body.includes("clearTransientProgress();\n                setStatus(\"返信を受信しました。\""), true);
+  assert.equal(body.includes("clearTransientProgress();\n                releaseComposerForFollowUp"), true);
   assert.equal(body.includes('lastMessage?.status === "failed"'), true);
   assert.equal(body.includes("応答生成が時間切れになりました。同じ thread で続けられます。"), true);
   assert.equal(body.includes("appendMessage(body"), false);
