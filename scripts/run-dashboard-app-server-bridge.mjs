@@ -745,7 +745,7 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
 export function buildAppServerReplyDeltaProgressText({ accumulatedText = "", delta = "", maxLength = 1200 } = {}) {
   const fullText = String(`${accumulatedText || ""}${delta || ""}`).replace(/\r\n?/g, "\n");
   if (!fullText) return "";
-  const normalized = fullText.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const normalized = formatAppServerProgressNarration(fullText);
   if (normalized.length <= maxLength) return normalized;
   const tail = normalized.slice(-maxLength);
   const paragraphStart = tail.indexOf("\n\n");
@@ -801,6 +801,16 @@ function extractAppServerProgressTarget(params = {}, keys = []) {
     if (itemValue) return itemValue;
   }
   return "";
+}
+
+export function formatAppServerProgressNarration(value = "") {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/([。！？!?])(?=[^\s\n])/g, "$1\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function shouldPersistAppServerProgressStage(stage = "") {

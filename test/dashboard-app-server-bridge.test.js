@@ -586,6 +586,27 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(accumulatedDelta.text, "次を確認します。");
   assert.equal(accumulatedDelta.progressText, "Issue #590 を確認しています。\n\n次を確認します。");
 
+  const readableProgress = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        delta:
+          "進行確認を始めます。対象は Issue #590 / PR #733 です。次は queue と bridge runtime を確認します。"
+      }
+    },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(
+    readableProgress.progressText,
+    [
+      "進行確認を始めます。",
+      "対象は Issue #590 / PR #733 です。",
+      "次は queue と bridge runtime を確認します。"
+    ].join("\n")
+  );
+
   const completed = mapAppServerNotificationToDashboardEvent(
     { method: "turn/completed", params: { threadId: "codex-thread-1" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1", accumulatedText: "最終返答" }
