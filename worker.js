@@ -70379,9 +70379,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .media-lightbox-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
     .media-lightbox-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: 14px; font-weight: 800; }
     .media-lightbox-close { width: 42px; height: 42px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .32); border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font: inherit; font-size: 24px; line-height: 1; cursor: pointer; }
-    .media-lightbox-body { min-height: 0; display: grid; place-items: center; overflow: auto; overscroll-behavior: contain; }
-    .media-lightbox-body img, .media-lightbox-body video { display: block; max-width: 100%; max-height: 100%; border-radius: 8px; background: #111; }
-    .media-lightbox-body video { width: min(100%, 960px); }
+    .media-lightbox-body { min-width: 0; min-height: 0; width: 100%; height: 100%; display: grid; place-items: center; overflow: auto; overscroll-behavior: contain; }
+    .media-lightbox-body img, .media-lightbox-body video { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; background: #111; }
+    .media-lightbox-body video { max-width: min(100%, 960px); }
     .media-lightbox-meta { min-height: 20px; color: rgba(255, 255, 255, .74); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
     .composer-status:empty { min-height: 0; padding-left: 0; }
@@ -71301,7 +71301,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
       if (mediaLightbox) {
         mediaLightbox.addEventListener("click", (event) => {
-          if (event.target === mediaLightbox) closeMediaLightbox();
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          if (target.closest("button")) return;
+          if (target.closest("video")) return;
+          closeMediaLightbox();
         });
       }
       document.addEventListener("keydown", (event) => {

@@ -1841,8 +1841,14 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("function formatMediaRetentionLabel("), true);
   assert.equal(body.includes("id=\"butler-media-lightbox\""), true);
   assert.equal(body.includes("id=\"butler-media-lightbox-close\""), true);
+  assert.equal(body.includes(".media-lightbox-body { min-width: 0; min-height: 0; width: 100%; height: 100%;"), true);
+  assert.equal(body.includes(".media-lightbox-body img, .media-lightbox-body video { display: block; width: 100%; height: 100%;"), true);
+  assert.equal(body.includes("object-fit: contain;"), true);
   assert.equal(body.includes("function openMediaLightbox("), true);
   assert.equal(body.includes("function closeMediaLightbox("), true);
+  assert.equal(body.includes("if (target.closest(\"button\")) return;"), true);
+  assert.equal(body.includes("if (target.closest(\"video\")) return;"), true);
+  assert.equal(body.includes("closeMediaLightbox();"), true);
   assert.equal(body.includes("mediaLightboxTitle.textContent = item && item.filename ? item.filename : getMediaKindLabel(item)"), true);
   assert.equal(body.includes("mediaLightboxMeta.textContent = formatMediaRetentionLabel(item)"), true);
   assert.equal(body.includes("保存期間が切れたか、取得できません。必要なら再添付してください。"), true);
