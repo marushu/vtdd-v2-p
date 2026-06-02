@@ -11,7 +11,14 @@
     "logClientWidth": 370,
     "textScrollWidth": 338,
     "textClientWidth": 338,
-    "bubbleCount": 3,
+    "bubbleCount": 21,
     "transientCount": 1
+  },
+  "layoutAfterProgressUpdate": {
+    "logScrollTop": 0
+  },
+  "scrollPreservation": {
+    "before": 64,
+    "after": 64
   }
 }

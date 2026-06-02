@@ -1247,6 +1247,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function updateTransientProgress(text, options = {})"), true);
   assert.equal(body.includes("function clearTransientProgress()"), true);
   assert.equal(body.includes("function renderTransientProgress()"), true);
+  const renderTransientProgressSource = body.match(/function renderTransientProgress\(\) \{[\s\S]*?\n      \}/)?.[0] || "";
+  assert.equal(renderTransientProgressSource.includes("scrollToLatest()"), false);
+  assert.equal(renderTransientProgressSource.includes("updateComposerReserve()"), true);
   assert.equal(body.includes("isLongRunningTransientStatus(options.status)"), true);
   assert.equal(body.includes("function appendMessage(message, target = log, options = {})"), true);
   assert.equal(body.includes("const fragment = document.createDocumentFragment()"), true);

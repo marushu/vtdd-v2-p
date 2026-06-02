@@ -14978,7 +14978,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (text) {
           text.textContent = transientProgressState.text || "処理を続けています。";
         }
-        scrollToLatest();
+        updateComposerReserve();
       }
 
       function updateTransientProgress(text, options = {}) {

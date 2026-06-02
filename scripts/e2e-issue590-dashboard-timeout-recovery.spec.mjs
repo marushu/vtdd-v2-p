@@ -193,6 +193,18 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
 }) => {
   await page.goto(dashboardUrl);
 
+  await page.evaluate(() => {
+    const log = document.querySelector("#butler-chat-log");
+    if (!log) return;
+    for (let index = 0; index < 18; index += 1) {
+      const bubble = document.createElement("article");
+      bubble.className = index % 2 === 0 ? "bubble owner" : "bubble";
+      bubble.innerHTML = `<p>Issue #590 scroll preservation fixture ${index + 1}</p>`;
+      log.appendChild(bubble);
+    }
+    log.scrollTop = 0;
+  });
+
   const beforeBubbleCount = await page.locator(".bubble").count();
   await page.evaluate(() => {
     const pane = document.querySelector("#butler-transient-progress");
@@ -206,8 +218,13 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
     if (!text) return;
     text.textContent =
       "Issue #590 の production evidence、reviewer 指摘、deploy 後 E2E の残リスクを確認しています。通常チャット履歴には保存しません。";
-    pane.scrollIntoView({ block: "end" });
   });
+
+  const layoutAfterProgressUpdate = await page.evaluate(() => {
+    const log = document.querySelector("#butler-chat-log");
+    return { logScrollTop: log?.scrollTop ?? 0 };
+  });
+  expect(layoutAfterProgressUpdate.logScrollTop).toBe(0);
 
   const pane = page.locator("[data-transient-progress='true']");
   await expect(pane).toBeVisible();
@@ -242,9 +259,21 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   expect(layout.logScrollWidth).toBeLessThanOrEqual(layout.logClientWidth + 1);
   expect(layout.textScrollWidth).toBeLessThanOrEqual(layout.textClientWidth + 1);
 
+  const scrollPreservation = await page.evaluate(() => {
+    const log = document.querySelector("#butler-chat-log");
+    const text = document.querySelector("[data-transient-progress='true'] .progress-text");
+    if (!log || !text) return { before: -1, after: -1 };
+    log.scrollTop = 64;
+    const before = log.scrollTop;
+    text.textContent =
+      "ファイルの修正・変更が完了しました。現在コミット中です。\nPR を作成しています。このままレビュアーを待ちます。";
+    return { before, after: log.scrollTop };
+  });
+  expect(scrollPreservation.after).toBe(scrollPreservation.before);
+
   const statePath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-state.json`);
   const screenshotPath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-390x844.png`);
-  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout }, null, 2));
+  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout, layoutAfterProgressUpdate, scrollPreservation }, null, 2));
   await page.screenshot({ path: screenshotPath, fullPage: true });
   console.log(JSON.stringify({
     ok: true,
@@ -252,7 +281,8 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
     verified: [
       "inline transient progress is visible above the composer in 390x844 mobile viewport",
       "inline transient progress does not append durable chat bubbles",
-      "progress text wraps without horizontal overflow"
+      "progress text wraps without horizontal overflow",
+      "transient progress updates preserve the owner's chat scroll position"
     ],
     evidence: { statePath, screenshotPath }
   }));

@@ -45,6 +45,7 @@ Codex app-server が final answer と commentary/progress を protocol 上で明
 - delta をそのまま表示すると断片的すぎる。
 - accumulation を無制限に表示すると composer 周辺が重くなる。
 - card を chat log に残すと owner が望む「入力欄上の軽い表示」から外れる。
+- progress 更新時に chat log を最下部へ scroll すると、owner が過去ログを読んでいる最中に位置が奪われる。
 - final reply に progress が混ざる問題は、今回の transient visibility だけでは完全に閉じない可能性がある。
 
 ## PR 前に確認すること
