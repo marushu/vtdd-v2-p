@@ -1502,6 +1502,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
   assert.equal(body.includes('body.type === "transient_status"'), true);
   assert.equal(body.includes("updateTransientProgress(transientText"), true);
+  assert.equal(body.includes("setStatus(transientText, {\n                  thinking: isThinking"), false);
   assert.equal(body.includes("clearTransientProgress();\n                setStatus(\"返信を受信しました。\""), true);
   assert.equal(body.includes("clearTransientProgress();\n                releaseComposerForFollowUp"), true);
   assert.equal(body.includes('lastMessage?.status === "failed"'), true);

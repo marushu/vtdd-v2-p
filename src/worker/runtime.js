@@ -15987,10 +15987,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
                 } else {
                   clearTransientProgress();
                 }
-                setStatus(transientText, {
-                  thinking: isThinking,
-                  temporary: !isThinking
-                });
+                if (!isThinking) {
+                  setStatus(transientText, { temporary: true });
+                }
               }
             } else if (body.type === "owner_message_accepted" && body.ok) {
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
