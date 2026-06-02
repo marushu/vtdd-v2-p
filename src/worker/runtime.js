@@ -14298,20 +14298,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   );
   const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
   const requestedChatThreadId = normalizeDashboardThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
-  const dashboardTargetLabel = repositoryInput ? `この作業: ${repositoryInput}` : "作業対象 repo 未指定";
+  const dashboardTargetLabel = repositoryInput ? `この作業: ${repositoryInput}` : "repo-less main chat";
   const targetStatusMarkup = repositoryInput
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">固定ではありません。この会話で Issue / PR / deploy など repo が必要な作業をする間だけ対象にします。deploy 先と承認境界は repo ごとに確認します。</p>`
-    : `<p><strong>作業対象 repo 未指定</strong></p>
-          <p class="muted">通常会話は続けられます。Issue / PR / deploy など repo が必要な作業を始める時だけ、この作業の対象 repo を指定します。VTDD と TOMIO では deploy 先も承認境界も別物として扱います。</p>
-          <form class="target-form" method="get" action="${escapeDashboardHtml(origin)}/dashboard">
-            <label for="dashboard-repository-input">この作業の対象 repo</label>
-            <div class="target-form-row">
-              <input id="dashboard-repository-input" name="repository" placeholder="owner/repo" autocomplete="off" autocapitalize="off" spellcheck="false">
-              ${dashboardIssueNumber ? `<input type="hidden" name="issueNumber" value="${dashboardIssueNumber}">` : ""}
-              <button type="submit">設定</button>
-            </div>
-          </form>`;
+    : `<p><strong>repo-less main chat</strong></p>
+          <p class="muted">ここが通常のメインチャットです。repo は常設設定ではなく、Issue / PR / deploy など repo 境界が必要になった時だけ Butler が会話の中で確認します。VTDD と TOMIO では deploy 先も承認境界も別物として扱います。</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = requestedChatThreadId || `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -14435,6 +14427,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(surface.title)}</strong><small>${escapeDashboardHtml(surface.disabledReason || "利用できません")}</small></span>`
       )
       .join("");
+  const initialDashboardIntroMarkup = repositoryInput
+    ? `<p>はい。ここではまず普通に会話できます。通知、進捗、この作業の対象 repo の確認は必要な時だけ開けます。</p>
+          <p>作業を進める時は、対象 repo、Issue、deploy 先を会話の中で確認してから進めます。</p>`
+    : `<p>はい。ここは repo-less main chat です。repo を固定しなくても、まず普通に会話できます。</p>
+          <p>Issue / PR / deploy など repo 境界が必要な作業に入る時だけ、対象 repo、Issue、deploy 先を会話の中で確認してから進めます。</p>`;
 
   return `<!doctype html>
 <html lang="ja">
@@ -14537,12 +14534,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .reply-context-label { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .04em; }
     .reply-context-snippet { display: -webkit-box; max-width: 100%; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: inherit; overflow-wrap: anywhere; word-break: break-word; }
     .reply-target-highlight { outline: 2px solid var(--link); outline-offset: 4px; transition: outline-color .22s ease; }
-    .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
-    .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
-    .bubble.has-copy-action { position: relative; }
+    .message-entry { display: grid; gap: 5px; align-self: stretch; max-width: min(760px, 88%); }
+    .message-entry.owner { justify-items: end; align-self: flex-end; }
+    .message-entry.butler, .message-entry.system { justify-items: start; }
+    .message-entry .bubble { max-width: 100%; }
+    .message-actions { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
+    .message-entry.owner .message-actions { justify-content: flex-end; }
+    .message-meta { color: inherit; font: inherit; line-height: inherit; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
-    .copy-message { position: absolute; top: -8px; right: -8px; z-index: 2; opacity: 0; pointer-events: none; transform: translateY(-2px) scale(.96); transition: opacity .16s ease, transform .16s ease; }
-    .bubble.has-copy-action:hover .copy-message, .bubble.has-copy-action:focus-within .copy-message, .bubble.actions-visible .copy-message, .copy-message:focus-visible { opacity: .92; pointer-events: auto; transform: translateY(0) scale(1); }
+    .copy-message { width: 28px; height: 28px; flex: 0 0 auto; opacity: .88; }
+    .copy-message:hover, .copy-message:focus-visible { opacity: 1; }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
     .copy-code:hover, .copy-code:focus-visible { opacity: 1; }
@@ -14553,7 +14554,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble.owner .message-body code { color: var(--owner-code-text); }
     .bubble.owner .message-body pre { background: var(--owner-code-bg); border-color: var(--owner-code-border); color: var(--owner-code-text); }
     .bubble.owner .message-body pre code { color: var(--owner-code-text); }
-    .bubble.owner .copy-message { top: -10px; left: -10px; right: auto; width: 28px; height: 28px; background: var(--panel-strong); color: var(--text); }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
@@ -14574,14 +14574,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-progress .progress-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--link); box-shadow: 0 0 0 4px rgba(11, 107, 101, .12); }
     .composer-progress .progress-text { margin: 0; max-height: min(9lh, 24dvh); overflow: auto; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .composer-progress.thinking .progress-title::before { animation: pulseProgress 1.25s ease-in-out infinite; }
-    .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; overflow: hidden; }
-    .media-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(48vw, 320px); }
-    .media-chip .media-label { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
-    .media-chip .media-kind { color: var(--text); font-weight: 700; max-width: min(26vw, 140px); }
-    .media-chip .media-retention { color: var(--muted); font-size: 11px; max-width: min(38vw, 220px); }
-    .media-thumb { width: 64px; height: 64px; flex: 0 0 auto; border-radius: 10px; object-fit: cover; background: var(--border); }
-    .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
-    .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
+    .media-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 76px; height: 76px; min-width: 76px; border: 1px solid var(--border); border-radius: 8px; padding: 0; color: var(--text); background: var(--soft); font: inherit; font-size: 12px; text-decoration: none; overflow: hidden; cursor: pointer; }
+    .media-chip:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+    .media-thumb { width: 100%; height: 100%; flex: 0 0 auto; border-radius: 7px; object-fit: cover; background: var(--border); }
+    .media-chip video.media-thumb { pointer-events: none; }
+    .media-fallback-label { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 999px; background: rgba(0, 0, 0, .62); color: #fff; font-weight: 800; text-align: center; line-height: 1.25; }
+    .media-remove { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 999px; background: rgba(0, 0, 0, .68); color: #fff; font: inherit; font-weight: 900; line-height: 1; padding: 0; cursor: pointer; }
+    .media-lightbox[hidden] { display: none; }
+    .media-lightbox { position: fixed; inset: 0; z-index: 30; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); background: rgba(0, 0, 0, .88); color: #fff; }
+    .media-lightbox-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+    .media-lightbox-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: 14px; font-weight: 800; }
+    .media-lightbox-close { width: 42px; height: 42px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .32); border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font: inherit; font-size: 24px; line-height: 1; cursor: pointer; }
+    .media-lightbox-body { min-width: 0; min-height: 0; width: 100%; height: 100%; display: grid; place-items: center; overflow: auto; overscroll-behavior: contain; }
+    .media-lightbox-body img, .media-lightbox-body video { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; background: #111; }
+    .media-lightbox-body video { max-width: min(100%, 960px); }
+    .media-lightbox-meta { min-height: 20px; color: rgba(255, 255, 255, .74); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
     .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
@@ -14673,9 +14680,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを閉じる">×</label>
         </div>
         <div class="mobile-drawer-content">
-          <p class="menu-callout">通知、進捗、この作業の対象 repo の確認はここから開きます。開発/運用の詳細は下に隔離しています。</p>
+          <p class="menu-callout">通知、進捗、repo が必要な開発/運用確認はここから開きます。通常チャットは repo 未指定のまま始められます。</p>
           <div class="lane">
-            <div class="lane-title"><h3>この作業の対象 repo</h3><span class="pill">${repositoryInput ? "active" : "未指定"}</span></div>
+            <div class="lane-title"><h3>${repositoryInput ? "この作業の対象 repo" : "repo-less main chat"}</h3><span class="pill">${repositoryInput ? "active" : "main"}</span></div>
             ${targetStatusMarkup}
           </div>
           <div class="lane">
@@ -14725,8 +14732,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>はい。ここではまず普通に会話できます。通知、進捗、この作業の対象 repo の確認は必要な時だけ開けます。</p>
-          <p>作業を進める時は、対象 repo、Issue、deploy 先を会話の中で確認してから進めます。</p>
+          ${initialDashboardIntroMarkup}
           <ul>
             <li>対象: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
             <li>通知と進捗はこの画面から戻って確認できます。</li>
@@ -14757,6 +14763,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="composer-status" id="butler-chat-status">接続準備中です。送信できる状態になったら知らせます。</div>
       </form>
+      <div class="media-lightbox" id="butler-media-lightbox" role="dialog" aria-modal="true" aria-label="添付プレビュー" hidden>
+        <div class="media-lightbox-top">
+          <div class="media-lightbox-title" id="butler-media-lightbox-title"></div>
+          <button class="media-lightbox-close" id="butler-media-lightbox-close" type="button" aria-label="閉じる">×</button>
+        </div>
+        <div class="media-lightbox-body" id="butler-media-lightbox-body"></div>
+        <div class="media-lightbox-meta" id="butler-media-lightbox-meta"></div>
+      </div>
     </section>
   </main>
   <script>
@@ -14769,6 +14783,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const mediaButton = document.getElementById("butler-media-button");
       const mediaInput = document.getElementById("butler-media-input");
       const pendingMedia = document.getElementById("butler-pending-media");
+      const mediaLightbox = document.getElementById("butler-media-lightbox");
+      const mediaLightboxBody = document.getElementById("butler-media-lightbox-body");
+      const mediaLightboxTitle = document.getElementById("butler-media-lightbox-title");
+      const mediaLightboxMeta = document.getElementById("butler-media-lightbox-meta");
+      const mediaLightboxClose = document.getElementById("butler-media-lightbox-close");
       const freshnessPill = document.getElementById("dashboard-freshness-pill");
       const freshnessState = document.getElementById("dashboard-freshness-state");
       const refreshCheckButton = document.getElementById("dashboard-refresh-check-button");
@@ -14797,6 +14816,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let transientProgressCard = null;
       let transientProgressState = null;
       let latestOwnerReplySource = null;
+      let lastMediaLightboxTrigger = null;
       let pendingOwnerSend = null;
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
@@ -15292,6 +15312,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (textarea.value.trim() === pending.text) {
             textarea.value = "";
           }
+          if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
           revokePendingMediaPreviews();
           pendingMediaItems = [];
           renderPendingMedia();
@@ -15416,38 +15437,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function appendMessage(message, target = log, options = {}) {
+        const entry = document.createElement("div");
+        entry.className = "message-entry " + (message.role === "owner" ? "owner" : message.role === "system" ? "system" : "butler");
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
         const renderedMessageId = getRenderedMessageId(message);
         if (renderedMessageId) {
           article.dataset.messageId = renderedMessageId;
         }
-        if (message.role === "owner") {
-          attachMessageActionReveal(article);
-          const copyButton = document.createElement("button");
-          copyButton.className = "copy-message";
-          copyButton.type = "button";
-          copyButton.textContent = "⧉";
-          copyButton.setAttribute("aria-label", "自分の発言をコピー");
-          copyButton.title = "自分の発言をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
-          article.appendChild(copyButton);
-        } else if (message.role === "butler") {
+        if (message.role === "butler") {
           const header = document.createElement("div");
           header.className = "bubble-header";
           const strong = document.createElement("strong");
           strong.textContent = "Butler";
           header.appendChild(strong);
-          const copyButton = document.createElement("button");
-          copyButton.className = "copy-message";
-          copyButton.type = "button";
-          copyButton.textContent = "⧉";
-          copyButton.setAttribute("aria-label", "返信をコピー");
-          copyButton.title = "返信をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
-          header.appendChild(copyButton);
           article.appendChild(header);
-          attachMessageActionReveal(article);
         } else if (message.role === "system") {
           const header = document.createElement("div");
           header.className = "bubble-header";
@@ -15468,27 +15472,32 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (media) {
           article.appendChild(media);
         }
+        entry.appendChild(article);
+        const actions = document.createElement("div");
+        actions.className = "message-actions";
         const timestamp = formatMessageTimestamp(message.createdAt || message.created_at);
         if (timestamp) {
           const meta = document.createElement("time");
           meta.className = "message-meta";
           meta.dateTime = normalizeDateTimeAttribute(message.createdAt || message.created_at);
           meta.textContent = timestamp;
-          article.appendChild(meta);
+          actions.appendChild(meta);
         }
-        target.appendChild(article);
+        const copyButton = document.createElement("button");
+        copyButton.className = "copy-message";
+        copyButton.type = "button";
+        copyButton.textContent = "⧉";
+        const copyLabel = message.role === "owner" ? "自分の発言をコピー" : message.role === "system" ? "システムメッセージをコピー" : "返信をコピー";
+        copyButton.setAttribute("aria-label", copyLabel);
+        copyButton.title = copyLabel;
+        copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
+        actions.appendChild(copyButton);
+        entry.appendChild(actions);
+        target.appendChild(entry);
         rememberRenderedMessage(message, article);
         if (target === log && options.scroll !== false) {
           scrollToLatest();
         }
-      }
-
-      function attachMessageActionReveal(article) {
-        article.classList.add("has-copy-action");
-        article.addEventListener("click", (event) => {
-          if (event.target.closest("a, button, input, textarea, select, summary")) return;
-          article.classList.toggle("actions-visible");
-        });
       }
 
       function formatMessageTimestamp(value) {
@@ -15545,20 +15554,65 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return remainingDays >= 7 ? "7日後に削除" : "あと" + remainingDays + "日";
       }
 
-      function appendMediaLabel(chip, item) {
-        const label = document.createElement("span");
-        label.className = "media-label";
-        const kind = document.createElement("span");
-        kind.className = "media-kind";
-        kind.textContent = getMediaKindLabel(item);
-        const retention = document.createElement("span");
-        retention.className = "media-retention";
-        retention.textContent = formatMediaRetentionLabel(item);
-        label.title = item && item.filename ? item.filename : "";
-        label.appendChild(kind);
-        label.appendChild(retention);
-        chip.appendChild(label);
+      function openMediaLightbox(item, sourceUrl, trigger) {
+        if (!mediaLightbox || !mediaLightboxBody || !mediaLightboxTitle || !mediaLightboxMeta || !sourceUrl) return;
+        const mediaKind = getMediaContentKind(item);
+        mediaLightboxBody.replaceChildren();
+        mediaLightboxTitle.textContent = item && item.filename ? item.filename : getMediaKindLabel(item);
+        mediaLightboxMeta.textContent = formatMediaRetentionLabel(item);
+        if (mediaKind === "video") {
+          const video = document.createElement("video");
+          video.src = sourceUrl;
+          video.controls = true;
+          video.playsInline = true;
+          video.preload = "metadata";
+          video.setAttribute("aria-label", item && item.filename ? item.filename : "添付動画");
+          video.addEventListener("error", () => {
+            mediaLightboxMeta.textContent = "保存期間が切れたか、取得できません。必要なら再添付してください。";
+          }, { once: true });
+          mediaLightboxBody.appendChild(video);
+        } else if (mediaKind === "image") {
+          const image = document.createElement("img");
+          image.src = sourceUrl;
+          image.alt = item && item.filename ? item.filename : "添付画像";
+          image.addEventListener("error", () => {
+            mediaLightboxMeta.textContent = "保存期間が切れたか、取得できません。必要なら再添付してください。";
+          }, { once: true });
+          mediaLightboxBody.appendChild(image);
+        } else {
+          mediaLightboxMeta.textContent = "この添付はプレビューできません。";
+        }
+        lastMediaLightboxTrigger = trigger || document.activeElement;
+        mediaLightbox.hidden = false;
+        if (mediaLightboxClose) mediaLightboxClose.focus();
       }
+
+      function closeMediaLightbox() {
+        if (!mediaLightbox || !mediaLightboxBody) return;
+        mediaLightbox.hidden = true;
+        mediaLightboxBody.replaceChildren();
+        if (mediaLightboxTitle) mediaLightboxTitle.textContent = "";
+        if (mediaLightboxMeta) mediaLightboxMeta.textContent = "";
+        const trigger = lastMediaLightboxTrigger;
+        lastMediaLightboxTrigger = null;
+        if (trigger && typeof trigger.focus === "function") trigger.focus();
+      }
+
+      if (mediaLightboxClose) {
+        mediaLightboxClose.addEventListener("click", closeMediaLightbox);
+      }
+      if (mediaLightbox) {
+        mediaLightbox.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          if (target.closest("button")) return;
+          if (target.closest("video")) return;
+          closeMediaLightbox();
+        });
+      }
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
+      });
 
       function renderMediaReferences(references) {
         const list = Array.isArray(references) ? references : [];
@@ -15573,9 +15627,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const mediaKind = getMediaContentKind(reference);
           const isImage = mediaKind === "image";
           const isVideo = mediaKind === "video";
-          const chip = document.createElement(isVideo && downloadHref !== "#" ? "span" : "a");
+          const canPreview = (isImage || isVideo) && downloadHref !== "#";
+          const chip = document.createElement(canPreview ? "button" : "a");
           chip.className = "media-chip";
-          if (chip.tagName === "A") {
+          if (canPreview) {
+            chip.type = "button";
+            chip.addEventListener("click", () => openMediaLightbox(reference, downloadHref, chip));
+          } else if (chip.tagName === "A") {
             chip.href = downloadHref;
             chip.target = "_blank";
             chip.rel = "noreferrer";
@@ -15593,21 +15651,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             video.className = "media-thumb";
             video.src = downloadHref;
             video.muted = true;
-            video.controls = true;
             video.playsInline = true;
             video.preload = "metadata";
             video.setAttribute("aria-label", reference.filename || "添付動画");
             chip.appendChild(video);
             const icon = document.createElement("span");
+            icon.className = "media-fallback-label";
             icon.textContent = "動画";
             chip.appendChild(icon);
           } else {
             const icon = document.createElement("span");
+            icon.className = "media-fallback-label";
             icon.textContent = "添付";
             chip.appendChild(icon);
           }
           chip.title = reference.filename || reference.mediaId || "media";
-          appendMediaLabel(chip, reference);
           wrapper.appendChild(chip);
         }
         return wrapper;
@@ -15638,6 +15696,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         for (const item of pendingMediaItems) {
           const chip = document.createElement("span");
           chip.className = "media-chip";
+          chip.tabIndex = 0;
+          chip.setAttribute("role", "button");
+          chip.setAttribute("aria-label", (item.filename || "添付") + "を拡大表示");
+          chip.addEventListener("click", () => {
+            if (item.previewUrl) openMediaLightbox({ ...item, retentionLabel: "送信後7日で削除" }, item.previewUrl, chip);
+          });
+          chip.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            if (item.previewUrl) openMediaLightbox({ ...item, retentionLabel: "送信後7日で削除" }, item.previewUrl, chip);
+          });
           if (item.previewUrl) {
             chip.classList.add("pending-preview");
             const isVideo = getMediaContentKind(item) === "video";
@@ -15646,11 +15715,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               video.className = "media-thumb";
               video.src = item.previewUrl;
               video.muted = true;
-              video.controls = true;
               video.playsInline = true;
               video.preload = "metadata";
               video.setAttribute("aria-label", item.filename || "送信待ち動画");
               chip.appendChild(video);
+              const icon = document.createElement("span");
+              icon.className = "media-fallback-label";
+              icon.textContent = "動画";
+              chip.appendChild(icon);
             } else {
               const image = document.createElement("img");
               image.className = "media-thumb";
@@ -15658,24 +15730,29 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               image.alt = item.filename || "送信待ち画像";
               chip.appendChild(image);
             }
+          } else {
+            const icon = document.createElement("span");
+            icon.className = "media-fallback-label";
+            icon.textContent = "添付";
+            chip.appendChild(icon);
           }
           chip.title = item.filename || "attachment";
-          appendMediaLabel(chip, {
-            ...item,
-            retentionLabel: "送信後7日で削除"
-          });
           const remove = document.createElement("button");
           remove.className = "media-remove";
           remove.type = "button";
           remove.textContent = "×";
           remove.setAttribute("aria-label", "添付を外す");
-          remove.addEventListener("click", () => {
+          remove.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
             revokePendingMediaPreview(item);
             pendingMediaItems = pendingMediaItems.filter((candidate) => candidate.clientId !== item.clientId);
             renderPendingMedia();
             updateComposerReserve();
           });
-          chip.appendChild(label);
+          remove.addEventListener("keydown", (event) => {
+            event.stopPropagation();
+          });
           chip.appendChild(remove);
           pendingMedia.appendChild(chip);
         }
@@ -16392,6 +16469,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             const nextPendingMediaItems = [...pendingMediaItems, ...selectedItems];
             const retainedPendingMediaItems = nextPendingMediaItems.slice(-12);
             for (const dropped of nextPendingMediaItems.slice(0, Math.max(0, nextPendingMediaItems.length - 12))) {
+              if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
               revokePendingMediaPreview(dropped);
             }
             pendingMediaItems = retainedPendingMediaItems;

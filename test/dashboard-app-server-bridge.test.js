@@ -13,6 +13,9 @@ import {
   buildAppServerThreadResumeRequest,
   buildAppServerThreadStartRequest,
   buildAppServerTurnStartRequest,
+  buildDashboardBridgeConnectedEvent,
+  buildDashboardBridgeResumeStatusEvent,
+  buildDashboardBridgeTurnStartedStatusEvent,
   buildDashboardTurnInputText,
   connectDashboardAppServerBridgeOnce,
   executeVpsRunnerWakeup,
@@ -76,6 +79,46 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(turn.params.threadId, "codex-thread-1");
   assert.deepEqual(turn.params.input, [{ type: "text", text: "今日は何日？", text_elements: [] }]);
   assert.equal(turn.params.sandboxPolicy, undefined);
+});
+
+test("dashboard app-server bridge formats lifecycle resume status events", () => {
+  const connected = buildDashboardBridgeConnectedEvent({
+    endpoint: "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main-unresolved",
+    cwd: "/repo",
+    resumedAt: "2026-06-02T00:00:00.000Z"
+  });
+  assert.equal(connected.type, "app_server_status");
+  assert.equal(connected.threadId, "dashboard-main-unresolved");
+  assert.equal(connected.status, "bridge_connected");
+  assert.equal(connected.stage, "bridge_connected");
+  assert.match(connected.text, /保存済み文脈/);
+  assert.equal(connected.bridgeLifecycle.cwd, "/repo");
+
+  const resumed = buildDashboardBridgeResumeStatusEvent({
+    dashboardThreadId: "dashboard-main-unresolved",
+    codexThreadId: "codex-thread-741",
+    messageId: "owner-message-1",
+    resumedAt: "2026-06-02T00:00:01.000Z"
+  });
+  assert.equal(resumed.status, "resumed_existing_thread");
+  assert.equal(resumed.stage, "thread_resume");
+  assert.equal(resumed.codexThreadId, "codex-thread-741");
+  assert.equal(resumed.bridgeLifecycle.messageId, "owner-message-1");
+  assert.match(resumed.text, /前の文脈から続けられます/);
+
+  const turnStarted = buildDashboardBridgeTurnStartedStatusEvent({
+    dashboardThreadId: "dashboard-main-unresolved",
+    codexThreadId: "codex-thread-741",
+    turnId: "turn-741",
+    messageId: "owner-message-1",
+    resumedExistingThread: true,
+    startedAt: "2026-06-02T00:00:02.000Z"
+  });
+  assert.equal(turnStarted.status, "turn_started");
+  assert.equal(turnStarted.stage, "turn_started");
+  assert.equal(turnStarted.bridgeLifecycle.turnId, "turn-741");
+  assert.equal(turnStarted.bridgeLifecycle.resumedExistingThread, true);
+  assert.match(turnStarted.text, /復帰した Codex thread/);
 });
 
 test("dashboard app-server bridge runner wakeup uses only fixed user systemd start command", async () => {
@@ -826,9 +869,90 @@ test("dashboard app-server bridge handles a fresh dashboard turn through thread/
   assert.equal(requests[1].params.threadId, "codex-thread-1");
   assert.equal(events[0].type, "app_server_status");
   assert.equal(events[0].codexThreadId, "codex-thread-1");
-  assert.equal(events[1].type, "app_server_reply_delta");
-  assert.equal(events[2].type, "app_server_reply");
-  assert.equal(events[2].text, "今日は2026年5月22日です。");
+  const turnStarted = events.find((event) => event.status === "turn_started");
+  assert.ok(turnStarted);
+  assert.equal(turnStarted.codexThreadId, "codex-thread-1");
+  assert.equal(turnStarted.bridgeLifecycle.turnId, "turn-1");
+  assert.equal(turnStarted.bridgeLifecycle.resumedExistingThread, false);
+  const delta = events.find((event) => event.type === "app_server_reply_delta");
+  const reply = events.find((event) => event.type === "app_server_reply");
+  assert.ok(delta);
+  assert.ok(reply);
+  assert.equal(reply.text, "今日は2026年5月22日です。");
+});
+
+test("dashboard app-server bridge resumes an existing Codex thread and reports resume state", async () => {
+  const requests = [];
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      requests.push(message);
+      if (message.method === "thread/resume") {
+        return { thread: { id: "codex-thread-existing" } };
+      }
+      if (message.method === "turn/start") {
+        for (const handler of handlers) {
+          handler({
+            method: "item/agentMessage/delta",
+            params: {
+              threadId: "codex-thread-existing",
+              turnId: "turn-resumed",
+              delta: "続きから確認しています。"
+            }
+          });
+          handler({
+            method: "turn/completed",
+            params: {
+              threadId: "codex-thread-existing",
+              turn: { id: "turn-resumed", status: "completed" }
+            }
+          });
+        }
+        return { turn: { id: "turn-resumed" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-existing",
+      messageId: "owner-message-resume",
+      text: "続きは？"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo"
+  });
+
+  assert.deepEqual(
+    requests.map((request) => request.method),
+    ["thread/resume", "turn/start"]
+  );
+  const resumed = events.find((event) => event.status === "resumed_existing_thread");
+  assert.ok(resumed);
+  assert.equal(resumed.threadId, "dashboard-main-unresolved");
+  assert.equal(resumed.codexThreadId, "codex-thread-existing");
+  assert.equal(resumed.bridgeLifecycle.messageId, "owner-message-resume");
+  const turnStarted = events.find((event) => event.status === "turn_started");
+  assert.ok(turnStarted);
+  assert.equal(turnStarted.bridgeLifecycle.turnId, "turn-resumed");
+  assert.equal(turnStarted.bridgeLifecycle.resumedExistingThread, true);
+  const reply = events.find((event) => event.type === "app_server_reply");
+  assert.ok(reply);
+  assert.equal(reply.text, "続きから確認しています。");
 });
 
 test("dashboard app-server bridge posts owner-action-required when app-server requests approval during a turn", async () => {
@@ -907,7 +1031,7 @@ test("dashboard app-server bridge posts owner-action-required when app-server re
   assert.equal(body.actionId, "app-server-approval:dashboard-main:codex-thread-approval:item-commandExecution-requestApproval:7");
   assert.equal(body.issueNumber, 637);
   assert.equal(body.url, "/dashboard/notifications?focus=owner-action");
-  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.ok(events.find((event) => event.type === "app_server_reply"));
 });
 
 test("dashboard app-server bridge records owner-action notification failure in dashboard thread", async () => {
@@ -1055,7 +1179,7 @@ test("dashboard app-server bridge drains real client approval notification tasks
     JSON.parse(runtimeCalls[0].init.body).actionId,
     "app-server-approval:dashboard-main:codex-thread-drain:item-commandExecution-requestApproval:99"
   );
-  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.ok(events.find((event) => event.type === "app_server_reply"));
 });
 
 test("dashboard app-server bridge passes traffic-control context to codex app-server turns", async () => {
@@ -1143,7 +1267,7 @@ test("dashboard app-server bridge passes traffic-control context to codex app-se
   assert.match(inputText, /"currentNow":"Issue #590: app-server turn timeout must become recoverable\."/);
   assert.match(inputText, /mechanicalBoundary/);
   assert.match(inputText, /Owner message:\nDashboard Butler が交通整理できるか確認して/);
-  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.ok(events.find((event) => event.type === "app_server_reply"));
 });
 
 test("dashboard app-server bridge passes materialized media paths to codex app-server turns", async () => {
@@ -1214,7 +1338,7 @@ test("dashboard app-server bridge passes materialized media paths to codex app-s
   assert.match(inputText, /mediaReferences: 1/);
   assert.match(inputText, /fetchStatus: fetched/);
   assert.match(inputText, /localPath: .*med_turn_image-dashboard\.png/);
-  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.ok(events.find((event) => event.type === "app_server_reply"));
 });
 
 test("dashboard app-server bridge keeps listening for async turn notifications after turn/start response", async () => {
