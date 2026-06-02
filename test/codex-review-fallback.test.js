@@ -201,7 +201,9 @@ test("fallback script records blocked marker comments for unavailable Codex revi
   assert.equal(fallbackScript.includes("createCodexFallbackComment"), true);
   assert.equal(fallbackScript.includes("openai_quota_exceeded"), true);
   assert.equal(fallbackScript.includes("openai_api_key_invalid_or_missing"), true);
+  assert.equal(fallbackScript.includes("openai_codex_chatgpt_account_model_unsupported"), true);
   assert.equal(fallbackScript.includes("openai_model_unsupported"), true);
+  assert.equal(fallbackScript.includes("not supported when using codex with a chatgpt account"), true);
   assert.equal(fallbackScript.includes("model is not supported"), true);
   assert.equal(fallbackScript.includes('status: "blocked"'), true);
 });

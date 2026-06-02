@@ -291,6 +291,8 @@ function classifyCodexFallbackFailure(error) {
 
   if (lowered.includes("quota exceeded")) {
     blocker = "openai_quota_exceeded";
+  } else if (lowered.includes("not supported when using codex with a chatgpt account")) {
+    blocker = "openai_codex_chatgpt_account_model_unsupported";
   } else if (lowered.includes("model is not supported") || lowered.includes("unsupported model")) {
     blocker = "openai_model_unsupported";
   } else if (
