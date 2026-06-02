@@ -10,6 +10,8 @@ import {
   resolveOperatorMention
 } from "../src/core/index.js";
 
+const DEFAULT_CODEX_FALLBACK_REVIEW_MODEL = "gpt-5.4-mini";
+
 async function main() {
   const repository = mustGetEnv("TARGET_REPOSITORY");
   const prNumber = mustGetEnv("TARGET_PR_NUMBER");
@@ -140,11 +142,17 @@ function buildCodexFallbackReviewPrompt({ context, prDiff }) {
 }
 
 async function runCodexReview({ prompt }) {
-  return spawnWithInput("codex", ["exec", "--skip-git-repo-check", "--ephemeral", "-"], prompt, {
+  const model = resolveCodexFallbackReviewModel(process.env);
+  return spawnWithInput("codex", ["exec", "--model", model, "--skip-git-repo-check", "--ephemeral", "-"], prompt, {
     cwd: process.cwd(),
     env: buildCodexExecutionEnv(process.env),
     maxBuffer: 1024 * 1024 * 8
   });
+}
+
+function resolveCodexFallbackReviewModel(env) {
+  const value = String(env.CODEX_FALLBACK_REVIEW_MODEL || "").trim();
+  return value || DEFAULT_CODEX_FALLBACK_REVIEW_MODEL;
 }
 
 function buildCodexExecutionEnv(env) {
@@ -283,6 +291,8 @@ function classifyCodexFallbackFailure(error) {
 
   if (lowered.includes("quota exceeded")) {
     blocker = "openai_quota_exceeded";
+  } else if (lowered.includes("model is not supported") || lowered.includes("unsupported model")) {
+    blocker = "openai_model_unsupported";
   } else if (
     lowered.includes("not authenticated") ||
     lowered.includes("login") ||

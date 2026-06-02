@@ -185,7 +185,9 @@ test("fallback script reviews GitHub API diff without checking out untrusted PR 
   assert.equal(fallbackScript.includes("Do not run shell commands or inspect the filesystem."), true);
   assert.equal(fallbackScript.includes("Japanese-first owner-facing prose"), true);
   assert.equal(fallbackScript.includes("重大 blocker は見つかりませんでした。"), true);
-  assert.equal(fallbackScript.includes('["exec", "--skip-git-repo-check", "--ephemeral", "-"]'), true);
+  assert.equal(fallbackScript.includes('["exec", "--model", model, "--skip-git-repo-check", "--ephemeral", "-"]'), true);
+  assert.equal(fallbackScript.includes('const DEFAULT_CODEX_FALLBACK_REVIEW_MODEL = "gpt-5.4-mini";'), true);
+  assert.equal(fallbackScript.includes("resolveCodexFallbackReviewModel(process.env)"), true);
   assert.equal(fallbackScript.includes("buildCodexExecutionEnv(process.env)"), true);
   assert.equal(fallbackScript.includes("env: process.env"), false);
   assert.equal(fallbackScript.includes("githubFetchAll"), true);
@@ -199,6 +201,8 @@ test("fallback script records blocked marker comments for unavailable Codex revi
   assert.equal(fallbackScript.includes("createCodexFallbackComment"), true);
   assert.equal(fallbackScript.includes("openai_quota_exceeded"), true);
   assert.equal(fallbackScript.includes("openai_api_key_invalid_or_missing"), true);
+  assert.equal(fallbackScript.includes("openai_model_unsupported"), true);
+  assert.equal(fallbackScript.includes("model is not supported"), true);
   assert.equal(fallbackScript.includes('status: "blocked"'), true);
 });
 
