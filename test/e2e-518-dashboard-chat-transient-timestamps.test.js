@@ -111,7 +111,9 @@ test("E2E-518 dashboard route exposes timestamp renderer and transient status UI
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal(html.includes('class="chat-scroll" id="butler-chat-log"'), true);
-  assert.equal(html.includes(".message-meta { margin-top: 6px;"), true);
+  assert.equal(html.includes(".message-entry { display: grid;"), true);
+  assert.equal(html.includes(".message-actions { display: inline-flex;"), true);
+  assert.equal(html.includes(".message-meta { color: inherit;"), true);
   assert.equal(html.includes("function formatMessageTimestamp("), true);
   assert.equal(html.includes('body.type === "transient_status"'), true);
   assert.equal(html.includes(".transient-progress-card"), false);
