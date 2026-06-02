@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS vtdd_media_objects (
   ocr_text TEXT,
   created_by TEXT,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  expires_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_vtdd_media_repo
@@ -90,6 +91,10 @@ CREATE INDEX IF NOT EXISTS idx_vtdd_media_source
 ```
 
 `sha256` is calculated before metadata insert. A failed R2 put or failed D1 insert must not be reported as a saved media object.
+
+Dashboard Butler の private media は default 7 日の短命 retention を持つ。`expires_at` は D1 metadata に保存し、R2 object の custom metadata にも同じ値を入れる。D1 には raw binary を保存しない。
+
+期限切れ media は metadata / download / validation の各経路で owner-facing に `410 Gone` とし、「保存期間が切れた」ことと再添付導線を日本語で返す。期限切れ object の物理削除は scheduled cleanup / R2 lifecycle / maintenance runner の後続自動化で扱うが、期限切れ後に Butler / VPS 解析へ渡してはいけない。
 
 ## Visibility
 
@@ -170,6 +175,7 @@ RAG may store:
   "contentType": "image/png",
   "summary": "Dashboard Butler の iPhone PWA 画面。返信待ち表示が残っている。",
   "ocrText": "VPS Codex CLI に送信しました...",
+  "expiresAt": "2026-06-09T00:00:00.000Z",
   "objectKey": "media/...",
   "visibility": "private"
 }
@@ -221,6 +227,7 @@ The first implementation slice is incomplete until all of these are connected an
 5. Dashboard Butler thread can display a media reference.
 6. RAG stores only media summary/reference, never raw media.
 7. E2E proves iPhone screenshot upload -> dashboard thread media reference -> R2/D1 confirmation.
+8. Dashboard private media exposes a default 7-day `expiresAt`, and expired media returns an owner-facing Japanese expiration message.
 
 ## Non-goals for First Slice
 
@@ -228,7 +235,7 @@ The first implementation slice is incomplete until all of these are connected an
 - thumbnail generation
 - image editing
 - automatic public promotion
-- automatic long-term retention policy
+- physical expired-object purge automation beyond the 7-day read/validation cutoff
 - bulk upload optimization
 - Cloudflare account setup automation
 - deploy or credential mutation without scoped passkey approval
