@@ -114,7 +114,9 @@ test("E2E-518 dashboard route exposes timestamp renderer and transient status UI
   assert.equal(html.includes(".message-meta { margin-top: 6px;"), true);
   assert.equal(html.includes("function formatMessageTimestamp("), true);
   assert.equal(html.includes('body.type === "transient_status"'), true);
-  assert.equal(html.includes(".transient-progress-card"), true);
+  assert.equal(html.includes(".transient-progress-card"), false);
+  assert.equal(html.includes(".composer-progress"), true);
+  assert.equal(html.includes('id="butler-transient-progress"'), true);
   assert.equal(html.includes("function updateTransientProgress(text, options = {})"), true);
   assert.equal(html.includes("function clearTransientProgress()"), true);
   assert.equal(html.includes("function appendMessage(message, target = log, options = {})"), true);

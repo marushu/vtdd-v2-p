@@ -55,6 +55,10 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(start.params.sandbox, undefined);
   assert.equal(start.params.experimentalRawEvents, false);
   assert.equal(start.params.persistExtendedHistory, false);
+  assert.match(start.params.developerInstructions, /concrete file, command, PR, reviewer state, merge state, deploy state/);
+  assert.match(start.params.developerInstructions, /ファイルの修正・変更が完了しました。現在コミット中です。/);
+  assert.match(start.params.developerInstructions, /マージされました。今回はデプロイが必要です。ここにデプロイURL。/);
+  assert.match(start.params.developerInstructions, /avoid one long paragraph of accumulated work/);
 
   const resume = buildAppServerThreadResumeRequest({ id: 12, codexThreadId: "codex-thread-1", cwd: "/repo" });
   assert.equal(resume.method, "thread/resume");
@@ -570,6 +574,42 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(delta.threadId, "dashboard-main");
   assert.equal(delta.codexThreadId, "codex-thread-1");
   assert.equal(delta.text, "返答");
+  assert.equal(delta.progressText, "返答");
+
+  const accumulatedDelta = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        delta: "次を確認します。"
+      }
+    },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1", accumulatedText: "Issue #590 を確認しています。\n\n" }
+  );
+  assert.equal(accumulatedDelta.text, "次を確認します。");
+  assert.equal(accumulatedDelta.progressText, "Issue #590 を確認しています。\n\n次を確認します。");
+
+  const readableProgress = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        delta:
+          "進行確認を始めます。対象は Issue #590 / PR #733 です。次は queue と bridge runtime を確認します。"
+      }
+    },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(
+    readableProgress.progressText,
+    [
+      "進行確認を始めます。",
+      "対象は Issue #590 / PR #733 です。",
+      "次は queue と bridge runtime を確認します。"
+    ].join("\n")
+  );
 
   const completed = mapAppServerNotificationToDashboardEvent(
     { method: "turn/completed", params: { threadId: "codex-thread-1" } },
@@ -588,28 +628,82 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(started.text, "codex app-server が応答を生成しています。");
 
   const plan = mapAppServerNotificationToDashboardEvent(
-    { method: "turn/plan/updated", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
+    { method: "turn/plan/updated", params: { threadId: "codex-thread-1", turnId: "turn-1", delta: "Issue #590 の runtime mapping を確認します。" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
   );
   assert.equal(plan.type, "app_server_status");
   assert.equal(plan.stage, "planning");
   assert.equal(plan.persistProgress, true);
+  assert.equal(plan.text, "方針を整理しています。\nIssue #590 の runtime mapping を確認します。");
 
   const command = mapAppServerNotificationToDashboardEvent(
-    { method: "item/commandExecution/outputDelta", params: { threadId: "codex-thread-1", turnId: "turn-1", delta: "npm test" } },
+    { method: "item/commandExecution/outputDelta", params: { threadId: "codex-thread-1", turnId: "turn-1", command: "node --test test/worker.test.js", delta: "250 tests passed" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
   );
   assert.equal(command.type, "app_server_status");
   assert.equal(command.stage, "command");
   assert.equal(command.persistProgress, true);
+  assert.equal(command.text, "コマンドを実行しています。\n対象: node --test test/worker.test.js\n250 tests passed");
 
   const diff = mapAppServerNotificationToDashboardEvent(
-    { method: "turn/diff/updated", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
+    { method: "turn/diff/updated", params: { threadId: "codex-thread-1", turnId: "turn-1", path: "src/worker/runtime.js", delta: "composer progress の重複 status を外します。" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
   );
   assert.equal(diff.type, "app_server_status");
   assert.equal(diff.stage, "file_change");
   assert.equal(diff.persistProgress, true);
+  assert.equal(diff.text, "ファイル変更を確認しています。\n対象: src/worker/runtime.js\ncomposer progress の重複 status を外します。");
+
+  const nestedDiff = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/fileChange/patchUpdated",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        item: {
+          files: [
+            { path: "scripts/run-dashboard-app-server-bridge.mjs" },
+            { path: "test/dashboard-app-server-bridge.test.js" }
+          ]
+        },
+        diff: "@@ -1 +1 @@\n-ざっくり\n+対象ファイル名も出す"
+      }
+    },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(
+    nestedDiff.text,
+    [
+      "ファイル変更を確認しています。",
+      "対象: scripts/run-dashboard-app-server-bridge.mjs, test/dashboard-app-server-bridge.test.js",
+      "@@ -1 +1 @@",
+      "-ざっくり",
+      "+対象ファイル名も出す"
+    ].join("\n")
+  );
+
+  const commandAction = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/commandExecution/outputDelta",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        item: {
+          commandActions: [{ command: "git diff -- src/worker/runtime.js" }]
+        },
+        output: "diff --git a/src/worker/runtime.js b/src/worker/runtime.js"
+      }
+    },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(
+    commandAction.text,
+    [
+      "コマンドを実行しています。",
+      "対象: git diff -- src/worker/runtime.js",
+      "diff --git a/src/worker/runtime.js b/src/worker/runtime.js"
+    ].join("\n")
+  );
 
   const toolProgress = mapAppServerNotificationToDashboardEvent(
     { method: "item/mcpToolCall/progress", params: { threadId: "codex-thread-1", turnId: "turn-1", message: "raw provider progress" } },

@@ -1240,11 +1240,16 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes(".mobile-drawer { position: fixed;"), true);
   assert.equal(body.includes(".menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }"), true);
   assert.equal(body.includes(".composer-status:empty"), true);
-  assert.equal(body.includes(".transient-progress-card"), true);
+  assert.equal(body.includes(".transient-progress-card"), false);
+  assert.equal(body.includes(".composer-progress"), true);
+  assert.equal(body.includes('id="butler-transient-progress"'), true);
   assert.equal(body.includes("data-transient-progress"), true);
   assert.equal(body.includes("function updateTransientProgress(text, options = {})"), true);
   assert.equal(body.includes("function clearTransientProgress()"), true);
   assert.equal(body.includes("function renderTransientProgress()"), true);
+  const renderTransientProgressSource = body.match(/function renderTransientProgress\(\) \{[\s\S]*?\n      \}/)?.[0] || "";
+  assert.equal(renderTransientProgressSource.includes("scrollToLatest()"), false);
+  assert.equal(renderTransientProgressSource.includes("updateComposerReserve()"), true);
   assert.equal(body.includes("isLongRunningTransientStatus(options.status)"), true);
   assert.equal(body.includes("function appendMessage(message, target = log, options = {})"), true);
   assert.equal(body.includes("const fragment = document.createDocumentFragment()"), true);
@@ -1500,6 +1505,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
   assert.equal(body.includes('body.type === "transient_status"'), true);
   assert.equal(body.includes("updateTransientProgress(transientText"), true);
+  assert.equal(body.includes("setStatus(transientText, {\n                  thinking: isThinking"), false);
   assert.equal(body.includes("clearTransientProgress();\n                setStatus(\"返信を受信しました。\""), true);
   assert.equal(body.includes("clearTransientProgress();\n                releaseComposerForFollowUp"), true);
   assert.equal(body.includes('lastMessage?.status === "failed"'), true);
@@ -3978,7 +3984,11 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
 
   assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-450");
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
-  assert.equal(dashboardSocket.sent.length, 0);
+  assert.equal(dashboardSocket.sent.length, 1);
+  const transientDelta = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(transientDelta.type, "transient_status");
+  assert.equal(transientDelta.status, "thinking");
+  assert.equal(transientDelta.text, "日本");
 
   await room.webSocketMessage(
     bridgeSocket,

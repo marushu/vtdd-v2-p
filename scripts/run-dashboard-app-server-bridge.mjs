@@ -54,6 +54,9 @@ export function buildAppServerThreadStartRequest({ id, cwd = process.cwd(), deve
           "You are backing VTDD Dashboard Butler.",
           "Treat ordinary messages as conversation unless the owner asks for repository, Issue, PR, deploy, credential, or permission work.",
           "For traffic-control requests, read durable Issue/PR/runtime truth first, separate blockers from next actions, and do not claim VTDD completion without Butler-facing evidence.",
+          "While working through Dashboard Butler, emit concise Japanese progress narration as the work advances. Do not rely on abstract-only text such as 考えています or コマンドを実行しています. Name the concrete file, command, PR, reviewer state, merge state, deploy state, blocker, or next verification when known.",
+          "For long work, prefer short sequential progress lines like: ファイルの修正・変更が完了しました。現在コミット中です。 / PR を作成しています。このままレビュアーを待ちます。 / レビュアーの指摘が入りました。妥当なので修正を当てます。 / レビュアーチェックがパスしました。オートマージが走るのを確認しています。 / マージされました。今回はデプロイが必要です。ここにデプロイURL。",
+          "Keep progress narration readable. Use sentence breaks and short paragraphs; avoid one long paragraph of accumulated work.",
           "High-risk work requires explicit GO or passkey approval through VTDD runtime boundaries.",
           "Reply in Japanese by default."
         ].join("\n"),
@@ -567,13 +570,18 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
   const method = String(message?.method || "");
   const params = message?.params && typeof message.params === "object" ? message.params : {};
   if (method === "item/agentMessage/delta" && params.delta) {
+    const delta = String(params.delta);
     return {
       type: "app_server_reply_delta",
       schema: DEFAULT_SCHEMA,
       threadId: context.dashboardThreadId,
       codexThreadId: params.threadId || context.codexThreadId || null,
       turnId: params.turnId || null,
-      text: String(params.delta)
+      text: delta,
+      progressText: buildAppServerReplyDeltaProgressText({
+        accumulatedText: context.accumulatedText,
+        delta
+      })
     };
   }
   if (method === "turn/started") {
@@ -618,7 +626,11 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       status: "thinking",
       stage: "planning",
       persistProgress: true,
-      text: "方針を整理しています。"
+      text: buildAppServerConcreteProgressText({
+        params,
+        prefix: "方針を整理しています。",
+        fallback: "方針を整理しています。"
+      })
     };
   }
   if (method === "turn/diff/updated" || method === "item/fileChange/patchUpdated" || method === "item/fileChange/outputDelta") {
@@ -631,7 +643,12 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       status: "thinking",
       stage: "file_change",
       persistProgress: true,
-      text: "ファイル変更を確認しています。"
+      text: buildAppServerConcreteProgressText({
+        params,
+        prefix: "ファイル変更を確認しています。",
+        fallback: "ファイル変更を確認しています。",
+        target: extractAppServerProgressTarget(params, ["path", "filePath", "file", "filename"])
+      })
     };
   }
   if (method === "command/exec/outputDelta" || method === "item/commandExecution/outputDelta") {
@@ -644,7 +661,12 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       status: "thinking",
       stage: "command",
       persistProgress: true,
-      text: "コマンドを実行しています。"
+      text: buildAppServerConcreteProgressText({
+        params,
+        prefix: "コマンドを実行しています。",
+        fallback: "コマンドを実行しています。",
+        target: extractAppServerProgressTarget(params, ["command", "cmd", "shellCommand"])
+      })
     };
   }
   if (method === "item/mcpToolCall/progress") {
@@ -683,7 +705,11 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       status: "thinking",
       stage: "thinking",
       persistProgress: true,
-      text: "考えています。"
+      text: buildAppServerConcreteProgressText({
+        params,
+        prefix: "考えを整理しています。",
+        fallback: "考えています。"
+      })
     };
   }
   if (method === "turn/completed") {
@@ -717,6 +743,106 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
     };
   }
   return null;
+}
+
+export function buildAppServerReplyDeltaProgressText({ accumulatedText = "", delta = "", maxLength = 1200 } = {}) {
+  const fullText = String(`${accumulatedText || ""}${delta || ""}`).replace(/\r\n?/g, "\n");
+  if (!fullText) return "";
+  const normalized = formatAppServerProgressNarration(fullText);
+  if (normalized.length <= maxLength) return normalized;
+  const tail = normalized.slice(-maxLength);
+  const paragraphStart = tail.indexOf("\n\n");
+  if (paragraphStart >= 0 && paragraphStart < Math.floor(maxLength / 2)) {
+    return `…\n\n${tail.slice(paragraphStart + 2).trim()}`;
+  }
+  return `…${tail.trimStart()}`;
+}
+
+export function buildAppServerConcreteProgressText({
+  params = {},
+  prefix = "",
+  fallback = "",
+  target = "",
+  maxLength = 420
+} = {}) {
+  const cleanPrefix = normalizeBridgeText(prefix || fallback);
+  const cleanTarget = normalizeBridgeText(target);
+  const detail = buildAppServerProgressDetail(params, { maxLength });
+  const head = cleanPrefix || normalizeBridgeText(fallback);
+  const targetLine = cleanTarget ? `対象: ${cleanTarget}` : "";
+  if (!detail) return [head, targetLine].filter(Boolean).join("\n");
+  return [head, targetLine, detail].filter(Boolean).join("\n");
+}
+
+function buildAppServerProgressDetail(params = {}, { maxLength = 420 } = {}) {
+  const candidates = [
+    params.delta,
+    params.text,
+    params.message,
+    params.summary,
+    params.output,
+    params.patch,
+    params.diff
+  ];
+  const raw = candidates.find((value) => String(value || "").trim());
+  if (!raw) return "";
+  const normalized = String(raw)
+    .replace(/\r\n?/g, "\n")
+    .replace(/\x1b\[[0-9;]*m/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+  if (!normalized) return "";
+  if (normalized.length <= maxLength) return normalized;
+  return `…${normalized.slice(-maxLength).trimStart()}`;
+}
+
+function extractAppServerProgressTarget(params = {}, keys = []) {
+  const nestedTargets = collectAppServerProgressTargets(params);
+  if (nestedTargets.length > 0) return nestedTargets.join(", ");
+  for (const key of keys) {
+    const direct = normalizeBridgeText(params?.[key]);
+    if (direct) return direct;
+    const itemValue = normalizeBridgeText(params?.item?.[key]);
+    if (itemValue) return itemValue;
+  }
+  return "";
+}
+
+function collectAppServerProgressTargets(params = {}) {
+  const targets = [];
+  const push = (value) => {
+    const normalized = normalizeBridgeText(value);
+    if (normalized && !targets.includes(normalized)) targets.push(normalized);
+  };
+  const visit = (value, depth = 0) => {
+    if (!value || depth > 3 || targets.length >= 6) return;
+    if (typeof value === "string") return;
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry, depth + 1);
+      return;
+    }
+    if (typeof value !== "object") return;
+    for (const key of ["path", "filePath", "file", "filename", "relativePath", "command", "cmd", "shellCommand"]) {
+      push(value[key]);
+    }
+    for (const key of ["paths", "files", "filenames", "changedFiles", "changes", "patches", "commandActions"]) {
+      visit(value[key], depth + 1);
+    }
+  };
+  visit(params, 0);
+  visit(params?.item, 0);
+  return targets;
+}
+
+export function formatAppServerProgressNarration(value = "") {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/([。！？!?])(?=[^\s\n])/g, "$1\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function shouldPersistAppServerProgressStage(stage = "") {
