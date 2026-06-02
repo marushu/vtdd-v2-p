@@ -14298,20 +14298,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   );
   const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
   const requestedChatThreadId = normalizeDashboardThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
-  const dashboardTargetLabel = repositoryInput ? `この作業: ${repositoryInput}` : "作業対象 repo 未指定";
+  const dashboardTargetLabel = repositoryInput ? `この作業: ${repositoryInput}` : "repo-less main chat";
   const targetStatusMarkup = repositoryInput
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">固定ではありません。この会話で Issue / PR / deploy など repo が必要な作業をする間だけ対象にします。deploy 先と承認境界は repo ごとに確認します。</p>`
-    : `<p><strong>作業対象 repo 未指定</strong></p>
-          <p class="muted">通常会話は続けられます。Issue / PR / deploy など repo が必要な作業を始める時だけ、この作業の対象 repo を指定します。VTDD と TOMIO では deploy 先も承認境界も別物として扱います。</p>
-          <form class="target-form" method="get" action="${escapeDashboardHtml(origin)}/dashboard">
-            <label for="dashboard-repository-input">この作業の対象 repo</label>
-            <div class="target-form-row">
-              <input id="dashboard-repository-input" name="repository" placeholder="owner/repo" autocomplete="off" autocapitalize="off" spellcheck="false">
-              ${dashboardIssueNumber ? `<input type="hidden" name="issueNumber" value="${dashboardIssueNumber}">` : ""}
-              <button type="submit">設定</button>
-            </div>
-          </form>`;
+    : `<p><strong>repo-less main chat</strong></p>
+          <p class="muted">ここが通常のメインチャットです。repo は常設設定ではなく、Issue / PR / deploy など repo 境界が必要になった時だけ Butler が会話の中で確認します。VTDD と TOMIO では deploy 先も承認境界も別物として扱います。</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = requestedChatThreadId || `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -14435,6 +14427,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(surface.title)}</strong><small>${escapeDashboardHtml(surface.disabledReason || "利用できません")}</small></span>`
       )
       .join("");
+  const initialDashboardIntroMarkup = repositoryInput
+    ? `<p>はい。ここではまず普通に会話できます。通知、進捗、この作業の対象 repo の確認は必要な時だけ開けます。</p>
+          <p>作業を進める時は、対象 repo、Issue、deploy 先を会話の中で確認してから進めます。</p>`
+    : `<p>はい。ここは repo-less main chat です。repo を固定しなくても、まず普通に会話できます。</p>
+          <p>Issue / PR / deploy など repo 境界が必要な作業に入る時だけ、対象 repo、Issue、deploy 先を会話の中で確認してから進めます。</p>`;
 
   return `<!doctype html>
 <html lang="ja">
@@ -14674,9 +14671,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを閉じる">×</label>
         </div>
         <div class="mobile-drawer-content">
-          <p class="menu-callout">通知、進捗、この作業の対象 repo の確認はここから開きます。開発/運用の詳細は下に隔離しています。</p>
+          <p class="menu-callout">通知、進捗、repo が必要な開発/運用確認はここから開きます。通常チャットは repo 未指定のまま始められます。</p>
           <div class="lane">
-            <div class="lane-title"><h3>この作業の対象 repo</h3><span class="pill">${repositoryInput ? "active" : "未指定"}</span></div>
+            <div class="lane-title"><h3>${repositoryInput ? "この作業の対象 repo" : "repo-less main chat"}</h3><span class="pill">${repositoryInput ? "active" : "main"}</span></div>
             ${targetStatusMarkup}
           </div>
           <div class="lane">
@@ -14726,8 +14723,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>はい。ここではまず普通に会話できます。通知、進捗、この作業の対象 repo の確認は必要な時だけ開けます。</p>
-          <p>作業を進める時は、対象 repo、Issue、deploy 先を会話の中で確認してから進めます。</p>
+          ${initialDashboardIntroMarkup}
           <ul>
             <li>対象: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
             <li>通知と進捗はこの画面から戻って確認できます。</li>

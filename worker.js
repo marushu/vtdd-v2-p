@@ -70118,18 +70118,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   );
   const dashboardIssueNumber = normalizePositiveInteger10(url?.searchParams?.get("issueNumber"));
   const requestedChatThreadId = normalizeDashboardThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
-  const dashboardTargetLabel = repositoryInput ? `\u3053\u306E\u4F5C\u696D: ${repositoryInput}` : "\u4F5C\u696D\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
+  const dashboardTargetLabel = repositoryInput ? `\u3053\u306E\u4F5C\u696D: ${repositoryInput}` : "repo-less main chat";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
-          <p class="muted">\u56FA\u5B9A\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u3053\u306E\u4F1A\u8A71\u3067 Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u4F5C\u696D\u3092\u3059\u308B\u9593\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002deploy \u5148\u3068\u627F\u8A8D\u5883\u754C\u306F repo \u3054\u3068\u306B\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>` : `<p><strong>\u4F5C\u696D\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
-          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u4F5C\u696D\u3092\u59CB\u3081\u308B\u6642\u3060\u3051\u3001\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo \u3092\u6307\u5B9A\u3057\u307E\u3059\u3002VTDD \u3068 TOMIO \u3067\u306F deploy \u5148\u3082\u627F\u8A8D\u5883\u754C\u3082\u5225\u7269\u3068\u3057\u3066\u6271\u3044\u307E\u3059\u3002</p>
-          <form class="target-form" method="get" action="${escapeDashboardHtml(origin)}/dashboard">
-            <label for="dashboard-repository-input">\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo</label>
-            <div class="target-form-row">
-              <input id="dashboard-repository-input" name="repository" placeholder="owner/repo" autocomplete="off" autocapitalize="off" spellcheck="false">
-              ${dashboardIssueNumber ? `<input type="hidden" name="issueNumber" value="${dashboardIssueNumber}">` : ""}
-              <button type="submit">\u8A2D\u5B9A</button>
-            </div>
-          </form>`;
+          <p class="muted">\u56FA\u5B9A\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u3053\u306E\u4F1A\u8A71\u3067 Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u4F5C\u696D\u3092\u3059\u308B\u9593\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002deploy \u5148\u3068\u627F\u8A8D\u5883\u754C\u306F repo \u3054\u3068\u306B\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>` : `<p><strong>repo-less main chat</strong></p>
+          <p class="muted">\u3053\u3053\u304C\u901A\u5E38\u306E\u30E1\u30A4\u30F3\u30C1\u30E3\u30C3\u30C8\u3067\u3059\u3002repo \u306F\u5E38\u8A2D\u8A2D\u5B9A\u3067\u306F\u306A\u304F\u3001Issue / PR / deploy \u306A\u3069 repo \u5883\u754C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051 Butler \u304C\u4F1A\u8A71\u306E\u4E2D\u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002VTDD \u3068 TOMIO \u3067\u306F deploy \u5148\u3082\u627F\u8A8D\u5883\u754C\u3082\u5225\u7269\u3068\u3057\u3066\u6271\u3044\u307E\u3059\u3002</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = requestedChatThreadId || `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -70241,6 +70233,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const renderDashboardSurfaceList = (items) => items.map(
     (surface) => surface.href ? `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>` : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(surface.title)}</strong><small>${escapeDashboardHtml(surface.disabledReason || "\u5229\u7528\u3067\u304D\u307E\u305B\u3093")}</small></span>`
   ).join("");
+  const initialDashboardIntroMarkup = repositoryInput ? `<p>\u306F\u3044\u3002\u3053\u3053\u3067\u306F\u307E\u305A\u666E\u901A\u306B\u4F1A\u8A71\u3067\u304D\u307E\u3059\u3002\u901A\u77E5\u3001\u9032\u6357\u3001\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u306F\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u3051\u307E\u3059\u3002</p>
+          <p>\u4F5C\u696D\u3092\u9032\u3081\u308B\u6642\u306F\u3001\u5BFE\u8C61 repo\u3001Issue\u3001deploy \u5148\u3092\u4F1A\u8A71\u306E\u4E2D\u3067\u78BA\u8A8D\u3057\u3066\u304B\u3089\u9032\u3081\u307E\u3059\u3002</p>` : `<p>\u306F\u3044\u3002\u3053\u3053\u306F repo-less main chat \u3067\u3059\u3002repo \u3092\u56FA\u5B9A\u3057\u306A\u304F\u3066\u3082\u3001\u307E\u305A\u666E\u901A\u306B\u4F1A\u8A71\u3067\u304D\u307E\u3059\u3002</p>
+          <p>Issue / PR / deploy \u306A\u3069 repo \u5883\u754C\u304C\u5FC5\u8981\u306A\u4F5C\u696D\u306B\u5165\u308B\u6642\u3060\u3051\u3001\u5BFE\u8C61 repo\u3001Issue\u3001deploy \u5148\u3092\u4F1A\u8A71\u306E\u4E2D\u3067\u78BA\u8A8D\u3057\u3066\u304B\u3089\u9032\u3081\u307E\u3059\u3002</p>`;
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -70479,9 +70474,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC\u3092\u9589\u3058\u308B">\xD7</label>
         </div>
         <div class="mobile-drawer-content">
-          <p class="menu-callout">\u901A\u77E5\u3001\u9032\u6357\u3001\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u958B\u767A/\u904B\u7528\u306E\u8A73\u7D30\u306F\u4E0B\u306B\u9694\u96E2\u3057\u3066\u3044\u307E\u3059\u3002</p>
+          <p class="menu-callout">\u901A\u77E5\u3001\u9032\u6357\u3001repo \u304C\u5FC5\u8981\u306A\u958B\u767A/\u904B\u7528\u78BA\u8A8D\u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u901A\u5E38\u30C1\u30E3\u30C3\u30C8\u306F repo \u672A\u6307\u5B9A\u306E\u307E\u307E\u59CB\u3081\u3089\u308C\u307E\u3059\u3002</p>
           <div class="lane">
-            <div class="lane-title"><h3>\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo</h3><span class="pill">${repositoryInput ? "active" : "\u672A\u6307\u5B9A"}</span></div>
+            <div class="lane-title"><h3>${repositoryInput ? "\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo" : "repo-less main chat"}</h3><span class="pill">${repositoryInput ? "active" : "main"}</span></div>
             ${targetStatusMarkup}
           </div>
           <div class="lane">
@@ -70531,8 +70526,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>\u306F\u3044\u3002\u3053\u3053\u3067\u306F\u307E\u305A\u666E\u901A\u306B\u4F1A\u8A71\u3067\u304D\u307E\u3059\u3002\u901A\u77E5\u3001\u9032\u6357\u3001\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u306F\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u3051\u307E\u3059\u3002</p>
-          <p>\u4F5C\u696D\u3092\u9032\u3081\u308B\u6642\u306F\u3001\u5BFE\u8C61 repo\u3001Issue\u3001deploy \u5148\u3092\u4F1A\u8A71\u306E\u4E2D\u3067\u78BA\u8A8D\u3057\u3066\u304B\u3089\u9032\u3081\u307E\u3059\u3002</p>
+          ${initialDashboardIntroMarkup}
           <ul>
             <li>\u5BFE\u8C61: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
             <li>\u901A\u77E5\u3068\u9032\u6357\u306F\u3053\u306E\u753B\u9762\u304B\u3089\u623B\u3063\u3066\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</li>

@@ -1263,10 +1263,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("接続準備中です。送信できる状態になったら知らせます。"), true);
   assert.equal(body.includes("接続準備中です。WebSocket 接続後に送信できます。"), false);
   assert.equal(body.includes("repo/nickname 未指定"), false);
-  assert.equal(body.includes("作業対象 repo 未指定"), true);
-  assert.equal(body.includes("この作業の対象 repo"), true);
+  assert.equal(body.includes("作業対象 repo 未指定"), false);
+  assert.equal(body.includes("repo-less main chat"), true);
+  assert.equal(body.includes("通常チャットは repo 未指定のまま始められます"), true);
+  assert.equal(body.includes("この作業の対象 repo"), false);
   assert.equal(body.includes("固定ではありません"), false);
-  assert.equal(body.includes("VTDD と TOMIO では deploy 先も承認境界も別物"), true);
+  assert.equal(body.includes("repo 境界が必要になった時だけ Butler が会話の中で確認します"), true);
   assert.equal(body.includes("?repository=owner/repo"), false);
   assert.equal(body.includes("旧 VPS runner 直送経路は使いません"), false);
   assert.equal(body.includes("codex app-server"), true);
@@ -1293,8 +1295,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('aria-label="Passkey">◇</a>'), false);
   assert.equal(body.includes('<label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>'), false);
   assert.equal(body.includes('class="tool-button top-action"'), false);
-  assert.equal(body.includes('id="dashboard-repository-input"'), true);
-  assert.equal(body.includes('placeholder="owner/repo"'), true);
+  assert.equal(body.includes('id="dashboard-repository-input"'), false);
+  assert.equal(body.includes('placeholder="owner/repo"'), false);
   assert.equal(body.includes('aria-disabled="true"'), true);
   assert.equal(body.includes("repo 設定後に開けます"), true);
   assert.equal(body.includes('id="butler-chat-form"'), true);
