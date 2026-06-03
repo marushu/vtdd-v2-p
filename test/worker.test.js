@@ -3672,6 +3672,106 @@ test("DashboardChatRoom answers cost-aware lightweight owner turns without start
   assert.match(reply.text, /codexWillStart: false/);
 });
 
+test("DashboardChatRoom answers PR status through GitHub read plane without starting app-server Codex", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const fetchedUrls = [];
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    {
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_read",
+      GITHUB_API_FETCH: async (url) => {
+        fetchedUrls.push(String(url));
+        return new Response(
+          JSON.stringify({
+            number: 756,
+            title: "Issue #455 Dashboard の軽量 cost 相談で Codex を起動しない",
+            state: "closed",
+            draft: false,
+            merged: true,
+            merged_at: "2026-06-03T10:36:02Z",
+            merge_commit_sha: "ea831654cd00d06b2041a3f7c51ffb8dcaacf9fa",
+            head: {
+              ref: "issue-455-dashboard-cost-aware-fast-path",
+              sha: "f23938ed83b9ca79576bcdc020b7c0577a029d2a",
+              repo: { owner: { login: "marushu" } }
+            },
+            base: { ref: "main", sha: "base-sha" },
+            html_url: "https://github.com/marushu/vtdd-v2-p/pull/756"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repositoryInput: "marushu/vtdd-v2-p",
+      text: "PR #756 の状況を確認だけして"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 0);
+  assert.equal(fetchedUrls.length, 1);
+  assert.match(fetchedUrls[0], /\/repos\/marushu\/vtdd-v2-p\/pulls\/756/);
+  const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
+  const reply = sentPayloads.at(-1).messages.at(-1);
+  assert.equal(reply.role, "butler");
+  assert.equal(reply.status, "replied");
+  assert.match(reply.text, /GitHub read plane の軽量 fast path で PR 状態を読みました/);
+  assert.match(reply.text, /cost_boundary: github_read_plane_lightweight/);
+  assert.match(reply.text, /codexWillStart: false/);
+  assert.match(reply.text, /merged: true/);
+  assert.match(reply.text, /source: https:\/\/github.com\/marushu\/vtdd-v2-p\/pull\/756/);
+});
+
+test("DashboardChatRoom blocks repo-less PR status fast path without starting app-server Codex", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "PR #756 の状況を確認だけして"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 0);
+  const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
+  const reply = sentPayloads.at(-1).messages.at(-1);
+  assert.equal(reply.role, "butler");
+  assert.equal(reply.status, "replied");
+  assert.match(reply.text, /GitHub read plane の軽量 fast path で止めました/);
+  assert.match(reply.text, /reason: repository is required/);
+  assert.match(reply.text, /codexWillStart: false/);
+});
+
 test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal before app-server bridge", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();

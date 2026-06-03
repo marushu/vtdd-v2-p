@@ -350,6 +350,17 @@ export class DashboardChatRoom {
       now,
       origin
     });
+    const githubReadFastPathMessages = vpsMaintenanceMessages
+      ? null
+      : await buildDashboardGitHubReadFastPathMessages({
+          env: this.env,
+          threadId,
+          repository,
+          relatedIssue,
+          text,
+          mediaReferences: mediaValidation.mediaReferences,
+          now
+        });
     const costAwareFastPathMessages = vpsMaintenanceMessages
       ? null
       : buildDashboardCostAwareFastPathMessages({
@@ -366,6 +377,17 @@ export class DashboardChatRoom {
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
       if (vpsMaintenanceMessages) {
         const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
+        await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
+        this.sendSocket(socket, {
+          type: "owner_message_accepted",
+          ok: true,
+          clientMessageId,
+          messageId: ownerMessage.messageId
+        });
+        return;
+      }
+      if (githubReadFastPathMessages) {
+        const butlerMessages = store ? await store.appendMany(threadId, githubReadFastPathMessages) : githubReadFastPathMessages;
         await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
         this.sendSocket(socket, {
           type: "owner_message_accepted",
@@ -417,6 +439,11 @@ export class DashboardChatRoom {
     });
     if (vpsMaintenanceMessages) {
       const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
+      await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
+      return;
+    }
+    if (githubReadFastPathMessages) {
+      const butlerMessages = store ? await store.appendMany(threadId, githubReadFastPathMessages) : githubReadFastPathMessages;
       await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
       return;
     }
@@ -8967,6 +8994,213 @@ function buildDashboardAppServerUsageTransientText({ text = "", repository = "",
     return `軽量相談として扱えない文脈が含まれるため、Codex app-server に渡します。Codex usage を消費し得ます。${scope}`;
   }
   return `Codex app-server に渡しています。Codex usage を消費し得ます。${scope}`;
+}
+
+async function buildDashboardGitHubReadFastPathMessages({
+  env,
+  threadId,
+  repository = "",
+  relatedIssue = "",
+  text = "",
+  mediaReferences = [],
+  now = ""
+} = {}) {
+  const intent = parseDashboardGitHubReadFastPathIntent({ text, repository, relatedIssue, mediaReferences });
+  if (!intent.ok) {
+    return null;
+  }
+  let result;
+  if (intent.blocked) {
+    result = { ok: true, read: { records: [] } };
+  } else {
+    try {
+      result = await retrieveGitHubReadPlane({
+        resource: intent.resource,
+        repository: intent.repository,
+        issueNumber: intent.issueNumber,
+        pullNumber: intent.pullNumber,
+        limit: 1,
+        env
+      });
+    } catch (error) {
+      result = {
+        ok: false,
+        error: "github_read_exception",
+        reason: normalizeText(error?.message) || "GitHub read threw"
+      };
+    }
+  }
+  const createdAt = normalizeIsoTimestamp(now) || new Date().toISOString();
+  const message = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      repository: intent.repository,
+      relatedIssue: intent.issueNumber || relatedIssue,
+      status: result?.ok ? "replied" : "failed",
+      messageId: `dashboard_butler_github_read_fast_path:${crypto.randomUUID()}`,
+      createdAt,
+      text: buildDashboardGitHubReadFastPathReplyText({ intent, result })
+    },
+    { threadId }
+  );
+  return message ? [message] : null;
+}
+
+function parseDashboardGitHubReadFastPathIntent({ text = "", repository = "", relatedIssue = "", mediaReferences = [] } = {}) {
+  if (Array.isArray(mediaReferences) && mediaReferences.length > 0) {
+    return { ok: false, reason: "media references require app-server context" };
+  }
+  const normalized = sanitizeDashboardChatText(text);
+  const resolvedRepository = normalizeCanonicalRepositoryInput(repository);
+  if (!normalized) {
+    return { ok: false, reason: "message text is required" };
+  }
+  if (!isDashboardNarrowStatusReadIntent(normalized)) {
+    return { ok: false, reason: "not a narrow status read intent" };
+  }
+  const number = extractIssueNumberFromDashboardChatText(normalized) || normalizePositiveInteger(relatedIssue);
+  if (!number) {
+    return { ok: false, reason: "issue or pull number is required" };
+  }
+  const lower = normalized.toLowerCase();
+  const isPull = /\b(pr|pull request|pull)\b/i.test(normalized) || normalized.includes("プルリク") || normalized.includes("PR");
+  const isIssue = /\bissue\b/i.test(normalized) || normalized.includes("Issue") || normalized.includes("イシュー");
+  if (!resolvedRepository) {
+    return {
+      ok: true,
+      blocked: true,
+      repository: "",
+      resource: isPull ? "pulls" : "issues",
+      pullNumber: isPull ? number : null,
+      issueNumber: isPull ? null : number,
+      source: "dashboard_github_read_fast_path",
+      reason: "repository is required for GitHub read fast path"
+    };
+  }
+  if (isPull) {
+    return {
+      ok: true,
+      repository: resolvedRepository,
+      resource: "pulls",
+      pullNumber: number,
+      issueNumber: null,
+      source: "dashboard_github_read_fast_path"
+    };
+  }
+  if (isIssue || !lower.includes("pr")) {
+    return {
+      ok: true,
+      repository: resolvedRepository,
+      resource: "issues",
+      issueNumber: number,
+      pullNumber: null,
+      source: "dashboard_github_read_fast_path"
+    };
+  }
+  return { ok: false, reason: "ambiguous GitHub read intent" };
+}
+
+function isDashboardNarrowStatusReadIntent(value) {
+  const text = sanitizeDashboardChatText(value);
+  if (!text) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  if (/\bGO\b/.test(text)) {
+    return false;
+  }
+  if (/(実装|修正|直して|作って|追加|削除|デプロイして|レビューして|レビュアー起動|テストして|調査して|探して|開発して)/.test(text)) {
+    return false;
+  }
+  if (/(merge\s+it|mergeして|マージして|deploy\s+it|deployして)/i.test(text)) {
+    return false;
+  }
+  const hasNumber = /#([1-9][0-9]*)/.test(text);
+  if (!hasNumber) {
+    return false;
+  }
+  return (
+    /\b(status|state|open|closed|merged|mergeable|checks?)\b/i.test(text) ||
+    /(状況|状態|どう|開いて|閉じて|マージ済み|マージされた|自動マージ|チェック|確認だけ|見るだけ|読んで|見て)/.test(text)
+  );
+}
+
+function buildDashboardGitHubReadFastPathReplyText({ intent, result } = {}) {
+  const resourceLabel = intent?.resource === "pulls" ? `PR #${intent.pullNumber}` : `Issue #${intent?.issueNumber || ""}`;
+  const scope = [
+    `対象 repo: ${intent?.repository || "未指定"}`,
+    `対象: ${resourceLabel}`,
+    "cost_boundary: github_read_plane_lightweight",
+    "codexWillStart: false"
+  ].join("\n");
+  if (!result?.ok) {
+    return [
+      "GitHub read plane の軽量 fast path で読み取りを試みましたが、取得できませんでした。Codex app-server / VPS Codex CLI は起動していません。",
+      "",
+      scope,
+      `status: failed`,
+      `reason: ${sanitizeDashboardChatText(result?.reason || result?.error || "GitHub read failed")}`,
+      "",
+      "次に進めるなら、repository / Issue / PR 番号を確認するか、明示的に調査を依頼してください。その場合は Codex usage を消費し得ます。"
+    ].join("\n");
+  }
+  if (intent?.blocked) {
+    return [
+      "GitHub read plane の軽量 fast path で止めました。Codex app-server / VPS Codex CLI は起動していません。",
+      "",
+      scope,
+      "status: blocked",
+      `reason: ${sanitizeDashboardChatText(intent.reason || "repository is required")}`,
+      "",
+      "repo 未指定の main chat では、対象 repository を推測しません。owner/repo を付けてもう一度送ると、GitHub read plane だけで確認できます。"
+    ].join("\n");
+  }
+  const record = Array.isArray(result.read?.records) ? result.read.records[0] : null;
+  if (!record) {
+    return [
+      "GitHub read plane の軽量 fast path で読みましたが、対象 record が見つかりませんでした。Codex app-server / VPS Codex CLI は起動していません。",
+      "",
+      scope,
+      "status: not_found"
+    ].join("\n");
+  }
+  if (intent.resource === "pulls") {
+    return buildDashboardPullReadFastPathReplyText({ scope, record });
+  }
+  return buildDashboardIssueReadFastPathReplyText({ scope, record });
+}
+
+function buildDashboardPullReadFastPathReplyText({ scope, record } = {}) {
+  const lines = [
+    "GitHub read plane の軽量 fast path で PR 状態を読みました。Codex app-server / VPS Codex CLI は起動していません。",
+    "",
+    scope,
+    `title: ${record.title || "未取得"}`,
+    `state: ${record.state || "unknown"}`,
+    `draft: ${record.draft === true ? "true" : "false"}`,
+    `merged: ${record.merged === true ? "true" : "false"}`,
+    record.mergedAt ? `mergedAt: ${record.mergedAt}` : "",
+    record.mergeCommitSha ? `mergeCommitSha: ${record.mergeCommitSha}` : "",
+    `head: ${record.headRef || "unknown"} ${record.headSha || ""}`.trim(),
+    `base: ${record.baseRef || "unknown"}`,
+    record.mergeableState ? `mergeableState: ${record.mergeableState}` : "",
+    record.mergeBlockedReason ? `mergeBlockedReason: ${record.mergeBlockedReason}` : "",
+    record.htmlUrl ? `source: ${record.htmlUrl}` : ""
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
+function buildDashboardIssueReadFastPathReplyText({ scope, record } = {}) {
+  return [
+    "GitHub read plane の軽量 fast path で Issue 状態を読みました。Codex app-server / VPS Codex CLI は起動していません。",
+    "",
+    scope,
+    `title: ${record.title || "未取得"}`,
+    `state: ${record.state || "unknown"}`,
+    record.author ? `author: ${record.author}` : "",
+    record.htmlUrl ? `source: ${record.htmlUrl}` : ""
+  ].filter(Boolean).join("\n");
 }
 
 function buildDashboardCostAwareFastPathMessages({
