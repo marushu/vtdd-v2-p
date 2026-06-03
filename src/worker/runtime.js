@@ -14521,14 +14521,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .thread-title { min-width: 0; max-width: 100%; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; padding: 8px 18px 28px 4px; scroll-padding-bottom: 28px; scrollbar-gutter: stable; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
-    .bubble { max-width: min(760px, 88%); min-width: 0; color: var(--text); font-size: 17px; line-height: 1.72; }
+    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; padding: 8px clamp(18px, 5vw, 96px) 28px; scroll-padding-bottom: 28px; scrollbar-gutter: stable both-edges; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .bubble { max-width: 100%; min-width: 0; color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
     .bubble-header strong { margin-bottom: 0; }
     .bubble p { color: var(--text); margin-bottom: 12px; }
-    .bubble .message-body { display: grid; gap: 12px; min-width: 0; max-width: 100%; overflow: hidden; }
+    .bubble .message-body { display: grid; gap: 12px; min-width: 0; max-width: 100%; overflow: visible; }
     .bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
@@ -14545,8 +14545,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .reply-context-label { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .04em; }
     .reply-context-snippet { display: -webkit-box; max-width: 100%; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: inherit; overflow-wrap: anywhere; word-break: break-word; }
     .reply-target-highlight { outline: 2px solid var(--link); outline-offset: 4px; transition: outline-color .22s ease; }
-    .message-entry { display: grid; gap: 5px; align-self: stretch; max-width: min(760px, 88%); }
-    .message-entry.owner { justify-items: end; align-self: flex-end; }
+    .message-entry { display: grid; gap: 5px; width: 100%; max-width: 100%; align-self: stretch; }
+    .message-entry.owner { justify-items: end; }
     .message-entry.butler, .message-entry.system { justify-items: start; }
     .message-entry .bubble { max-width: 100%; }
     .message-actions { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
@@ -14559,8 +14559,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
     .copy-code:hover, .copy-code:focus-visible { opacity: 1; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
-    .bubble.owner { position: relative; align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
-    .bubble.owner p { color: var(--owner-text); margin: 0; }
+    .message-entry.butler .bubble, .message-entry.system .bubble { width: 100%; }
+    .bubble.owner { position: relative; align-self: flex-end; width: min(720px, 100%); background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
+    .bubble.owner .message-body, .bubble.owner p { color: var(--owner-text); margin: 0; }
     .bubble.owner ul, .bubble.owner li, .bubble.owner li::marker { color: var(--owner-text); }
     .bubble.owner .message-body code { color: var(--owner-code-text); }
     .bubble.owner .message-body pre { background: var(--owner-code-bg); border-color: var(--owner-code-border); color: var(--owner-code-text); }
@@ -14639,10 +14640,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
     .mobile-drawer-content { display: grid; gap: 12px; }
     .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
-    @media (min-width: 1180px) {
-      .chat-scroll { align-items: center; }
-      .bubble.owner { margin-right: calc((100% - 760px) / 2); }
-    }
     @media (max-width: 900px) {
       main { padding: 14px 14px 0; }
       .app-shell { height: calc(100dvh - 14px); }

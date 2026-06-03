@@ -1459,7 +1459,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("const locale = navigator.language || \"ja-JP\""), true);
   assert.equal(body.includes("new Intl.DateTimeFormat(locale"), true);
   assert.equal(body.includes(".message-entry { display: grid; gap: 5px;"), true);
-  assert.equal(body.includes(".message-entry.owner { justify-items: end; align-self: flex-end; }"), true);
+  assert.equal(body.includes(".message-entry.owner { justify-items: end; }"), true);
   assert.equal(body.includes(".message-actions { display: inline-flex; align-items: center; gap: 6px;"), true);
   assert.equal(body.includes(".message-meta { color: inherit; font: inherit; line-height: inherit; }"), true);
   assert.equal(body.includes(".bubble.has-copy-action { position: relative; }"), false);
@@ -1486,6 +1486,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("return source.length > 80 && !/\\s/.test(source);"), true);
   assert.equal(body.includes(".chat-link { color: var(--link);"), true);
   assert.equal(body.includes(".bubble.owner .chat-link { color: var(--owner-link); }"), true);
+  assert.equal(body.includes(".bubble.owner .message-body, .bubble.owner p { color: var(--owner-text); margin: 0; }"), true);
   assert.equal(body.includes(".bubble.owner ul, .bubble.owner li, .bubble.owner li::marker { color: var(--owner-text); }"), true);
   assert.equal(body.includes('renderMessageText(body, normalizeMessageDisplayText(message.text || "（空のメッセージ）"))'), true);
   assert.equal(body.includes('copyMessageText(copyButton, normalizeMessageCopyText(message.text || ""))'), true);
@@ -1542,9 +1543,19 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("white-space: pre-wrap"), true);
   assert.equal(body.includes(".bubble .message-body pre.wrap-code"), true);
   assert.equal(body.includes("overflow-wrap: anywhere; word-break: break-word;"), true);
-  assert.equal(body.includes(".bubble .message-body { display: grid; gap: 12px; min-width: 0; max-width: 100%; overflow: hidden; }"), true);
+  assert.equal(body.includes(".bubble .message-body { display: grid; gap: 12px; min-width: 0; max-width: 100%; overflow: visible; }"), true);
   assert.equal(body.includes(".bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }"), true);
   assert.equal(body.includes(".chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden;"), true);
+  assert.equal(body.includes("padding: 8px clamp(18px, 5vw, 96px) 28px;"), true);
+  assert.equal(body.includes("scrollbar-gutter: stable both-edges;"), true);
+  assert.equal(body.includes("calc((100% - 760px) / 2)"), false);
+  assert.equal(body.includes(".message-entry { display: grid; gap: 5px; width: 100%; max-width: 100%; align-self: stretch; }"), true);
+  assert.equal(body.includes(".message-entry.owner { justify-items: end; }"), true);
+  assert.equal(body.includes(".message-entry.butler, .message-entry.system { justify-items: start; }"), true);
+  assert.equal(body.includes(".message-entry.butler .bubble, .message-entry.system .bubble { width: 100%; }"), true);
+  assert.equal(body.includes(".bubble.owner { position: relative; align-self: flex-end; width: min(720px, 100%);"), true);
+  assert.equal(body.includes(".bubble.owner { margin-right:"), false);
+  assert.equal(body.includes(".chat-scroll { align-items: center; }"), false);
   assert.equal(body.includes("overscroll-behavior-x: none"), true);
   assert.equal(body.includes("touch-action: pan-y"), true);
   assert.equal(body.includes(".bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }"), true);

@@ -1,0 +1,115 @@
+{
+  "ok": true,
+  "browserName": "chromium",
+  "viewport": {
+    "name": "iphone",
+    "width": 390,
+    "height": 844
+  },
+  "layoutState": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "owner": {
+      "entry": {
+        "left": 39.5,
+        "right": 350.5,
+        "width": 311
+      },
+      "bubble": {
+        "left": 95.484375,
+        "right": 350.5,
+        "width": 255.015625
+      },
+      "body": {
+        "left": 111.484375,
+        "right": 334.5,
+        "width": 223.015625,
+        "height": 395.859375
+      },
+      "styles": {
+        "bubbleBackgroundColor": "rgb(23, 23, 23)",
+        "bodyColor": "rgb(247, 247, 244)",
+        "bodyDisplay": "grid",
+        "bodyVisibility": "visible"
+      },
+      "text": "強制リロード後の表示確認。\n俺のコメントが見切れず、右寄せのまま読める必要がある。\n長いURLも横にはみ出してはいけない: https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2F"
+    },
+    "ownerShort": {
+      "entry": {
+        "left": 39.5,
+        "right": 350.5,
+        "width": 311
+      },
+      "bubble": {
+        "left": 95.484375,
+        "right": 350.5,
+        "width": 255.015625
+      },
+      "body": {
+        "left": 111.484375,
+        "right": 334.5,
+        "width": 223.015625,
+        "height": 52.78125
+      },
+      "styles": {
+        "bubbleBackgroundColor": "rgb(23, 23, 23)",
+        "bodyColor": "rgb(247, 247, 244)",
+        "bodyDisplay": "grid",
+        "bodyVisibility": "visible"
+      },
+      "text": "今入れたコメントが消えないこと。6/2 16:02⧉"
+    },
+    "ownerNoSpace": {
+      "entry": {
+        "left": 39.5,
+        "right": 350.5,
+        "width": 311
+      },
+      "bubble": {
+        "left": 95.484375,
+        "right": 350.5,
+        "width": 255.015625
+      },
+      "body": {
+        "left": 111.484375,
+        "right": 334.5,
+        "width": 223.015625,
+        "height": 52.78125
+      },
+      "styles": {
+        "bubbleBackgroundColor": "rgb(23, 23, 23)",
+        "bodyColor": "rgb(247, 247, 244)",
+        "bodyDisplay": "grid",
+        "bodyVisibility": "visible"
+      },
+      "text": "今VTDDの状況は？次に進めるべきタスクも示して。6/2 16:03⧉"
+    },
+    "butler": {
+      "entry": {
+        "left": 39.5,
+        "right": 350.5,
+        "width": 311
+      },
+      "bubble": {
+        "left": 39.5,
+        "right": 350.5,
+        "width": 311
+      },
+      "body": {
+        "left": 39.5,
+        "right": 350.5,
+        "width": 311,
+        "height": 327.125
+      },
+      "styles": {
+        "bubbleBackgroundColor": "rgba(0, 0, 0, 0)",
+        "bodyColor": "rgb(21, 21, 21)",
+        "bodyDisplay": "grid",
+        "bodyVisibility": "visible"
+      },
+      "text": "Butler返信先強制リロード後の表示確認。 俺のコメントが見切れず、右寄せのまま読める必要がある。 長いURLも横にはみ出してはいけない: https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/a...対象: Issue #744 の chat layout / VRT状態:owner 発言は読み幅カラ"
+    }
+  }
+}
