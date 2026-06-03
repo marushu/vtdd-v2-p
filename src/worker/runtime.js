@@ -4541,9 +4541,22 @@ async function handleGitHubActionsEventRequest(request, env) {
     });
   }
 
-  const threadId = event.threadId || buildDashboardEventDefaultThreadId(event.event);
+  const baseEvent = normalizeDashboardEventRecord(event.event);
+  const existingEvent = await readDashboardEventById(store, baseEvent.id);
+  const acceptedEvent = normalizeDashboardEventRecord({
+    ...baseEvent,
+    pwaNotificationStatus: existingEvent?.pwaNotificationStatus === "sent" ? "sent" : "dashboard_event_received",
+    pwaNotificationError: existingEvent?.pwaNotificationError || null,
+    pwaNotificationReason: existingEvent?.pwaNotificationReason || null,
+    pwaNotificationAttempted: existingEvent?.pwaNotificationAttempted || 0,
+    pwaNotificationDelivered: existingEvent?.pwaNotificationDelivered || 0,
+    pwaNotificationCleaned: existingEvent?.pwaNotificationCleaned || 0
+  });
+  await store.put(acceptedEvent);
+
+  const threadId = event.threadId || buildDashboardEventDefaultThreadId(baseEvent);
   const chatMessage = buildGitHubActionsDashboardChatMessage({
-    event: event.event,
+    event: baseEvent,
     threadId
   });
   const chatStore = resolveDashboardChatStore(env);
@@ -4567,21 +4580,32 @@ async function handleGitHubActionsEventRequest(request, env) {
     }
   }
 
-  const shouldDispatchNotification = chatAppendStatus === "appended";
+  const duplicateNotificationAlreadySent =
+    existingEvent?.pwaNotificationStatus === "sent" && Number(existingEvent?.pwaNotificationDelivered || 0) > 0;
+  const shouldDispatchNotification = chatAppendStatus === "appended" && !duplicateNotificationAlreadySent;
   const recorded = await recordDashboardNotificationEvent({
     env,
     eventStore: store,
-    event: event.event,
+    event: baseEvent,
     overrides: shouldDispatchNotification
       ? {}
-      : {
-          pwaNotificationStatus: chatAppendError || "dashboard_chat_append_skipped",
-          pwaNotificationError: chatAppendError || null,
-          pwaNotificationReason: chatAppendReason || "dashboard Butler chat append did not complete",
-          pwaNotificationAttempted: 0,
-          pwaNotificationDelivered: 0,
-          pwaNotificationCleaned: 0
-        },
+      : duplicateNotificationAlreadySent
+        ? {
+            pwaNotificationStatus: "sent",
+            pwaNotificationError: null,
+            pwaNotificationReason: "duplicate event ignored after prior Web Push delivery",
+            pwaNotificationAttempted: existingEvent.pwaNotificationAttempted || 0,
+            pwaNotificationDelivered: existingEvent.pwaNotificationDelivered || 0,
+            pwaNotificationCleaned: existingEvent.pwaNotificationCleaned || 0
+          }
+        : {
+            pwaNotificationStatus: chatAppendError || "dashboard_chat_append_skipped",
+            pwaNotificationError: chatAppendError || null,
+            pwaNotificationReason: chatAppendReason || "dashboard Butler chat append did not complete",
+            pwaNotificationAttempted: 0,
+            pwaNotificationDelivered: 0,
+            pwaNotificationCleaned: 0
+          },
     dispatch: shouldDispatchNotification
   });
   const webSocketBroadcast =
@@ -4598,6 +4622,18 @@ async function handleGitHubActionsEventRequest(request, env) {
     webSocketBroadcast,
     webPush: recorded.webPush
   });
+}
+
+async function readDashboardEventById(eventStore, eventId) {
+  const id = normalizeDashboardEventText(eventId);
+  if (!id || !eventStore || typeof eventStore.get !== "function") {
+    return null;
+  }
+  try {
+    return await eventStore.get(id);
+  } catch {
+    return null;
+  }
 }
 
 async function recordDashboardNotificationEvent({ env, eventStore, event, overrides = {}, dispatch = true } = {}) {
@@ -9757,6 +9793,24 @@ function createD1DashboardEventStore(d1) {
       await ensureSchema();
       await d1.prepare("DELETE FROM vtdd_dashboard_events WHERE id = ?").bind(id).run();
       return true;
+    },
+
+    async get(eventId) {
+      const id = normalizeDashboardEventText(eventId);
+      if (!id) {
+        return null;
+      }
+      await ensureSchema();
+      const result = await d1.prepare("SELECT payload_json FROM vtdd_dashboard_events WHERE id = ? LIMIT 1").bind(id).all();
+      const row = Array.isArray(result?.results) ? result.results[0] : null;
+      if (!row?.payload_json) {
+        return null;
+      }
+      try {
+        return normalizeDashboardEventRecord(JSON.parse(row.payload_json));
+      } catch {
+        return null;
+      }
     },
 
     async latest(filter = {}) {

@@ -289,6 +289,9 @@ function createInMemoryDashboardEventStore() {
     async delete(eventId) {
       return events.delete(eventId);
     },
+    async get(eventId) {
+      return events.get(eventId) ?? null;
+    },
     async latest(filter = {}) {
       const matches = [...events.values()].filter((event) => {
         if (filter.kind && event.kind !== filter.kind) {
@@ -6247,6 +6250,11 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
     }
   );
   assert.equal(duplicateResponse.status, 202);
+  const duplicateBody = await duplicateResponse.json();
+  assert.equal(duplicateBody.event.pwaNotificationStatus, "sent");
+  assert.equal(duplicateBody.webPush.status, 204);
+  assert.equal(duplicateBody.webPush.delivered, 0);
+  assert.equal(pushCalls.length, 1);
   const duplicateChat = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
       headers: dashboardAccessHeaders
@@ -6558,6 +6566,53 @@ test("worker accepts GitHub Actions event without Web Push when dashboard chat s
   assert.equal(latest.pwaNotificationStatus, "dashboard_chat_store_unavailable");
   assert.equal(latest.pwaNotificationAttempted, 0);
   assert.equal(latest.pwaNotificationDelivered, 0);
+});
+
+test("worker does not append GitHub Actions chat before event truth is accepted", async () => {
+  let chatAppendCalls = 0;
+  const pushCalls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/github-actions", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133049999",
+        status: "completed",
+        conclusion: "success",
+        pullNumber: 749,
+        updatedAt: "2026-05-20T00:14:01Z"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      ...(await createTestVapidEnv({
+        DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
+          pushCalls.push({ input, init });
+          return new Response(null, { status: 201 });
+        }
+      })),
+      DASHBOARD_EVENT_STORE: {
+        async put() {
+          throw new Error("event store failed before chat");
+        },
+        async get() {
+          return null;
+        }
+      },
+      DASHBOARD_CHAT_STORE: {
+        async appendMany() {
+          chatAppendCalls += 1;
+          return [];
+        }
+      }
+    }
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(chatAppendCalls, 0);
+  assert.equal(pushCalls.length, 0);
 });
 
 test("worker does not infer PR number from issue-style parenthetical summary", async () => {
