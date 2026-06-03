@@ -17,7 +17,9 @@ import {
   buildDashboardBridgeResumeStatusEvent,
   buildDashboardBridgeTurnStartedStatusEvent,
   buildDashboardTurnInputText,
+  collectDashboardBridgeRepoSyncStatus,
   connectDashboardAppServerBridgeOnce,
+  ensureDashboardBridgeRepoSynced,
   executeVpsRunnerWakeup,
   extractAppServerNotificationTurnId,
   formatDashboardMediaReferenceLines,
@@ -2210,6 +2212,126 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
   assert.equal(parsed.heartbeatMs, 30000);
 });
 
+test("dashboard app-server bridge repo sync preflight allows clean in-sync main with known artifacts", async () => {
+  const status = await collectDashboardBridgeRepoSyncStatus({
+    repoRoot: "/srv/vtdd-runner/repos/vtdd-v2-p",
+    baseRef: "main",
+    run: mockBridgeRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "abc123",
+      ahead: 0,
+      behind: 0,
+      status: "?? .tmp/runtime.json\n?? test-results/bridge/output.log\n"
+    })
+  });
+
+  assert.equal(status.ok, true);
+  assert.equal(status.developmentAllowed, true);
+  assert.equal(status.inSyncWithOrigin, true);
+  assert.deepEqual(status.knownUntrackedArtifacts, [".tmp/runtime.json", "test-results/bridge/output.log"]);
+  assert.deepEqual(status.unknownUntrackedPaths, []);
+});
+
+test("dashboard app-server bridge repo sync preflight fast-forwards clean behind-only main", async () => {
+  const calls = [];
+  let pulled = false;
+  const status = await ensureDashboardBridgeRepoSynced({
+    repoRoot: "/srv/vtdd-runner/repos/vtdd-v2-p",
+    baseRef: "main",
+    run: async (command, args, options) => {
+      calls.push(args.join(" "));
+      if (args[0] === "pull") {
+        pulled = true;
+        return { stdout: "", stderr: "" };
+      }
+      return mockBridgeRepoSyncRun({
+        branch: "main",
+        headSha: pulled ? "def456" : "abc123",
+        originHeadSha: "def456",
+        ahead: 0,
+        behind: pulled ? 0 : 1,
+        status: ""
+      })(command, args, options);
+    }
+  });
+
+  assert.equal(status.developmentAllowed, true);
+  assert.equal(status.syncAction, "fast_forwarded");
+  assert.equal(status.headSha, "def456");
+  assert.equal(calls.includes("pull --ff-only origin main"), true);
+});
+
+test("dashboard app-server bridge repo sync preflight blocks tracked dirty, ahead, and unknown untracked drift", async () => {
+  const dirty = await collectDashboardBridgeRepoSyncStatus({
+    run: mockBridgeRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "abc123",
+      ahead: 0,
+      behind: 0,
+      status: " M scripts/run-dashboard-app-server-bridge.mjs\n"
+    })
+  });
+  const ahead = await collectDashboardBridgeRepoSyncStatus({
+    run: mockBridgeRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "def456",
+      ahead: 1,
+      behind: 0,
+      status: ""
+    })
+  });
+  const unknownUntracked = await collectDashboardBridgeRepoSyncStatus({
+    run: mockBridgeRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "abc123",
+      ahead: 0,
+      behind: 0,
+      status: "?? scripts/local-hotfix.mjs\n"
+    })
+  });
+
+  assert.equal(dirty.developmentAllowed, false);
+  assert.deepEqual(dirty.blockedBy, ["tracked_dirty"]);
+  assert.equal(ahead.developmentAllowed, false);
+  assert.deepEqual(ahead.blockedBy, ["ahead_of_origin"]);
+  assert.equal(unknownUntracked.developmentAllowed, false);
+  assert.deepEqual(unknownUntracked.blockedBy, ["unknown_untracked"]);
+});
+
+test("dashboard app-server bridge repo sync preflight blocks app-server initialization before connect", async () => {
+  let initializeCount = 0;
+  const appServer = {
+    async initialize() {
+      initializeCount += 1;
+    }
+  };
+
+  await assert.rejects(
+    runDashboardAppServerBridge({
+      runtimeUrl: "https://runtime.example",
+      token: "secret-token",
+      threadId: "dashboard-main",
+      cwd: "/repo",
+      appServer,
+      run: mockBridgeRepoSyncRun({
+        branch: "main",
+        headSha: "abc123",
+        originHeadSha: "abc123",
+        ahead: 0,
+        behind: 0,
+        status: "?? scripts/local-hotfix.mjs\n"
+      }),
+      WebSocketImpl: class MockWebSocket {}
+    }),
+    /repo sync preflight blocked startup/
+  );
+  assert.equal(initializeCount, 0);
+});
+
 test("dashboard app-server bridge endpoint uses the dashboard app-server thread WebSocket", () => {
   const endpoint = buildDashboardAppServerBridgeEndpoint({
     runtimeUrl: "https://runtime.example",
@@ -2322,6 +2444,7 @@ test("dashboard app-server bridge reconnects the dashboard WebSocket without rei
     token: "secret-token",
     threadId: "dashboard-main",
     cwd: "/repo",
+    repoSyncPreflight: false,
     appServer,
     WebSocketImpl: MockWebSocket,
     reconnectDelayMs: 0,
@@ -2391,6 +2514,38 @@ test("dashboard app-server bridge sends heartbeat pings on an open socket", asyn
   sockets[0].emit("close");
   await once;
 });
+
+function mockBridgeRepoSyncRun({
+  branch = "main",
+  headSha = "abc123",
+  originHeadSha = "abc123",
+  ahead = 0,
+  behind = 0,
+  status = ""
+} = {}) {
+  return async (_command, args) => {
+    const signature = args.join(" ");
+    if (signature.startsWith("fetch origin ")) {
+      return { stdout: "", stderr: "" };
+    }
+    if (signature === "symbolic-ref --short HEAD") {
+      return { stdout: `${branch}\n`, stderr: "" };
+    }
+    if (signature === "rev-parse HEAD") {
+      return { stdout: `${headSha}\n`, stderr: "" };
+    }
+    if (signature.startsWith("rev-parse origin/")) {
+      return { stdout: `${originHeadSha}\n`, stderr: "" };
+    }
+    if (signature.startsWith("rev-list --left-right --count HEAD...origin/")) {
+      return { stdout: `${ahead}\t${behind}\n`, stderr: "" };
+    }
+    if (signature === "status --porcelain=v1") {
+      return { stdout: status, stderr: "" };
+    }
+    throw new Error(`Unexpected git command in mock: ${signature}`);
+  };
+}
 
 async function waitFor(predicate, { timeoutMs = 1000 } = {}) {
   const start = Date.now();
