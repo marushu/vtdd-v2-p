@@ -695,15 +695,21 @@ function createMockDashboardChatRoomNamespace() {
 function createMockDurableObjectStorage() {
   const values = new Map();
   const putCalls = [];
+  const deleteCalls = [];
   return {
     values,
     putCalls,
+    deleteCalls,
     async get(key) {
       return values.get(key);
     },
     async put(key, value) {
       putCalls.push({ key, value });
       values.set(key, value);
+    },
+    async delete(key) {
+      deleteCalls.push({ key });
+      values.delete(key);
     }
   };
 }
@@ -1368,10 +1374,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function releaseComposerForFollowUp("), true);
   assert.equal(body.includes("このまま同じ thread に追加メッセージを送れます。"), true);
   assert.equal(body.includes("function restoreThreadRecoveryState(messages)"), true);
+  assert.equal(body.includes("function restoreTransientProgressSnapshot(snapshot)"), true);
   assert.equal(body.includes("送信済みです。app-server bridge の返信を待っています。復帰中なら同じ thread で再接続します。"), true);
   assert.equal(body.includes('status: "pending_app_server_bridge"'), true);
   assert.equal(body.includes('title: "返信待ち"'), true);
+  assert.equal(body.includes("if (!restoreTransientProgressSnapshot(body.transientProgressSnapshot))"), true);
   assert.equal(body.includes("restoreThreadRecoveryState(body.messages || []);"), true);
+  assert.equal(body.includes("restoreTransientProgressSnapshot(body.transientProgressSnapshot);"), true);
   assert.equal(body.includes("function withPendingSendRecoveryInstruction("), true);
   assert.equal(body.includes("送信保存を確認中のため入力欄は保持しています。確認後に同じ thread へ追加できます。"), true);
   assert.equal(body.includes('body.status === "stalled"'), true);
@@ -3370,6 +3379,67 @@ test("worker requires WebSocket upgrade for dashboard chat live updates", async 
   assert.equal(rooms.calls.length, 0);
 });
 
+test("worker includes DashboardChatRoom transient progress snapshot in chat thread refresh", async () => {
+  const store = createInMemoryDashboardChatStore();
+  await store.appendMany("dashboard-main-unresolved", [
+    {
+      threadId: "dashboard-main-unresolved",
+      role: "owner",
+      repository: "",
+      relatedIssue: null,
+      status: "sent",
+      text: "長めの作業を進めて",
+      createdAt: "2026-06-03T00:00:00.000Z"
+    }
+  ]);
+  const calls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved", {
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_CHAT_STORE: store,
+      DASHBOARD_CHAT_ROOMS: {
+        getByName(name) {
+          return {
+            async fetch(input) {
+              calls.push({ name, input });
+              return new Response(JSON.stringify({
+                ok: true,
+                threadId: "dashboard-main-unresolved",
+                transientProgressSnapshot: {
+                  threadId: "dashboard-main-unresolved",
+                  status: "thinking",
+                  text: "テストを実行しています。",
+                  source: "app_server_status",
+                  updatedAt: "2026-06-03T00:00:02.000Z"
+                }
+              }), {
+                headers: { "content-type": "application/json" }
+              });
+            }
+          };
+        }
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.messages.length, 1);
+  assert.deepEqual(body.transientProgressSnapshot, {
+    threadId: "dashboard-main-unresolved",
+    status: "thinking",
+    text: "テストを実行しています。",
+    source: "app_server_status",
+    updatedAt: "2026-06-03T00:00:02.000Z"
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, "dashboard-main-unresolved");
+});
+
 test("DashboardChatRoom accepts dashboard WebSocket upgrade with request origin attachment", async () => {
   const originalWebSocketPair = globalThis.WebSocketPair;
   const OriginalResponse = globalThis.Response;
@@ -4525,6 +4595,155 @@ test("DashboardChatRoom sends app-server thinking status as transient UI state",
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.equal(status.text, "codex app-server が応答を生成しています。");
+});
+
+test("DashboardChatRoom exposes last app-server status snapshot on thread reconnect", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const reconnectSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "planning",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "raw plan detail"
+    })
+  );
+
+  const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
+  assert.equal(snapshot.status, "thinking");
+  assert.equal(snapshot.text, "方針を整理しています。");
+  assert.equal(snapshot.source, "app_server_status");
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+
+  await room.sendThread(reconnectSocket, "dashboard-main-unresolved");
+
+  const payload = JSON.parse(reconnectSocket.sent[0]);
+  assert.equal(payload.type, "thread");
+  assert.equal(payload.messages.length, 0);
+  assert.deepEqual(payload.transientProgressSnapshot, snapshot);
+});
+
+test("DashboardChatRoom keeps app-server reply deltas out of progress snapshots", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply_delta",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      delta: "途中の返答断片"
+    })
+  );
+
+  assert.equal(storage.values.has("transient_progress_snapshot:dashboard-main-unresolved"), false);
+  assert.equal(storage.putCalls.some((call) => call.key === "transient_progress_snapshot:dashboard-main-unresolved"), false);
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+});
+
+test("DashboardChatRoom dedupes unchanged transient progress snapshot writes", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const event = {
+    type: "app_server_status",
+    status: "thinking",
+    stage: "command",
+    threadId: "dashboard-main-unresolved",
+    codexThreadId: "codex-thread-450",
+    text: "raw command detail"
+  };
+
+  await room.webSocketMessage(bridgeSocket, JSON.stringify(event));
+  await room.webSocketMessage(bridgeSocket, JSON.stringify(event));
+
+  const snapshotPuts = storage.putCalls.filter((call) => call.key === "transient_progress_snapshot:dashboard-main-unresolved");
+  assert.equal(snapshotPuts.length, 1);
+  assert.equal(snapshotPuts[0].value.text, "コマンドを実行しています。");
+  assert.equal(dashboardSocket.sent.map((message) => JSON.parse(message)).filter((message) => message.type === "transient_status").length, 2);
+});
+
+test("DashboardChatRoom clears transient progress snapshot after final reply", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "test",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "raw test detail"
+    })
+  );
+  assert.equal(storage.values.get("transient_progress_snapshot:dashboard-main-unresolved").text, "テストを実行しています。");
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "検証が終わりました。"
+    })
+  );
+
+  assert.equal(storage.values.has("transient_progress_snapshot:dashboard-main-unresolved"), false);
+  assert.equal(storage.deleteCalls.filter((call) => call.key === "transient_progress_snapshot:dashboard-main-unresolved").length >= 1, true);
+  const threadPayloads = dashboardSocket.sent.map((message) => JSON.parse(message)).filter((message) => message.type === "thread");
+  assert.equal(threadPayloads.at(-1).transientProgressSnapshot, null);
+  assert.equal((await store.listThread("dashboard-main-unresolved")).at(-1).text, "検証が終わりました。");
 });
 
 test("DashboardChatRoom keeps generic opt-in app-server progress transient-only", async () => {

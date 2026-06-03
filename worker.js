@@ -57530,6 +57530,21 @@ var DashboardChatRoom = class {
       });
       return json(202, { ok: true, threadId: threadId2 });
     }
+    if (request.method === "GET" && url.pathname === "/thread-state") {
+      const threadId2 = normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id"));
+      if (!threadId2) {
+        return json(422, {
+          ok: false,
+          error: "thread_id_required",
+          reason: "threadId is required"
+        });
+      }
+      return json(200, {
+        ok: true,
+        threadId: threadId2,
+        transientProgressSnapshot: await this.readTransientProgressSnapshot(threadId2)
+      });
+    }
     if (request.method === "POST" && url.pathname === "/runner-wakeup") {
       const payload = await readJson(request);
       const threadId2 = normalizeDashboardThreadId(payload.threadId || payload.thread_id);
@@ -57811,7 +57826,9 @@ var DashboardChatRoom = class {
       await this.broadcastTransientStatus({
         threadId,
         text: "\u9001\u4FE1\u306F\u4FDD\u5B58\u6E08\u307F\u3067\u3059\u3002app-server bridge \u306E\u518D\u63A5\u7D9A\u5F8C\u306B\u540C\u3058 thread \u3067\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002",
-        status: "pending_app_server_bridge"
+        status: "pending_app_server_bridge",
+        snapshot: true,
+        snapshotSource: "pending_app_server_bridge"
       });
       return;
     }
@@ -57842,7 +57859,9 @@ var DashboardChatRoom = class {
     await this.broadcastTransientStatus({
       threadId,
       status: "thinking",
-      text: buildDashboardAppServerUsageTransientText({ text, repository, relatedIssue })
+      text: buildDashboardAppServerUsageTransientText({ text, repository, relatedIssue }),
+      snapshot: true,
+      snapshotSource: "owner_message_dispatch"
     });
     await this.dispatchOwnerMessageToAppServerBridge({
       threadId,
@@ -57947,11 +57966,16 @@ var DashboardChatRoom = class {
         updatedAt: normalized.createdAt
       });
     }
+    if (normalized.transientStatus === "replied") {
+      await this.clearTransientProgressSnapshot(normalized.threadId);
+    }
     if (normalized.transientStatus) {
       await this.broadcastTransientStatus({
         threadId: normalized.threadId,
         status: normalized.transientStatus,
-        text: normalized.transientText || normalized.text
+        text: normalized.transientText || normalized.text,
+        snapshot: normalized.snapshotTransientStatus === true,
+        snapshotSource: normalized.snapshotSource
       });
     }
     if (normalized.messages.length === 0) {
@@ -57967,15 +57991,20 @@ var DashboardChatRoom = class {
       return;
     }
     const messages = store ? await store.appendMany(normalized.threadId, messagesToAppend) : messagesToAppend;
+    if (messagesToAppend.some((message) => shouldClearDashboardTransientProgressSnapshot(message))) {
+      await this.clearTransientProgressSnapshot(normalized.threadId);
+    }
     await this.broadcastThread({ threadId: normalized.threadId, messages });
   }
   async broadcastThread({ threadId, messages = null }) {
     const resolvedMessages = Array.isArray(messages) ? messages : await this.listThreadMessages(threadId);
+    const transientProgressSnapshot = await this.readTransientProgressSnapshot(threadId);
     const payload = JSON.stringify({
       type: "thread",
       ok: true,
       threadId,
-      messages: resolvedMessages
+      messages: resolvedMessages,
+      transientProgressSnapshot
     });
     for (const socket of this.connectedSockets()) {
       const attachment = this.getSocketAttachment(socket);
@@ -57984,7 +58013,15 @@ var DashboardChatRoom = class {
       }
     }
   }
-  async broadcastTransientStatus({ threadId, status, text }) {
+  async broadcastTransientStatus({ threadId, status, text, snapshot = false, snapshotSource = "" }) {
+    if (snapshot === true) {
+      await this.writeTransientProgressSnapshot({
+        threadId,
+        status,
+        text,
+        source: snapshotSource
+      });
+    }
     const payload = JSON.stringify({
       type: "transient_status",
       ok: true,
@@ -58002,12 +58039,14 @@ var DashboardChatRoom = class {
   async sendThread(socket, threadId) {
     if (!isSocketOpen(socket)) return;
     try {
+      const transientProgressSnapshot = await this.readTransientProgressSnapshot(threadId);
       socket.send(
         JSON.stringify({
           type: "thread",
           ok: true,
           threadId,
-          messages: await this.listThreadMessages(threadId)
+          messages: await this.listThreadMessages(threadId),
+          transientProgressSnapshot
         })
       );
     } catch (error2) {
@@ -58028,6 +58067,52 @@ var DashboardChatRoom = class {
       return [];
     }
     return store.listThread(threadId, { limit: 80 });
+  }
+  transientProgressSnapshotKey(threadId) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    return normalizedThreadId ? `transient_progress_snapshot:${normalizedThreadId}` : "";
+  }
+  async readTransientProgressSnapshot(threadId) {
+    const key = this.transientProgressSnapshotKey(threadId);
+    if (!key || typeof this.ctx?.storage?.get !== "function") {
+      return null;
+    }
+    const snapshot = await this.ctx.storage.get(key);
+    return normalizeDashboardTransientProgressSnapshot(snapshot);
+  }
+  async writeTransientProgressSnapshot({ threadId, status = "", text = "", source = "" } = {}) {
+    const key = this.transientProgressSnapshotKey(threadId);
+    const normalized = normalizeDashboardTransientProgressSnapshot({
+      threadId,
+      status,
+      text,
+      source,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (!key || !normalized || typeof this.ctx?.storage?.put !== "function") {
+      return false;
+    }
+    const previous = await this.readTransientProgressSnapshot(threadId);
+    if (previous && previous.status === normalized.status && previous.text === normalized.text && previous.source === normalized.source) {
+      return false;
+    }
+    await this.ctx.storage.put(key, normalized);
+    return true;
+  }
+  async clearTransientProgressSnapshot(threadId) {
+    const key = this.transientProgressSnapshotKey(threadId);
+    if (!key || !this.ctx?.storage) {
+      return false;
+    }
+    if (typeof this.ctx.storage.delete === "function") {
+      await this.ctx.storage.delete(key);
+      return true;
+    }
+    if (typeof this.ctx.storage.put === "function") {
+      await this.ctx.storage.put(key, null);
+      return true;
+    }
+    return false;
   }
   connectedSockets() {
     if (typeof this.ctx?.getWebSockets === "function") {
@@ -58199,7 +58284,9 @@ var DashboardChatRoom = class {
       await this.broadcastTransientStatus({
         threadId: normalizedThreadId,
         status: "thinking",
-        text: "\u63A5\u7D9A\u3057\u307E\u3057\u305F\u3002\u4FDD\u5B58\u6E08\u307F\u306E\u9001\u4FE1\u3092 app-server bridge \u306B\u6E21\u3057\u307E\u3057\u305F\u3002"
+        text: "\u63A5\u7D9A\u3057\u307E\u3057\u305F\u3002\u4FDD\u5B58\u6E08\u307F\u306E\u9001\u4FE1\u3092 app-server bridge \u306B\u6E21\u3057\u307E\u3057\u305F\u3002",
+        snapshot: true,
+        snapshotSource: "pending_app_server_bridge_drained"
       });
     }
     return { ok: true, drained, remaining: remaining.length };
@@ -62976,12 +63063,38 @@ async function handleDashboardChatThreadRequest(request, url, env) {
     limit: normalizeLimit7(url.searchParams.get("limit"), 80)
   });
   const summary = typeof store.getSummary === "function" ? await store.getSummary(threadId) : null;
+  const transientProgressSnapshot = await readDashboardChatRoomTransientProgressSnapshot({
+    env,
+    threadId,
+    origin: url.origin
+  });
   return json(200, {
     ok: true,
     threadId,
     messages,
-    summary
+    summary,
+    transientProgressSnapshot
   });
+}
+async function readDashboardChatRoomTransientProgressSnapshot({ env, threadId, origin = "" } = {}) {
+  const normalizedThreadId = normalizeDashboardThreadId(threadId);
+  if (!normalizedThreadId) {
+    return null;
+  }
+  const room = resolveDashboardChatRoomStub(env, normalizedThreadId);
+  if (!room || typeof room.fetch !== "function") {
+    return null;
+  }
+  try {
+    const baseOrigin = normalizeText32(origin) || normalizeText32(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local";
+    const url = new URL("/thread-state", baseOrigin);
+    url.searchParams.set("threadId", normalizedThreadId);
+    const response = await room.fetch(new Request(url.toString(), { method: "GET" }));
+    const body = await response.json().catch(() => ({}));
+    return body?.ok ? normalizeDashboardTransientProgressSnapshot(body.transientProgressSnapshot) : null;
+  } catch {
+    return null;
+  }
 }
 async function handleDashboardChatSearchRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
@@ -65259,6 +65372,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const createdAt = normalizeIsoTimestamp(input.createdAt) || (/* @__PURE__ */ new Date()).toISOString();
   const messages = [];
   let transientStatus = "";
+  let snapshotTransientStatus = false;
+  let snapshotSource = "";
   if (eventType === "app_server_reply_delta") {
     transientStatus = "thinking";
     transientText = progressText || text;
@@ -65307,6 +65422,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       text,
       transientStatus
     });
+    snapshotTransientStatus = transientStatus === "thinking";
+    snapshotSource = "app_server_status";
     if (shouldPersistDashboardAppServerProgress(input, { transientStatus })) {
       messages.push(
         normalizeDashboardChatMessage(
@@ -65332,8 +65449,39 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     text,
     transientText,
     transientStatus,
+    snapshotTransientStatus,
+    snapshotSource,
     messages: messages.filter(Boolean)
   };
+}
+function normalizeDashboardTransientProgressSnapshot(value) {
+  const input = normalizeObject12(value);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id);
+  const status = normalizeDashboardChatStatus(input.status);
+  const text = sanitizeDashboardChatText(input.text);
+  if (!threadId || !text || !isDashboardSnapshotTransientStatus(status)) {
+    return null;
+  }
+  return {
+    threadId,
+    status,
+    text,
+    source: sanitizeDashboardChatText(input.source || ""),
+    updatedAt: normalizeIsoTimestamp(input.updatedAt || input.updated_at) || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function isDashboardSnapshotTransientStatus(status) {
+  return [
+    "thinking",
+    "pending_app_server_bridge",
+    "waiting_approval",
+    "waiting_user_input"
+  ].includes(normalizeDashboardChatStatus(status));
+}
+function shouldClearDashboardTransientProgressSnapshot(message) {
+  const role = normalizeDashboardEventText(message?.role).toLowerCase();
+  const status = normalizeDashboardChatStatus(message?.status);
+  return role === "butler" && status === "replied" || status === "failed" || status === "stalled";
 }
 function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {}) {
   const normalizedText = sanitizeDashboardChatText(text);
@@ -71502,6 +71650,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
       }
 
+      function restoreTransientProgressSnapshot(snapshot) {
+        if (!snapshot || typeof snapshot !== "object") return false;
+        const text = String(snapshot.text || "").trim();
+        const statusValue = String(snapshot.status || "").trim();
+        if (!text || !isLongRunningTransientStatus(statusValue)) return false;
+        updateTransientProgress(text, {
+          status: statusValue,
+          thinking: statusValue === "thinking" || statusValue === "pending_app_server_bridge",
+          title: statusValue === "pending_app_server_bridge" ? "\u8FD4\u4FE1\u5F85\u3061" : "\u9032\u884C\u4E2D"
+        });
+        setStatus(text, { thinking: true });
+        return true;
+      }
+
       function normalizeMessageId(value) {
         const id = String(value || "").trim();
         return id || "";
@@ -72358,7 +72520,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             releasePendingOwnerSendFromThread(body.messages || []);
-            restoreThreadRecoveryState(body.messages || []);
+            if (!restoreTransientProgressSnapshot(body.transientProgressSnapshot)) {
+              restoreThreadRecoveryState(body.messages || []);
+            }
             status.dataset.websocketState = describeChatSocketState();
             return { ok: true };
           }
@@ -72415,6 +72579,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             const body = JSON.parse(event.data || "{}");
             if (body.type === "thread" && body.ok) {
               renderThread(body.messages || [], { replace: false });
+              restoreTransientProgressSnapshot(body.transientProgressSnapshot);
               const releasedFromThread = releasePendingOwnerSendFromThread(body.messages || []);
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
