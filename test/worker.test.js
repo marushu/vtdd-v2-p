@@ -1553,7 +1553,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes(".message-entry.owner { justify-items: end; }"), true);
   assert.equal(body.includes(".message-entry.butler, .message-entry.system { justify-items: start; }"), true);
   assert.equal(body.includes(".message-entry.butler .bubble, .message-entry.system .bubble { width: 100%; }"), true);
-  assert.equal(body.includes(".bubble.owner { position: relative; align-self: flex-end; width: min(720px, 100%);"), true);
+  assert.equal(body.includes(".bubble.owner { position: relative; align-self: flex-end; width: fit-content; max-width: min(720px, 100%);"), true);
+  assert.equal(body.includes(".bubble.owner { position: relative; align-self: flex-end; width: min(720px, 100%);"), false);
   assert.equal(body.includes(".bubble.owner { margin-right:"), false);
   assert.equal(body.includes(".chat-scroll { align-items: center; }"), false);
   assert.equal(body.includes("overscroll-behavior-x: none"), true);
