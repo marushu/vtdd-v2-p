@@ -1381,6 +1381,9 @@ test("VPS runner selects pending Codex reviewer fallback comments after developm
   assert.equal(selected[0].repository, "sample-org/vtdd-v2");
   assert.equal(selected[0].pullRequestNumber, 22);
   assert.equal(selected[0].trigger, "pull_request_target:synchronize");
+  assert.equal(selected[0].dedupeKey, "codex-fallback:sample-org/vtdd-v2:pr-22:head-unknown");
+  assert.equal(selected[0].codexWillStart, true);
+  assert.equal(selected[0].codexUsageImpact, "high");
 });
 
 test("VPS runner does not reprocess Codex fallback requested comments after reviewer approve", () => {
@@ -1525,6 +1528,54 @@ test("VPS runner does not reprocess Codex fallback requested comments after revi
           "- Delivery mode: `vps_codex_cli`",
           "- Head SHA: `abc123`",
           "- Blocker: `actor_identity_failure`"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(selected.length, 0);
+});
+
+test("VPS runner uses fallback reviewer body head SHA when API headSha is missing", () => {
+  const selected = selectPendingVpsReviewerFallbacks({
+    repositoryPolicies: normalizeRepositoryPolicies({
+      allowedRepositories: ["sample-org/vtdd-v2"]
+    }),
+    comments: [
+      {
+        id: 1,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/22#issuecomment-1",
+        created_at: "2026-06-03T01:00:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex fallback レビュー",
+          "",
+          "- Status: `requested`",
+          "- Trigger: `pull_request_target:synchronize`",
+          "- Reason: `gemini_temporarily_unavailable`",
+          "- Delivery mode: `vps_codex_cli`",
+          "- Head SHA: `same-head-455`"
+        ].join("\n")
+      },
+      {
+        id: 2,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/22#issuecomment-2",
+        created_at: "2026-06-03T01:01:00Z",
+        user: { login: "vtdd-codex-fallback-reviewer[bot]" },
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex fallback レビュー",
+          "",
+          "- Status: `blocked`",
+          "- Trigger: `pull_request_target:synchronize`",
+          "- Reason: `gemini_temporarily_unavailable`",
+          "- Delivery mode: `vps_codex_cli`",
+          "- Head SHA: `same-head-455`",
+          "- Blocker: `openai_codex_chatgpt_account_model_unsupported`"
         ].join("\n")
       }
     ]
