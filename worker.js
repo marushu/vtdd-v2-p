@@ -58026,7 +58026,17 @@ var DashboardChatRoom = class {
     if (!codexThreadId) {
       return false;
     }
-    await this.ctx.storage.put(`app_server_thread:${normalizedThreadId}`, {
+    const key = `app_server_thread:${normalizedThreadId}`;
+    if (typeof this.ctx?.storage?.get === "function") {
+      try {
+        const existing = normalizeObject12(await this.ctx.storage.get(key));
+        if (normalizeDashboardEventText(existing.codexThreadId || existing.codex_thread_id) === codexThreadId) {
+          return false;
+        }
+      } catch {
+      }
+    }
+    await this.ctx.storage.put(key, {
       codexThreadId,
       updatedAt: normalizeIsoTimestamp(mapping?.updatedAt) || (/* @__PURE__ */ new Date()).toISOString()
     });
