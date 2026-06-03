@@ -751,7 +751,10 @@ async function collectVpsRunnerPendingSnapshot({ githubFetch, repositoryPolicies
     pendingReviewerFallbacks: reviewerFallbacks.map((item) => ({
       repository: item.repository,
       pullRequestNumber: item.pullRequestNumber,
-      fallbackCommentId: item.commentId
+      fallbackCommentId: item.commentId,
+      dedupeKey: item.dedupeKey,
+      codexWillStart: item.codexWillStart === true,
+      codexUsageImpact: item.codexUsageImpact || "unknown"
     }))
   };
 }
@@ -912,6 +915,7 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
       if (!policies.some((policy) => policy.repository === repository)) {
         return null;
       }
+      const headSha = normalizeText(parsed.headSha || comment.headSha);
       const samePullRequestComments = comments.filter(
         (candidate) =>
           normalizeRepository(candidate.repository) === repository &&
@@ -921,7 +925,7 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
         isReviewerTerminalResolved({
           comments: samePullRequestComments,
           after: comment.created_at,
-          headSha: normalizeText(comment.headSha)
+          headSha
         })
       ) {
         return null;
@@ -930,11 +934,17 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
         hasVpsReviewerFallbackActorIdentityIncident({
           comments: samePullRequestComments,
           after: comment.created_at,
-          headSha: normalizeText(comment.headSha)
+          headSha
         })
       ) {
         return null;
       }
+      const dedupeKey = [
+        "codex-fallback",
+        repository,
+        `pr-${pullRequestNumber}`,
+        headSha || "head-unknown"
+      ].join(":");
       return {
         repository,
         pullRequestNumber,
@@ -943,7 +953,10 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
         createdAt: comment.created_at,
         commentId: comment.id,
         commentUrl: comment.html_url,
-        headSha: normalizeText(comment.headSha)
+        headSha,
+        dedupeKey,
+        codexWillStart: true,
+        codexUsageImpact: "high"
       };
     })
     .filter(Boolean);
