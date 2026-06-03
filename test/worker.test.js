@@ -1367,6 +1367,11 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("setComposerLocked(false);"), true);
   assert.equal(body.includes("function releaseComposerForFollowUp("), true);
   assert.equal(body.includes("このまま同じ thread に追加メッセージを送れます。"), true);
+  assert.equal(body.includes("function restoreThreadRecoveryState(messages)"), true);
+  assert.equal(body.includes("送信済みです。app-server bridge の返信を待っています。復帰中なら同じ thread で再接続します。"), true);
+  assert.equal(body.includes('status: "pending_app_server_bridge"'), true);
+  assert.equal(body.includes('title: "返信待ち"'), true);
+  assert.equal(body.includes("restoreThreadRecoveryState(body.messages || []);"), true);
   assert.equal(body.includes("function withPendingSendRecoveryInstruction("), true);
   assert.equal(body.includes("送信保存を確認中のため入力欄は保持しています。確認後に同じ thread へ追加できます。"), true);
   assert.equal(body.includes('body.status === "stalled"'), true);
@@ -1393,6 +1398,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('setStatus("Dashboard thread 接続済み。", { temporary: true })'), true);
   assert.equal(body.includes('setStatus("");'), true);
   assert.equal(body.includes('document.addEventListener("visibilitychange", async () => {'), true);
+  assert.equal(body.includes('refreshDashboardFreshnessStatus({ pill: "表示中" });\n        refreshThread();\n        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)'), true);
   assert.equal(body.includes('window.addEventListener("online", async () => {'), true);
   assert.equal(body.includes("window.addEventListener(\"offline\""), true);
   assert.equal(body.includes("window.addEventListener(\"pagehide\", persistDashboardDraft)"), true);
