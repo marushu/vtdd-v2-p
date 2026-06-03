@@ -2907,9 +2907,12 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.equal(body.execution.runtimeTruth.helperQueueReached, false);
   assert.equal(body.messages[1].role, "butler");
   assert.equal(body.messages[1].status, "blocked");
-  assert.match(body.messages[1].text, /自然文 intent/);
+  assert.match(body.messages[1].text, /VPS 復旧・保守の確認リクエスト/);
+  assert.match(body.messages[1].text, /確認対象: Playwright Chromium dependency install/);
+  assert.match(body.messages[1].text, /操作: add/);
+  assert.match(body.messages[1].text, /risk: high/);
   assert.match(body.messages[1].text, /approval_required/);
-  assert.match(body.messages[1].text, /rootExecutionStarted=false/);
+  assert.match(body.messages[1].text, /rootExecutionStarted=false, helperExecutionStarted=false/);
   assert.match(body.messages[1].text, /approval URL/);
   const approvalUrl = new URL(body.execution.approvalOperatorUrl);
   assert.equal(approvalUrl.searchParams.get("dashboardThreadId"), "dashboard-main-marushu-vtdd-v2-p");
@@ -2979,8 +2982,8 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.equal(approvedBody.execution.runtimeTruth.helperExecutionStarted, false);
   assert.equal(approvedBody.messages[1].role, "butler");
   assert.equal(approvedBody.messages[1].status, "sent");
-  assert.match(approvedBody.messages[1].text, /自然文 intent/);
-  assert.match(approvedBody.messages[1].text, /helper execution queue/);
+  assert.match(approvedBody.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
+  assert.match(approvedBody.messages[1].text, /bounded handoff/);
   assert.match(approvedBody.messages[1].text, /rootExecutionStarted=false/);
   assert.equal(githubCalls.length, 1);
   const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
@@ -3059,6 +3062,10 @@ test("worker maps Dashboard Butler VPS runner status text to the low-risk preset
   assert.equal(body.execution.approvalScope.vpsOperation, "review");
   assert.equal(body.execution.runtimeTruth.capabilityId, "systemd.user.runner.status");
   assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
+  assert.match(body.messages[1].text, /確認対象: Check VTDD runner user service status/);
+  assert.match(body.messages[1].text, /操作: review/);
+  assert.match(body.messages[1].text, /risk: low/);
+  assert.match(body.messages[1].text, /承認なしに root \/ sudo \/ helper 実行は開始しません/);
 
   const records = await provider.retrieve({ ids: [body.execution.vpsProposalId] });
   const proposalRecord = records[0];
@@ -3100,8 +3107,11 @@ test("worker detects app-server bridge recovery intent without internal VPS help
   assert.equal(body.execution.approvalScope.vpsOperation, "review");
   assert.equal(body.execution.runtimeTruth.capabilityId, "systemd.user.app.server.bridge.status");
   assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
-  assert.match(body.messages[1].text, /自然文 intent/);
-  assert.match(body.messages[1].text, /passkey approval が必要/);
+  assert.match(body.messages[1].text, /VPS 復旧・保守の確認リクエスト/);
+  assert.match(body.messages[1].text, /確認対象: Check Dashboard app-server bridge status/);
+  assert.match(body.messages[1].text, /操作: review/);
+  assert.match(body.messages[1].text, /risk: low/);
+  assert.match(body.messages[1].text, /scoped passkey approval が必要/);
 
   const records = await provider.retrieve({ ids: [body.execution.vpsProposalId] });
   const proposalRecord = records[0];

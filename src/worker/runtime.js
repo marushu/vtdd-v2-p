@@ -11870,30 +11870,38 @@ function buildDashboardVpsMaintenanceManifest({ helperRequest, now } = {}) {
 }
 
 function buildDashboardVpsPrivilegedMaintenanceApprovalRequiredReply({ repository, relatedIssue, proposal } = {}) {
+  const capability = proposal?.proposal?.capability || {};
+  const scope = proposal?.approvalScope || {};
+  const title = normalizeText(capability.title) || normalizeText(scope.vpsCapabilityId) || "VPS maintenance capability";
+  const operation = normalizeText(scope.vpsOperation || proposal?.proposal?.operation) || "review";
+  const riskLevel = normalizeText(capability.riskLevel) || "unknown";
   return [
-    "Dashboard Butler の自然文 intent から VPS privileged maintenance proposal まで到達しました。",
+    "VPS 復旧・保守の確認リクエストとして受け取りました。",
     "",
     `- 対象 repo: ${repository || "未指定"}`,
     `- 関連 Issue: ${relatedIssue ? `#${relatedIssue}` : "未指定"}`,
+    `- 確認対象: ${title}`,
+    `- 操作: ${operation}`,
+    `- risk: ${riskLevel}`,
     `- vpsProposalId: ${proposal?.vpsProposalId || "未作成"}`,
-    "- authority: passkey approval が必要です。承認なしに root / sudo 実行は開始しません。",
-    "- runtime truth: status=approval_required, rootExecutionStarted=false",
+    "- authority: scoped passkey approval が必要です。承認なしに root / sudo / helper 実行は開始しません。",
+    "- runtime truth: status=approval_required, rootExecutionStarted=false, helperExecutionStarted=false",
     proposal?.approvalOperatorUrl ? `- approval URL: ${proposal.approvalOperatorUrl}` : "- approval URL: 未生成",
     "",
-    "承認後、Dashboard Butler はこの同じ自然文フローから helper request / execution handoff / VPS runner queue へ進めます。"
+    "承認後は VPS runner へ復旧依頼を渡します。VPS runner の完了 truth が戻るまで、live 実行完了とは扱いません。"
   ].join("\n");
 }
 
 function buildDashboardVpsPrivilegedMaintenanceQueuedReply({ repository, relatedIssue, queue } = {}) {
   const execution = queue?.execution || {};
   return [
-    "Dashboard Butler の自然文 intent から VPS helper execution queue まで到達しました。",
+    "VPS runner へ復旧依頼を渡しました。",
     "",
     `- 対象 repo: ${repository || execution.repository || "未指定"}`,
     `- 関連 Issue: ${relatedIssue ? `#${relatedIssue}` : execution.issueNumber ? `#${execution.issueNumber}` : "未指定"}`,
     `- executionId: ${execution.executionId || "未生成"}`,
     `- queueCommentUrl: ${execution.queueCommentUrl || "未取得"}`,
-    "- authority: passkey approval 済みの helper handoff だけを queue 化しました。",
+    "- authority: passkey approval 済みの bounded handoff だけを queue 化しました。",
     "- runtime truth: status=queued_for_vps_helper_execution, rootExecutionStarted=false, helperExecutionStarted=false",
     "",
     "VPS runner pickup の完了 truth が戻るまで、live root 実行完了とは扱いません。"

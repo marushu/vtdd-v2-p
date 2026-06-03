@@ -67910,29 +67910,37 @@ function buildDashboardVpsMaintenanceManifest({ helperRequest, now } = {}) {
   };
 }
 function buildDashboardVpsPrivilegedMaintenanceApprovalRequiredReply({ repository, relatedIssue, proposal } = {}) {
+  const capability = proposal?.proposal?.capability || {};
+  const scope = proposal?.approvalScope || {};
+  const title = normalizeText32(capability.title) || normalizeText32(scope.vpsCapabilityId) || "VPS maintenance capability";
+  const operation = normalizeText32(scope.vpsOperation || proposal?.proposal?.operation) || "review";
+  const riskLevel = normalizeText32(capability.riskLevel) || "unknown";
   return [
-    "Dashboard Butler \u306E\u81EA\u7136\u6587 intent \u304B\u3089 VPS privileged maintenance proposal \u307E\u3067\u5230\u9054\u3057\u307E\u3057\u305F\u3002",
+    "VPS \u5FA9\u65E7\u30FB\u4FDD\u5B88\u306E\u78BA\u8A8D\u30EA\u30AF\u30A8\u30B9\u30C8\u3068\u3057\u3066\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002",
     "",
     `- \u5BFE\u8C61 repo: ${repository || "\u672A\u6307\u5B9A"}`,
     `- \u95A2\u9023 Issue: ${relatedIssue ? `#${relatedIssue}` : "\u672A\u6307\u5B9A"}`,
+    `- \u78BA\u8A8D\u5BFE\u8C61: ${title}`,
+    `- \u64CD\u4F5C: ${operation}`,
+    `- risk: ${riskLevel}`,
     `- vpsProposalId: ${proposal?.vpsProposalId || "\u672A\u4F5C\u6210"}`,
-    "- authority: passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002\u627F\u8A8D\u306A\u3057\u306B root / sudo \u5B9F\u884C\u306F\u958B\u59CB\u3057\u307E\u305B\u3093\u3002",
-    "- runtime truth: status=approval_required, rootExecutionStarted=false",
+    "- authority: scoped passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002\u627F\u8A8D\u306A\u3057\u306B root / sudo / helper \u5B9F\u884C\u306F\u958B\u59CB\u3057\u307E\u305B\u3093\u3002",
+    "- runtime truth: status=approval_required, rootExecutionStarted=false, helperExecutionStarted=false",
     proposal?.approvalOperatorUrl ? `- approval URL: ${proposal.approvalOperatorUrl}` : "- approval URL: \u672A\u751F\u6210",
     "",
-    "\u627F\u8A8D\u5F8C\u3001Dashboard Butler \u306F\u3053\u306E\u540C\u3058\u81EA\u7136\u6587\u30D5\u30ED\u30FC\u304B\u3089 helper request / execution handoff / VPS runner queue \u3078\u9032\u3081\u307E\u3059\u3002"
+    "\u627F\u8A8D\u5F8C\u306F VPS runner \u3078\u5FA9\u65E7\u4F9D\u983C\u3092\u6E21\u3057\u307E\u3059\u3002VPS runner \u306E\u5B8C\u4E86 truth \u304C\u623B\u308B\u307E\u3067\u3001live \u5B9F\u884C\u5B8C\u4E86\u3068\u306F\u6271\u3044\u307E\u305B\u3093\u3002"
   ].join("\n");
 }
 function buildDashboardVpsPrivilegedMaintenanceQueuedReply({ repository, relatedIssue, queue } = {}) {
   const execution = queue?.execution || {};
   return [
-    "Dashboard Butler \u306E\u81EA\u7136\u6587 intent \u304B\u3089 VPS helper execution queue \u307E\u3067\u5230\u9054\u3057\u307E\u3057\u305F\u3002",
+    "VPS runner \u3078\u5FA9\u65E7\u4F9D\u983C\u3092\u6E21\u3057\u307E\u3057\u305F\u3002",
     "",
     `- \u5BFE\u8C61 repo: ${repository || execution.repository || "\u672A\u6307\u5B9A"}`,
     `- \u95A2\u9023 Issue: ${relatedIssue ? `#${relatedIssue}` : execution.issueNumber ? `#${execution.issueNumber}` : "\u672A\u6307\u5B9A"}`,
     `- executionId: ${execution.executionId || "\u672A\u751F\u6210"}`,
     `- queueCommentUrl: ${execution.queueCommentUrl || "\u672A\u53D6\u5F97"}`,
-    "- authority: passkey approval \u6E08\u307F\u306E helper handoff \u3060\u3051\u3092 queue \u5316\u3057\u307E\u3057\u305F\u3002",
+    "- authority: passkey approval \u6E08\u307F\u306E bounded handoff \u3060\u3051\u3092 queue \u5316\u3057\u307E\u3057\u305F\u3002",
     "- runtime truth: status=queued_for_vps_helper_execution, rootExecutionStarted=false, helperExecutionStarted=false",
     "",
     "VPS runner pickup \u306E\u5B8C\u4E86 truth \u304C\u623B\u308B\u307E\u3067\u3001live root \u5B9F\u884C\u5B8C\u4E86\u3068\u306F\u6271\u3044\u307E\u305B\u3093\u3002"
