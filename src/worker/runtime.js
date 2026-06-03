@@ -9390,7 +9390,7 @@ function buildDashboardCostAwareFastPathMessages({
       status: "replied",
       messageId: `dashboard_butler_cost_fast_path:${crypto.randomUUID()}`,
       createdAt,
-      text: buildDashboardCostAwareFastPathReplyText({ repository, relatedIssue })
+      text: buildDashboardCostAwareFastPathReplyText({ repository, relatedIssue, text })
     },
     { threadId }
   );
@@ -9436,21 +9436,39 @@ function isDashboardCostAwareLightweightIntent({ text = "", mediaReferences = []
   return !heavyPatterns.some((pattern) => pattern.test(normalized));
 }
 
-function buildDashboardCostAwareFastPathReplyText({ repository = "", relatedIssue = "" } = {}) {
+function buildDashboardCostAwareFastPathReplyText({ repository = "", relatedIssue = "", text = "" } = {}) {
   const scope = [
     repository ? `対象 repo: ${repository}` : "対象 repo: 未指定",
-    relatedIssue ? `関連 Issue: #${relatedIssue}` : "関連 Issue: 未指定"
+    relatedIssue ? `関連 Issue: Issue #${relatedIssue}` : "関連 Issue: 未指定"
   ].join("\n");
+  const ownerText = sanitizeDashboardChatText(text);
+  const isQualityConcern =
+    /VTDD|品質|機能|落と|足りない|思ったもの|壊|劣化|改悪/.test(ownerText) ||
+    /quality|feature|capability|regress/i.test(ownerText);
+  const answer = isQualityConcern
+    ? [
+        "結論から言うと、削る場所を間違えると VTDD 自体が足りないものになります。",
+        "",
+        "削ってよいのは、毎回 Codex app-server / VPS Codex CLI を起動しなくても答えられる入口だけです。たとえば cost 方針の説明、既に Worker が持っている軽い状態説明、明白な read/status の受け付けです。",
+        "",
+        "削ってはいけないのは、Issue / PR / reviewer / CI / E2E / merge / deploy の gate です。ここを軽量化で飛ばすと、VTDD の目的そのものが壊れます。",
+        "",
+        "なので方針は「機能を薄くする」ではなく、「Codex を起動しなくてよい定型入口だけ Worker で返し、判断や実装が必要になったら Codex に渡す」です。"
+      ]
+    : [
+        "Codex usage を削る対象は、通常会話や cost/status の入口で毎回 Codex turn を起動する部分です。",
+        "",
+        "Issue / PR / reviewer / CI / E2E / merge / deploy の gate は削りません。ここを削ると VTDD の品質と安全境界が落ちます。",
+        "",
+        "重い実装、深い repo truth 読み、判断が必要な相談になった時だけ、Butler は Codex app-server に渡します。"
+      ];
   return [
-    "この返答は Dashboard Worker の軽量 fast path で返しています。Codex app-server / VPS Codex CLI は起動していません。",
+    ...answer,
     "",
+    "補足:",
     scope,
     "cost_boundary: lightweight_worker_reply",
-    "codexWillStart: false",
-    "",
-    "削る対象は、通常会話や cost/status の入口で毎回 Codex turn を起動する部分です。Issue / PR / reviewer / CI / E2E / merge / deploy の gate は削りません。",
-    "",
-    "次に重い実装や深い repo truth 読みが必要になった時だけ、Butler は Codex app-server に渡し、その時点で Codex usage を消費し得ることを表示します。"
+    "codexWillStart: false"
   ].join("\n");
 }
 

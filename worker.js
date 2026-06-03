@@ -65726,7 +65726,7 @@ function buildDashboardCostAwareFastPathMessages({
       status: "replied",
       messageId: `dashboard_butler_cost_fast_path:${crypto.randomUUID()}`,
       createdAt,
-      text: buildDashboardCostAwareFastPathReplyText({ repository, relatedIssue })
+      text: buildDashboardCostAwareFastPathReplyText({ repository, relatedIssue, text })
     },
     { threadId }
   );
@@ -65757,21 +65757,35 @@ function isDashboardCostAwareLightweightIntent({ text = "", mediaReferences = []
   ];
   return !heavyPatterns.some((pattern) => pattern.test(normalized));
 }
-function buildDashboardCostAwareFastPathReplyText({ repository = "", relatedIssue = "" } = {}) {
+function buildDashboardCostAwareFastPathReplyText({ repository = "", relatedIssue = "", text = "" } = {}) {
   const scope = [
     repository ? `\u5BFE\u8C61 repo: ${repository}` : "\u5BFE\u8C61 repo: \u672A\u6307\u5B9A",
-    relatedIssue ? `\u95A2\u9023 Issue: #${relatedIssue}` : "\u95A2\u9023 Issue: \u672A\u6307\u5B9A"
+    relatedIssue ? `\u95A2\u9023 Issue: Issue #${relatedIssue}` : "\u95A2\u9023 Issue: \u672A\u6307\u5B9A"
   ].join("\n");
-  return [
-    "\u3053\u306E\u8FD4\u7B54\u306F Dashboard Worker \u306E\u8EFD\u91CF fast path \u3067\u8FD4\u3057\u3066\u3044\u307E\u3059\u3002Codex app-server / VPS Codex CLI \u306F\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
+  const ownerText = sanitizeDashboardChatText(text);
+  const isQualityConcern = /VTDD|品質|機能|落と|足りない|思ったもの|壊|劣化|改悪/.test(ownerText) || /quality|feature|capability|regress/i.test(ownerText);
+  const answer = isQualityConcern ? [
+    "\u7D50\u8AD6\u304B\u3089\u8A00\u3046\u3068\u3001\u524A\u308B\u5834\u6240\u3092\u9593\u9055\u3048\u308B\u3068 VTDD \u81EA\u4F53\u304C\u8DB3\u308A\u306A\u3044\u3082\u306E\u306B\u306A\u308A\u307E\u3059\u3002",
     "",
+    "\u524A\u3063\u3066\u3088\u3044\u306E\u306F\u3001\u6BCE\u56DE Codex app-server / VPS Codex CLI \u3092\u8D77\u52D5\u3057\u306A\u304F\u3066\u3082\u7B54\u3048\u3089\u308C\u308B\u5165\u53E3\u3060\u3051\u3067\u3059\u3002\u305F\u3068\u3048\u3070 cost \u65B9\u91DD\u306E\u8AAC\u660E\u3001\u65E2\u306B Worker \u304C\u6301\u3063\u3066\u3044\u308B\u8EFD\u3044\u72B6\u614B\u8AAC\u660E\u3001\u660E\u767D\u306A read/status \u306E\u53D7\u3051\u4ED8\u3051\u3067\u3059\u3002",
+    "",
+    "\u524A\u3063\u3066\u306F\u3044\u3051\u306A\u3044\u306E\u306F\u3001Issue / PR / reviewer / CI / E2E / merge / deploy \u306E gate \u3067\u3059\u3002\u3053\u3053\u3092\u8EFD\u91CF\u5316\u3067\u98DB\u3070\u3059\u3068\u3001VTDD \u306E\u76EE\u7684\u305D\u306E\u3082\u306E\u304C\u58CA\u308C\u307E\u3059\u3002",
+    "",
+    "\u306A\u306E\u3067\u65B9\u91DD\u306F\u300C\u6A5F\u80FD\u3092\u8584\u304F\u3059\u308B\u300D\u3067\u306F\u306A\u304F\u3001\u300CCodex \u3092\u8D77\u52D5\u3057\u306A\u304F\u3066\u3088\u3044\u5B9A\u578B\u5165\u53E3\u3060\u3051 Worker \u3067\u8FD4\u3057\u3001\u5224\u65AD\u3084\u5B9F\u88C5\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u3089 Codex \u306B\u6E21\u3059\u300D\u3067\u3059\u3002"
+  ] : [
+    "Codex usage \u3092\u524A\u308B\u5BFE\u8C61\u306F\u3001\u901A\u5E38\u4F1A\u8A71\u3084 cost/status \u306E\u5165\u53E3\u3067\u6BCE\u56DE Codex turn \u3092\u8D77\u52D5\u3059\u308B\u90E8\u5206\u3067\u3059\u3002",
+    "",
+    "Issue / PR / reviewer / CI / E2E / merge / deploy \u306E gate \u306F\u524A\u308A\u307E\u305B\u3093\u3002\u3053\u3053\u3092\u524A\u308B\u3068 VTDD \u306E\u54C1\u8CEA\u3068\u5B89\u5168\u5883\u754C\u304C\u843D\u3061\u307E\u3059\u3002",
+    "",
+    "\u91CD\u3044\u5B9F\u88C5\u3001\u6DF1\u3044 repo truth \u8AAD\u307F\u3001\u5224\u65AD\u304C\u5FC5\u8981\u306A\u76F8\u8AC7\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001Butler \u306F Codex app-server \u306B\u6E21\u3057\u307E\u3059\u3002"
+  ];
+  return [
+    ...answer,
+    "",
+    "\u88DC\u8DB3:",
     scope,
     "cost_boundary: lightweight_worker_reply",
-    "codexWillStart: false",
-    "",
-    "\u524A\u308B\u5BFE\u8C61\u306F\u3001\u901A\u5E38\u4F1A\u8A71\u3084 cost/status \u306E\u5165\u53E3\u3067\u6BCE\u56DE Codex turn \u3092\u8D77\u52D5\u3059\u308B\u90E8\u5206\u3067\u3059\u3002Issue / PR / reviewer / CI / E2E / merge / deploy \u306E gate \u306F\u524A\u308A\u307E\u305B\u3093\u3002",
-    "",
-    "\u6B21\u306B\u91CD\u3044\u5B9F\u88C5\u3084\u6DF1\u3044 repo truth \u8AAD\u307F\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001Butler \u306F Codex app-server \u306B\u6E21\u3057\u3001\u305D\u306E\u6642\u70B9\u3067 Codex usage \u3092\u6D88\u8CBB\u3057\u5F97\u308B\u3053\u3068\u3092\u8868\u793A\u3057\u307E\u3059\u3002"
+    "codexWillStart: false"
   ].join("\n");
 }
 async function filterDashboardAppServerBridgeMessagesForAppend({ store, threadId, messages = [] } = {}) {
