@@ -43,14 +43,14 @@
         "width": 690
       },
       "bubble": {
-        "left": 189.203125,
+        "left": 467,
         "right": 755,
-        "width": 565.796875
+        "width": 288
       },
       "body": {
-        "left": 205.203125,
+        "left": 483,
         "right": 739,
-        "width": 533.796875,
+        "width": 256,
         "height": 26.390625
       },
       "styles": {
@@ -68,14 +68,14 @@
         "width": 690
       },
       "bubble": {
-        "left": 189.203125,
+        "left": 343.4375,
         "right": 755,
-        "width": 565.796875
+        "width": 411.5625
       },
       "body": {
-        "left": 205.203125,
+        "left": 359.4375,
         "right": 739,
-        "width": 533.796875,
+        "width": 379.5625,
         "height": 26.390625
       },
       "styles": {

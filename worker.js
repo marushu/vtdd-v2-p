@@ -70362,7 +70362,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .copy-code:hover, .copy-code:focus-visible { opacity: 1; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .message-entry.butler .bubble, .message-entry.system .bubble { width: 100%; }
-    .bubble.owner { position: relative; align-self: flex-end; width: min(720px, 100%); background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
+    .bubble.owner { position: relative; align-self: flex-end; width: fit-content; max-width: min(720px, 100%); background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner .message-body, .bubble.owner p { color: var(--owner-text); margin: 0; }
     .bubble.owner ul, .bubble.owner li, .bubble.owner li::marker { color: var(--owner-text); }
     .bubble.owner .message-body code { color: var(--owner-code-text); }

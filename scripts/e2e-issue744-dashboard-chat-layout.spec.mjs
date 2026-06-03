@@ -274,6 +274,14 @@ function assertLayout(state) {
   if (state.ownerNoSpace.bubble.width < Math.min(420, state.ownerNoSpace.entry.width * 0.45)) {
     throw new Error(`no-space Japanese owner bubble collapsed too narrow: ${JSON.stringify(state.ownerNoSpace.bubble)}`);
   }
+  if (state.ownerShort.bubble.width > state.ownerShort.entry.width * 0.9) {
+    throw new Error(
+      `short owner bubble expanded too wide instead of fitting content: ${JSON.stringify({
+        entry: state.ownerShort.entry,
+        bubble: state.ownerShort.bubble
+      })}`
+    );
+  }
   if (state.ownerShort.styles.bubbleBackgroundColor === "rgba(0, 0, 0, 0)") {
     throw new Error("short owner bubble background is transparent");
   }

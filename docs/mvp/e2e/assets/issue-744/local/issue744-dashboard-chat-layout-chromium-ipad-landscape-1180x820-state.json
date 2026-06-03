@@ -43,14 +43,14 @@
         "width": 1010
       },
       "bubble": {
-        "left": 375,
+        "left": 791,
         "right": 1095,
-        "width": 720
+        "width": 304
       },
       "body": {
-        "left": 391,
+        "left": 807,
         "right": 1079,
-        "width": 688,
+        "width": 272,
         "height": 28.046875
       },
       "styles": {
@@ -68,14 +68,14 @@
         "width": 1010
       },
       "bubble": {
-        "left": 375,
+        "left": 659.71875,
         "right": 1095,
-        "width": 720
+        "width": 435.28125
       },
       "body": {
-        "left": 391,
+        "left": 675.71875,
         "right": 1079,
-        "width": 688,
+        "width": 403.28125,
         "height": 28.046875
       },
       "styles": {
