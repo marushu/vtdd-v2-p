@@ -57742,12 +57742,31 @@ var DashboardChatRoom = class {
       now,
       origin
     });
+    const costAwareFastPathMessages = vpsMaintenanceMessages ? null : buildDashboardCostAwareFastPathMessages({
+      threadId,
+      repository,
+      relatedIssue,
+      text,
+      mediaReferences: mediaValidation.mediaReferences,
+      now
+    });
     const bridgeSockets = this.connectedAppServerBridgeSockets(threadId);
     if (bridgeSockets.length === 0) {
       const messages2 = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
       if (vpsMaintenanceMessages) {
         const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
+        await this.broadcastThread({ threadId, messages: [...messages2, ...butlerMessages] });
+        this.sendSocket(socket, {
+          type: "owner_message_accepted",
+          ok: true,
+          clientMessageId,
+          messageId: ownerMessage.messageId
+        });
+        return;
+      }
+      if (costAwareFastPathMessages) {
+        const butlerMessages = store ? await store.appendMany(threadId, costAwareFastPathMessages) : costAwareFastPathMessages;
         await this.broadcastThread({ threadId, messages: [...messages2, ...butlerMessages] });
         this.sendSocket(socket, {
           type: "owner_message_accepted",
@@ -57790,10 +57809,15 @@ var DashboardChatRoom = class {
       await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
       return;
     }
+    if (costAwareFastPathMessages) {
+      const butlerMessages = store ? await store.appendMany(threadId, costAwareFastPathMessages) : costAwareFastPathMessages;
+      await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
+      return;
+    }
     await this.broadcastTransientStatus({
       threadId,
       status: "thinking",
-      text: "app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059"
+      text: buildDashboardAppServerUsageTransientText({ text, repository, relatedIssue })
     });
     await this.dispatchOwnerMessageToAppServerBridge({
       threadId,
@@ -65299,6 +65323,85 @@ function buildDashboardAppServerFailureTransientText({ messageStatus = "", failu
     return "\u518D\u63A5\u7D9A\u3068\u72B6\u614B\u78BA\u8A8D\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002";
   }
   return sanitizeDashboardChatText(failureText) || "app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059";
+}
+function buildDashboardAppServerUsageTransientText({ text = "", repository = "", relatedIssue = "" } = {}) {
+  const scope = [
+    repository ? `repo=${repository}` : "repo=\u672A\u6307\u5B9A",
+    relatedIssue ? `Issue #${relatedIssue}` : "Issue=\u672A\u6307\u5B9A"
+  ].join(" / ");
+  if (isDashboardCostAwareLightweightIntent({ text })) {
+    return `\u8EFD\u91CF\u76F8\u8AC7\u3068\u3057\u3066\u6271\u3048\u306A\u3044\u6587\u8108\u304C\u542B\u307E\u308C\u308B\u305F\u3081\u3001Codex app-server \u306B\u6E21\u3057\u307E\u3059\u3002Codex usage \u3092\u6D88\u8CBB\u3057\u5F97\u307E\u3059\u3002${scope}`;
+  }
+  return `Codex app-server \u306B\u6E21\u3057\u3066\u3044\u307E\u3059\u3002Codex usage \u3092\u6D88\u8CBB\u3057\u5F97\u307E\u3059\u3002${scope}`;
+}
+function buildDashboardCostAwareFastPathMessages({
+  threadId,
+  repository = "",
+  relatedIssue = "",
+  text = "",
+  mediaReferences = [],
+  now = ""
+} = {}) {
+  if (!isDashboardCostAwareLightweightIntent({ text, mediaReferences })) {
+    return null;
+  }
+  const createdAt = normalizeIsoTimestamp(now) || (/* @__PURE__ */ new Date()).toISOString();
+  const message = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      repository,
+      relatedIssue,
+      status: "replied",
+      messageId: `dashboard_butler_cost_fast_path:${crypto.randomUUID()}`,
+      createdAt,
+      text: buildDashboardCostAwareFastPathReplyText({ repository, relatedIssue })
+    },
+    { threadId }
+  );
+  return message ? [message] : null;
+}
+function isDashboardCostAwareLightweightIntent({ text = "", mediaReferences = [] } = {}) {
+  if (Array.isArray(mediaReferences) && mediaReferences.length > 0) {
+    return false;
+  }
+  const normalized = sanitizeDashboardChatText(text);
+  if (!normalized) {
+    return false;
+  }
+  const lower = normalized.toLowerCase();
+  const hasCostTerm = lower.includes("codex usage") || lower.includes("usage") || lower.includes("quota") || lower.includes("credit") || lower.includes("cost") || lower.includes("fast path") || normalized.includes("\u30AF\u30EC\u30B8\u30C3\u30C8") || normalized.includes("\u4F7F\u7528\u91CF") || normalized.includes("\u6D88\u8CBB") || normalized.includes("\u7BC0\u7D04") || normalized.includes("\u524A\u308B") || normalized.includes("\u8EFD\u91CF") || normalized.includes("\u30B3\u30B9\u30C8");
+  if (!hasCostTerm) {
+    return false;
+  }
+  const heavyPatterns = [
+    /\bGO\b/,
+    /\bmerge\b/i,
+    /\bdeploy\b/i,
+    /\breviewer\b/i,
+    /\bci\b/i,
+    /\bpr\s*#?\d+/i,
+    /#\d+\b/,
+    /実装|修正|直して|作って|追加|削除|マージ|デプロイ|レビュー|レビュアー|テスト|CI|PR|Issue|ファイル|画像|動画|添付|調査して|探して/
+  ];
+  return !heavyPatterns.some((pattern) => pattern.test(normalized));
+}
+function buildDashboardCostAwareFastPathReplyText({ repository = "", relatedIssue = "" } = {}) {
+  const scope = [
+    repository ? `\u5BFE\u8C61 repo: ${repository}` : "\u5BFE\u8C61 repo: \u672A\u6307\u5B9A",
+    relatedIssue ? `\u95A2\u9023 Issue: #${relatedIssue}` : "\u95A2\u9023 Issue: \u672A\u6307\u5B9A"
+  ].join("\n");
+  return [
+    "\u3053\u306E\u8FD4\u7B54\u306F Dashboard Worker \u306E\u8EFD\u91CF fast path \u3067\u8FD4\u3057\u3066\u3044\u307E\u3059\u3002Codex app-server / VPS Codex CLI \u306F\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
+    "",
+    scope,
+    "cost_boundary: lightweight_worker_reply",
+    "codexWillStart: false",
+    "",
+    "\u524A\u308B\u5BFE\u8C61\u306F\u3001\u901A\u5E38\u4F1A\u8A71\u3084 cost/status \u306E\u5165\u53E3\u3067\u6BCE\u56DE Codex turn \u3092\u8D77\u52D5\u3059\u308B\u90E8\u5206\u3067\u3059\u3002Issue / PR / reviewer / CI / E2E / merge / deploy \u306E gate \u306F\u524A\u308A\u307E\u305B\u3093\u3002",
+    "",
+    "\u6B21\u306B\u91CD\u3044\u5B9F\u88C5\u3084\u6DF1\u3044 repo truth \u8AAD\u307F\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001Butler \u306F Codex app-server \u306B\u6E21\u3057\u3001\u305D\u306E\u6642\u70B9\u3067 Codex usage \u3092\u6D88\u8CBB\u3057\u5F97\u308B\u3053\u3068\u3092\u8868\u793A\u3057\u307E\u3059\u3002"
+  ].join("\n");
 }
 async function filterDashboardAppServerBridgeMessagesForAppend({ store, threadId, messages = [] } = {}) {
   const normalizedMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
