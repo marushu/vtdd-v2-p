@@ -11726,6 +11726,31 @@ function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
   const normalized = normalizeText(text);
   if (!normalized) return false;
   const lower = normalized.toLowerCase();
+  const mentionsRecoveryTarget =
+    lower.includes("runner") ||
+    lower.includes("app-server") ||
+    lower.includes("app server") ||
+    lower.includes("bridge") ||
+    normalized.includes("ランナー") ||
+    normalized.includes("実行器") ||
+    normalized.includes("ブリッジ");
+  const mentionsRecoveryAction =
+    lower.includes("status") ||
+    lower.includes("health") ||
+    lower.includes("state") ||
+    lower.includes("logs") ||
+    lower.includes("log") ||
+    lower.includes("restart") ||
+    lower.includes("reconnect") ||
+    normalized.includes("状態") ||
+    normalized.includes("確認") ||
+    normalized.includes("生存") ||
+    normalized.includes("稼働") ||
+    normalized.includes("ログ") ||
+    normalized.includes("再起動") ||
+    normalized.includes("復旧") ||
+    normalized.includes("落ち") ||
+    normalized.includes("止ま");
   const hasVpsMaintenance =
     lower.includes("vps") &&
     (lower.includes("privileged") ||
@@ -11737,7 +11762,7 @@ function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
   const hasJapaneseMaintenance =
     (lower.includes("root") || lower.includes("sudo") || lower.includes("helper")) &&
     (normalized.includes("保守") || normalized.includes("復旧") || normalized.includes("承認"));
-  return hasVpsMaintenance || hasJapaneseMaintenance;
+  return hasVpsMaintenance || hasJapaneseMaintenance || (mentionsRecoveryTarget && mentionsRecoveryAction);
 }
 
 function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, relatedIssue, env } = {}) {

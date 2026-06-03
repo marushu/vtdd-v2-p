@@ -3037,6 +3037,49 @@ test("worker maps Dashboard Butler VPS runner status text to the low-risk preset
   ]);
 });
 
+test("worker detects app-server bridge recovery intent without internal VPS helper words", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 637,
+        text: "app-server bridge が落ちてないか状態を確認して。"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.status, "approval_required");
+  assert.equal(body.execution.approvalScope.vpsCapabilityId, "systemd.user.app.server.bridge.status");
+  assert.equal(body.execution.approvalScope.vpsOperation, "review");
+  assert.equal(body.execution.runtimeTruth.capabilityId, "systemd.user.app.server.bridge.status");
+  assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
+  assert.match(body.messages[1].text, /自然文 intent/);
+  assert.match(body.messages[1].text, /passkey approval が必要/);
+
+  const records = await provider.retrieve({ ids: [body.execution.vpsProposalId] });
+  const proposalRecord = records[0];
+  assert.equal(proposalRecord.content.proposal.capability.commandClass, "systemd_user_app_server_bridge_status");
+  assert.equal(proposalRecord.content.proposal.capability.riskLevel, "low");
+  assert.deepEqual(proposalRecord.content.proposal.capability.allowedArgs, [
+    "systemctl --user is-active vtdd-dashboard-app-server-bridge.service"
+  ]);
+});
+
 test("worker reports Dashboard VPS maintenance config blockers before creating a proposal", async () => {
   const store = createInMemoryDashboardChatStore();
   const provider = createInMemoryMemoryProvider();
