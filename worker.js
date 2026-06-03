@@ -61394,14 +61394,48 @@ async function handleGitHubActionsEventRequest(request, env) {
       reason: "dashboard event store is not configured"
     });
   }
+  const chatStore = resolveDashboardChatStore(env);
+  if (!chatStore) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
   const recorded = await recordDashboardNotificationEvent({
     env,
     eventStore: store,
     event: event.event
   });
+  const threadId = event.threadId || buildDashboardEventDefaultThreadId(event.event);
+  const chatMessage = buildGitHubActionsDashboardChatMessage({
+    event: recorded.event,
+    threadId
+  });
+  let messages = [];
+  if (chatMessage) {
+    try {
+      messages = await chatStore.appendMany(threadId, [chatMessage]);
+    } catch (error2) {
+      await store.delete(recorded.event.id);
+      return json(502, {
+        ok: false,
+        error: "dashboard_event_chat_append_failed",
+        reason: "GitHub Actions event was not saved because Butler chat append failed",
+        rollback: {
+          eventId: recorded.event.id,
+          notificationDeleted: true
+        }
+      });
+    }
+  }
+  const webSocketBroadcast = messages.length > 0 ? await notifyDashboardChatRoom({ env, threadId, messages }) : false;
   return json(202, {
     ok: true,
     event: recorded.event,
+    threadId,
+    messages,
+    webSocketBroadcast,
     webPush: recorded.webPush
   });
 }
@@ -68992,6 +69026,7 @@ function normalizeGitHubActionsEvent(payload) {
   );
   const pullNumber = normalizeIssue6(input.pullNumber || input.pull_number || input.prNumber || input.pr_number) || inferPullNumberFromText(`${title} ${changeSummary}`);
   const issueNumber = normalizeIssue6(input.issueNumber || input.issue_number);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id);
   if (!repository) {
     return {
       ok: false,
@@ -69047,8 +69082,81 @@ function normalizeGitHubActionsEvent(payload) {
   };
   return {
     ok: true,
-    event
+    event,
+    threadId
   };
+}
+function buildDashboardEventDefaultThreadId(event) {
+  const record2 = normalizeDashboardEventRecord(event);
+  const repository = normalizeCanonicalRepositoryInput(record2.repository);
+  if (repository) {
+    return normalizeDashboardThreadId(`dashboard-main-${repository.replace("/", "-")}`);
+  }
+  return "dashboard-main-unresolved";
+}
+function buildGitHubActionsDashboardChatMessage({ event, threadId } = {}) {
+  const record2 = normalizeDashboardEventRecord(event);
+  const resolvedThreadId = normalizeDashboardThreadId(threadId) || buildDashboardEventDefaultThreadId(record2);
+  if (!resolvedThreadId || record2.kind !== "github_actions_workflow_run") {
+    return null;
+  }
+  const messageId = `dashboard-event:${record2.id}`;
+  return normalizeDashboardChatMessage(
+    {
+      threadId: resolvedThreadId,
+      messageId,
+      role: "system",
+      repository: record2.repository,
+      relatedIssue: record2.issueNumber,
+      status: record2.conclusion === "failure" || record2.conclusion === "cancelled" ? "blocked" : "replied",
+      text: buildGitHubActionsDashboardChatMessageText(record2),
+      createdAt: record2.updatedAt || record2.createdAt
+    },
+    { threadId: resolvedThreadId }
+  );
+}
+function buildGitHubActionsDashboardChatMessageText(event) {
+  const record2 = normalizeDashboardEventRecord(event);
+  const conclusion = normalizeDashboardEventText(record2.conclusion || record2.status) || "unknown";
+  const isDeploy = normalize7(record2.workflowName).includes("deploy");
+  const title = buildDashboardEventDisplayTitle(record2, {
+    workflowName: record2.workflowName,
+    conclusion
+  });
+  const lines = [
+    isDeploy ? "\u30C7\u30D7\u30ED\u30A4\u5B8C\u4E86\u30A4\u30D9\u30F3\u30C8\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002" : "GitHub Actions \u306E\u5B8C\u4E86\u30A4\u30D9\u30F3\u30C8\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002",
+    "",
+    "\u72B6\u614B:",
+    `- repo: ${record2.repository || "\u672A\u78BA\u8A8D"}`,
+    `- workflow: ${record2.workflowName || "\u672A\u78BA\u8A8D"}`,
+    `- status: ${record2.status || "\u672A\u78BA\u8A8D"}`,
+    `- conclusion: ${conclusion}`
+  ];
+  if (record2.pullNumber) {
+    lines.push(`- PR: PR #${record2.pullNumber}`);
+  }
+  if (record2.issueNumber) {
+    lines.push(`- Issue: Issue #${record2.issueNumber}`);
+  }
+  if (record2.headSha) {
+    lines.push(`- sha: ${record2.headSha.slice(0, 12)}`);
+  }
+  if (title) {
+    lines.push("", "\u5185\u5BB9:", title);
+  }
+  lines.push("", "\u6B21:");
+  if (isDeploy && conclusion === "success") {
+    lines.push("- production E2E / runtime truth \u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002");
+  } else if (conclusion === "failure" || conclusion === "cancelled" || conclusion === "timed_out") {
+    lines.push("- deploy / Actions \u306E\u5931\u6557\u539F\u56E0\u3092\u78BA\u8A8D\u3057\u3001blocker \u3068\u6B21 action \u3092\u51FA\u3057\u307E\u3059\u3002");
+  } else {
+    lines.push("- \u6700\u65B0 event \u3068\u6B8B\u308B blocker \u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002");
+  }
+  lines.push("- merge / deploy / credential / permission \u306F\u3001\u3053\u306E event \u3060\u3051\u3067\u306F\u81EA\u52D5\u5B9F\u884C\u3057\u307E\u305B\u3093\u3002");
+  if (record2.runUrl) {
+    lines.push("", `Actions: ${record2.runUrl}`);
+  }
+  return lines.join("\n");
 }
 function normalizeVpsRunnerDashboardEvent(payload) {
   const input = normalizeObject12(payload);

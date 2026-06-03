@@ -4541,14 +4541,52 @@ async function handleGitHubActionsEventRequest(request, env) {
     });
   }
 
+  const chatStore = resolveDashboardChatStore(env);
+  if (!chatStore) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+
   const recorded = await recordDashboardNotificationEvent({
     env,
     eventStore: store,
     event: event.event
   });
+
+  const threadId = event.threadId || buildDashboardEventDefaultThreadId(event.event);
+  const chatMessage = buildGitHubActionsDashboardChatMessage({
+    event: recorded.event,
+    threadId
+  });
+  let messages = [];
+  if (chatMessage) {
+    try {
+      messages = await chatStore.appendMany(threadId, [chatMessage]);
+    } catch (error) {
+      await store.delete(recorded.event.id);
+      return json(502, {
+        ok: false,
+        error: "dashboard_event_chat_append_failed",
+        reason: "GitHub Actions event was not saved because Butler chat append failed",
+        rollback: {
+          eventId: recorded.event.id,
+          notificationDeleted: true
+        }
+      });
+    }
+  }
+  const webSocketBroadcast =
+    messages.length > 0 ? await notifyDashboardChatRoom({ env, threadId, messages }) : false;
+
   return json(202, {
     ok: true,
     event: recorded.event,
+    threadId,
+    messages,
+    webSocketBroadcast,
     webPush: recorded.webPush
   });
 }
@@ -13106,6 +13144,7 @@ function normalizeGitHubActionsEvent(payload) {
     normalizeIssue(input.pullNumber || input.pull_number || input.prNumber || input.pr_number) ||
     inferPullNumberFromText(`${title} ${changeSummary}`);
   const issueNumber = normalizeIssue(input.issueNumber || input.issue_number);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id);
 
   if (!repository) {
     return {
@@ -13164,8 +13203,84 @@ function normalizeGitHubActionsEvent(payload) {
 
   return {
     ok: true,
-    event
+    event,
+    threadId
   };
+}
+
+function buildDashboardEventDefaultThreadId(event) {
+  const record = normalizeDashboardEventRecord(event);
+  const repository = normalizeCanonicalRepositoryInput(record.repository);
+  if (repository) {
+    return normalizeDashboardThreadId(`dashboard-main-${repository.replace("/", "-")}`);
+  }
+  return "dashboard-main-unresolved";
+}
+
+function buildGitHubActionsDashboardChatMessage({ event, threadId } = {}) {
+  const record = normalizeDashboardEventRecord(event);
+  const resolvedThreadId = normalizeDashboardThreadId(threadId) || buildDashboardEventDefaultThreadId(record);
+  if (!resolvedThreadId || record.kind !== "github_actions_workflow_run") {
+    return null;
+  }
+  const messageId = `dashboard-event:${record.id}`;
+  return normalizeDashboardChatMessage(
+    {
+      threadId: resolvedThreadId,
+      messageId,
+      role: "system",
+      repository: record.repository,
+      relatedIssue: record.issueNumber,
+      status: record.conclusion === "failure" || record.conclusion === "cancelled" ? "blocked" : "replied",
+      text: buildGitHubActionsDashboardChatMessageText(record),
+      createdAt: record.updatedAt || record.createdAt
+    },
+    { threadId: resolvedThreadId }
+  );
+}
+
+function buildGitHubActionsDashboardChatMessageText(event) {
+  const record = normalizeDashboardEventRecord(event);
+  const conclusion = normalizeDashboardEventText(record.conclusion || record.status) || "unknown";
+  const isDeploy = normalize(record.workflowName).includes("deploy");
+  const title = buildDashboardEventDisplayTitle(record, {
+    workflowName: record.workflowName,
+    conclusion
+  });
+  const lines = [
+    isDeploy ? "デプロイ完了イベントを受信しました。" : "GitHub Actions の完了イベントを受信しました。",
+    "",
+    "状態:",
+    `- repo: ${record.repository || "未確認"}`,
+    `- workflow: ${record.workflowName || "未確認"}`,
+    `- status: ${record.status || "未確認"}`,
+    `- conclusion: ${conclusion}`
+  ];
+  if (record.pullNumber) {
+    lines.push(`- PR: PR #${record.pullNumber}`);
+  }
+  if (record.issueNumber) {
+    lines.push(`- Issue: Issue #${record.issueNumber}`);
+  }
+  if (record.headSha) {
+    lines.push(`- sha: ${record.headSha.slice(0, 12)}`);
+  }
+  if (title) {
+    lines.push("", "内容:", title);
+  }
+  lines.push("", "次:");
+  if (isDeploy && conclusion === "success") {
+    lines.push("- production E2E / runtime truth を確認します。");
+  } else if (conclusion === "failure" || conclusion === "cancelled" || conclusion === "timed_out") {
+    lines.push("- deploy / Actions の失敗原因を確認し、blocker と次 action を出します。");
+  } else {
+    lines.push("- 最新 event と残る blocker を確認します。");
+  }
+  lines.push("- merge / deploy / credential / permission は、この event だけでは自動実行しません。");
+  if (record.runUrl) {
+    lines.push("", `Actions: ${record.runUrl}`);
+  }
+  return lines.join("\n");
 }
 
 function normalizeVpsRunnerDashboardEvent(payload) {

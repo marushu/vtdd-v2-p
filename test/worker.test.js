@@ -343,7 +343,14 @@ function createInMemoryDashboardChatStore() {
         ...message,
         threadId
       }));
-      list.push(...normalizedMessages);
+      for (const message of normalizedMessages) {
+        const existingIndex = list.findIndex((item) => item.messageId === message.messageId);
+        if (existingIndex >= 0) {
+          list[existingIndex] = message;
+        } else {
+          list.push(message);
+        }
+      }
       messagesByThread.set(threadId, list);
       return normalizedMessages;
     },
@@ -6091,6 +6098,8 @@ test("worker redacts dashboard push subscription raw material from D1 payload_js
 
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {
   const store = createInMemoryDashboardEventStore();
+  const chatStore = createInMemoryDashboardChatStore();
+  const rooms = createMockDashboardChatRoomNamespace();
   const pushStore = createInMemoryDashboardPushSubscriptionStore();
   const pushKeys = await createTestPushSubscription({
     endpointHash: "deploy-push-endpoint",
@@ -6129,6 +6138,8 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
       ...gatewayAuthEnv,
       ...vapidEnv,
       DASHBOARD_EVENT_STORE: store,
+      DASHBOARD_CHAT_STORE: chatStore,
+      DASHBOARD_CHAT_ROOMS: rooms.namespace,
       DASHBOARD_PUSH_SUBSCRIPTION_STORE: pushStore
     }
   );
@@ -6143,6 +6154,22 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(eventBody.event.pwaNotificationStatus, "sent");
   assert.equal(eventBody.event.pwaNotificationAttempted, 1);
   assert.equal(eventBody.event.pwaNotificationDelivered, 1);
+  assert.equal(eventBody.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(eventBody.messages.length, 1);
+  assert.equal(eventBody.messages[0].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458");
+  assert.equal(eventBody.messages[0].role, "system");
+  assert.equal(eventBody.messages[0].repository, "marushu/vtdd-v2-p");
+  assert.equal(eventBody.messages[0].relatedIssue, null);
+  assert.equal(eventBody.messages[0].status, "replied");
+  assert.equal(eventBody.messages[0].text.includes("デプロイ完了イベントを受信しました。"), true);
+  assert.equal(eventBody.messages[0].text.includes("- PR: PR #552"), true);
+  assert.equal(eventBody.messages[0].text.includes("- production E2E / runtime truth を確認します。"), true);
+  assert.equal(eventBody.messages[0].text.includes("merge / deploy / credential / permission"), true);
+  assert.equal(JSON.stringify(eventBody.messages).includes("approval:must-not-persist"), false);
+  assert.equal(JSON.stringify(eventBody.messages).includes("secret-must-not-persist"), false);
+  assert.equal(eventBody.webSocketBroadcast, true);
+  assert.equal(rooms.calls.length, 1);
+  assert.equal(rooms.calls[0].name, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(pushCalls.length, 1);
   assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
   assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
@@ -6171,6 +6198,59 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(storedDeployEvent.pwaNotificationStatus, "sent");
   assert.equal(storedDeployEvent.pwaNotificationAttempted, 1);
   assert.equal(storedDeployEvent.pwaNotificationDelivered, 1);
+
+  const chatResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: chatStore }
+  );
+  assert.equal(chatResponse.status, 200);
+  const chatBody = await chatResponse.json();
+  assert.equal(chatBody.messages.length, 1);
+  assert.equal(chatBody.messages[0].role, "system");
+  assert.equal(chatBody.messages[0].text.includes("デプロイ完了イベントを受信しました。"), true);
+  assert.equal(chatBody.messages[0].text.includes("- PR: PR #552"), true);
+  assert.equal(chatBody.messages[0].text.includes("bare #552"), false);
+
+  const duplicateResponse = await worker.fetch(
+    new Request("https://example.com/v2/events/github-actions", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133044458",
+        runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/26133044458",
+        status: "completed",
+        conclusion: "success",
+        headSha: "ef55709c4f52b54f436417acc239ec03a0c999fd",
+        headBranch: "main",
+        displayTitle: "dashboard: 通知カードにPR概要を出す (#534)",
+        changeSummary: "dashboard: 通知カードにPR概要を出す (#534)",
+        pullNumber: 552,
+        updatedAt: "2026-05-20T00:10:02Z"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      ...vapidEnv,
+      DASHBOARD_EVENT_STORE: store,
+      DASHBOARD_CHAT_STORE: chatStore,
+      DASHBOARD_CHAT_ROOMS: rooms.namespace,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: pushStore
+    }
+  );
+  assert.equal(duplicateResponse.status, 202);
+  const duplicateChat = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: chatStore }
+  );
+  const duplicateChatBody = await duplicateChat.json();
+  assert.equal(duplicateChatBody.messages.length, 1);
+  assert.equal(duplicateChatBody.messages[0].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458");
 
   const dashboardResponse = await worker.fetch(
     new Request("https://example.com/dashboard", {
@@ -6366,6 +6446,52 @@ test("worker rejects GitHub Actions deploy completion event without machine auth
   assert.equal(response.status, 401);
 });
 
+test("worker rolls back GitHub Actions notification when Butler chat append fails", async () => {
+  const eventStore = createInMemoryDashboardEventStore();
+  const chatStore = {
+    async appendMany() {
+      throw new Error("chat append failed");
+    },
+    async listThread() {
+      return [];
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/github-actions", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133047777",
+        status: "completed",
+        conclusion: "success",
+        pullNumber: 747,
+        updatedAt: "2026-05-20T00:12:01Z"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: eventStore,
+      DASHBOARD_CHAT_STORE: chatStore
+    }
+  );
+
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "dashboard_event_chat_append_failed");
+  assert.equal(body.rollback.notificationDeleted, true);
+
+  const latest = await eventStore.latest({
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production"
+  });
+  assert.equal(latest, null);
+});
+
 test("worker does not infer PR number from issue-style parenthetical summary", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/events/github-actions", {
@@ -6384,7 +6510,8 @@ test("worker does not infer PR number from issue-style parenthetical summary", a
     }),
     {
       ...gatewayAuthEnv,
-      DASHBOARD_EVENT_STORE: createInMemoryDashboardEventStore()
+      DASHBOARD_EVENT_STORE: createInMemoryDashboardEventStore(),
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore()
     }
   );
 
