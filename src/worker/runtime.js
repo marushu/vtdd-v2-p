@@ -11443,7 +11443,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
     return {
       messageStatus: "blocked",
       reply: [
-        "Dashboard Butler の自然文から VPS helper queue へ進めようとしましたが、memory provider が未接続です。",
+        "VPS maintenance request として受け取りましたが、このチャットでは実行を開始していません。",
         "",
         `- 対象 repo: ${repository || "未指定"}`,
         `- 関連 Issue: ${relatedIssue ? `#${relatedIssue}` : "未指定"}`,
@@ -11737,15 +11737,12 @@ function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
   const mentionsRecoveryAction =
     lower.includes("status") ||
     lower.includes("health") ||
-    lower.includes("state") ||
+    lower.includes("is-active") ||
     lower.includes("logs") ||
     lower.includes("log") ||
     lower.includes("restart") ||
     lower.includes("reconnect") ||
-    normalized.includes("状態") ||
-    normalized.includes("確認") ||
     normalized.includes("生存") ||
-    normalized.includes("稼働") ||
     normalized.includes("ログ") ||
     normalized.includes("再起動") ||
     normalized.includes("復旧") ||
@@ -11906,7 +11903,7 @@ function buildDashboardVpsPrivilegedMaintenanceQueuedReply({ repository, related
 function buildDashboardVpsPrivilegedMaintenanceBlockedReply({ repository, relatedIssue, error, reason, issues, nextAction } = {}) {
   const issueText = Array.isArray(issues) && issues.length > 0 ? issues.join("; ") : reason || "blocked";
   const lines = [
-    "Dashboard Butler の自然文 intent から VPS helper queue へ進めようとしましたが、途中で止まりました。",
+    "VPS maintenance request として受け取りましたが、このチャットでは実行を開始していません。",
     "",
     `- 対象 repo: ${repository || "未指定"}`,
     `- 関連 Issue: ${relatedIssue ? `#${relatedIssue}` : "未指定"}`,
