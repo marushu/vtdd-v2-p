@@ -67813,9 +67813,11 @@ function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
   const normalized = normalizeText32(text);
   if (!normalized) return false;
   const lower = normalized.toLowerCase();
+  const mentionsRecoveryTarget = lower.includes("runner") || lower.includes("app-server") || lower.includes("app server") || lower.includes("bridge") || normalized.includes("\u30E9\u30F3\u30CA\u30FC") || normalized.includes("\u5B9F\u884C\u5668") || normalized.includes("\u30D6\u30EA\u30C3\u30B8");
+  const mentionsRecoveryAction = lower.includes("status") || lower.includes("health") || lower.includes("state") || lower.includes("logs") || lower.includes("log") || lower.includes("restart") || lower.includes("reconnect") || normalized.includes("\u72B6\u614B") || normalized.includes("\u78BA\u8A8D") || normalized.includes("\u751F\u5B58") || normalized.includes("\u7A3C\u50CD") || normalized.includes("\u30ED\u30B0") || normalized.includes("\u518D\u8D77\u52D5") || normalized.includes("\u5FA9\u65E7") || normalized.includes("\u843D\u3061") || normalized.includes("\u6B62\u307E");
   const hasVpsMaintenance = lower.includes("vps") && (lower.includes("privileged") || lower.includes("maintenance") || lower.includes("root") || lower.includes("sudo") || lower.includes("helper") || lower.includes("passkey"));
   const hasJapaneseMaintenance = (lower.includes("root") || lower.includes("sudo") || lower.includes("helper")) && (normalized.includes("\u4FDD\u5B88") || normalized.includes("\u5FA9\u65E7") || normalized.includes("\u627F\u8A8D"));
-  return hasVpsMaintenance || hasJapaneseMaintenance;
+  return hasVpsMaintenance || hasJapaneseMaintenance || mentionsRecoveryTarget && mentionsRecoveryAction;
 }
 function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, relatedIssue, env } = {}) {
   const workingDirectory = normalizeText32(env?.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR);
