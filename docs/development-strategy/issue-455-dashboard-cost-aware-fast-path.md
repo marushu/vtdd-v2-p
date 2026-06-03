@@ -4,6 +4,8 @@
 
 owner が Dashboard Butler で「今の状況」「次は？」「PR/Issue の状態を見たい」のような read/status 系の軽い依頼を投げた時、Butler はまず Codex app-server turn を起動せず、チャット上に「この応答は軽量 read/status fast path で、Codex usage を消費していない」ことを返す。実装・修正・merge・deploy・reviewer などの重い作業は従来通り app-server / runner / reviewer 経路へ進み、品質 gate は削らない。
 
+2026-06-03 follow-up: fast path は owner-facing 返答の主役にしてはいけない。`cost_boundary` や `codexWillStart=false` は補足情報であり、先頭本文は owner の質問に答える必要がある。軽量化の目的は会話を潰すことではなく、会話品質を保ったまま不要な Codex 起動を避けることである。
+
 ## VTDD 全体で進める部分
 
 Issue #455 のうち、今回の slice は Dashboard の通常 chat entrypoint での usage-aware routing に限定する。PR #750 で入った reviewer fallback 重複抑止は前提として扱い、同じ PR head の fallback retry 抑止は再実装しない。Cloudflare rowsWritten の presence/persistence 修正や bridge lifecycle guard も今回は触らない。
@@ -11,6 +13,8 @@ Issue #455 のうち、今回の slice は Dashboard の通常 chat entrypoint �
 ## 設計
 
 DashboardChatRoom の `owner_message` 処理で、owner message を durable thread に保存し ack した後、app-server bridge dispatch 前に軽量 intent 分類を挟む。分類が read/status/cost explanation の範囲に収まる場合は Butler message を同じ thread に保存して broadcast し、`dispatchOwnerMessageToAppServerBridge()` を呼ばない。返答には `cost_boundary: lightweight_worker_reply / codexWillStart=false` を明記する。
+
+ただし返答本文は status packet ではなく、owner の発言に対する自然な回答を先に出す。`cost_boundary` は「補足」へ下げ、対象 repo / Issue などの internal context も必要最小限にする。
 
 分類が実装、調査、ファイル編集、PR 作成、merge、deploy、reviewer、画像解析、repo truth 深掘りなどを含む場合は fast path にせず、既存 app-server bridge 経路へ渡す。その場合は transient status に「Codex app-server を使うため usage を消費し得る」ことを短く出す。これは処理を止める承認 gate ではなく、owner-facing cost visibility である。
 
@@ -22,7 +26,7 @@ DashboardChatRoom の `owner_message` 処理で、owner message を durable thre
 
 - Unit: DashboardChatRoom が cost/status 系の軽い owner turn を保存し、Butler の軽量応答を保存して、connected app-server bridge へ送らない。
 - Unit: 実装修正系の owner turn は fast path されず、既存通り app-server bridge へ送られる。
-- Unit: fast path 応答に `cost_boundary` と `codexWillStart=false` が含まれる。
+- Unit: fast path 応答は owner の質問への回答を先頭に置き、`cost_boundary` と `codexWillStart=false` は補足として含める。
 - Local: `npm run build:worker`、`node --test test/worker.test.js`、`npm run check:generated-worker`、`git diff --check` を実行する。
 
 ## 改修見積もり

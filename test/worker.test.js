@@ -3736,10 +3736,13 @@ test("DashboardChatRoom answers cost-aware lightweight owner turns without start
   const reply = fastPathBroadcast.messages[1];
   assert.equal(reply.role, "butler");
   assert.equal(reply.status, "replied");
-  assert.match(reply.text, /軽量 fast path/);
-  assert.match(reply.text, /Codex app-server \/ VPS Codex CLI は起動していません/);
+  assert.match(reply.text, /削る場所を間違えると VTDD 自体が足りないものになります/);
+  assert.match(reply.text, /削ってはいけないのは、Issue \/ PR \/ reviewer \/ CI \/ E2E \/ merge \/ deploy の gate/);
+  assert.match(reply.text, /方針は「機能を薄くする」ではなく/);
+  assert.match(reply.text, /補足:/);
   assert.match(reply.text, /cost_boundary: lightweight_worker_reply/);
   assert.match(reply.text, /codexWillStart: false/);
+  assert.equal(reply.text.startsWith("この返答は Dashboard Worker"), false);
 });
 
 test("DashboardChatRoom answers PR status through GitHub read plane without starting app-server Codex", async () => {
