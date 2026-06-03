@@ -21,6 +21,8 @@ const DEBUG_SLOW_TURN_DEFAULT_SECONDS = 150;
 const DEBUG_SLOW_TURN_MIN_SECONDS = 10;
 const DEBUG_SLOW_TURN_MAX_SECONDS = 10 * 60;
 const DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS = 30 * 1000;
+const DEFAULT_REPO_SYNC_BASE_REF = "main";
+const KNOWN_BRIDGE_UNTRACKED_ARTIFACT_PREFIXES = [".tmp/", "test-results/"];
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -1591,6 +1593,8 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     token: env.VTDD_GATEWAY_BEARER_TOKEN || env.MVP_GATEWAY_BEARER_TOKEN || "",
     threadId: env.VTDD_DASHBOARD_THREAD_ID || "",
     cwd: env.VTDD_DASHBOARD_CODEX_CWD || process.cwd(),
+    repoSyncPreflight: env.VTDD_DASHBOARD_BRIDGE_REPO_SYNC_PREFLIGHT !== "0",
+    repoSyncBaseRef: env.VTDD_DASHBOARD_BRIDGE_REPO_SYNC_BASE_REF || DEFAULT_REPO_SYNC_BASE_REF,
     sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || "",
     turnTimeoutMs: Number(env.VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS || DEFAULT_TURN_TIMEOUT_MS),
     activityQuietMs: Number(env.VTDD_DASHBOARD_APP_SERVER_ACTIVITY_QUIET_MS || DEFAULT_ACTIVITY_QUIET_MS),
@@ -1603,6 +1607,8 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--token") options.token = argv[++index] || "";
     if (arg === "--thread-id") options.threadId = argv[++index] || "";
     if (arg === "--cwd") options.cwd = argv[++index] || "";
+    if (arg === "--repo-sync-base-ref") options.repoSyncBaseRef = argv[++index] || DEFAULT_REPO_SYNC_BASE_REF;
+    if (arg === "--skip-repo-sync-preflight") options.repoSyncPreflight = false;
     if (arg === "--sandbox") options.sandboxMode = argv[++index] || "";
     if (arg === "--turn-timeout-ms") options.turnTimeoutMs = Number(argv[++index] || DEFAULT_TURN_TIMEOUT_MS);
     if (arg === "--activity-quiet-ms") options.activityQuietMs = Number(argv[++index] || DEFAULT_ACTIVITY_QUIET_MS);
@@ -1624,6 +1630,17 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
   }
   if (typeof WebSocket !== "function") {
     throw new Error("global WebSocket is required. Run with Node.js that provides WebSocket.");
+  }
+  if (options.repoSyncPreflight !== false) {
+    const repoSync = await ensureDashboardBridgeRepoSynced({
+      repoRoot: options.cwd,
+      baseRef: options.repoSyncBaseRef || DEFAULT_REPO_SYNC_BASE_REF,
+      env: options.env || process.env,
+      run: options.run || runBridgeCommand
+    });
+    if (!repoSync.developmentAllowed) {
+      throw new Error(`Dashboard app-server bridge repo sync preflight blocked startup: ${repoSync.reason}`);
+    }
   }
   const endpoint = buildDashboardAppServerBridgeEndpoint(options);
   const appServer = options.appServer || new JsonLineAppServerClient({ cwd: options.cwd });
@@ -1652,6 +1669,225 @@ export function buildDashboardAppServerBridgeEndpoint(options = {}) {
   endpoint.searchParams.set("threadId", options.threadId);
   endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
   return endpoint;
+}
+
+export async function ensureDashboardBridgeRepoSynced({
+  repoRoot = process.cwd(),
+  baseRef = DEFAULT_REPO_SYNC_BASE_REF,
+  env = process.env,
+  run = runBridgeCommand
+} = {}) {
+  const first = await collectDashboardBridgeRepoSyncStatus({ repoRoot, baseRef, env, run });
+  if (!first.ok || first.developmentAllowed || first.behindCount <= 0 || !first.safeToFastForward) {
+    return first;
+  }
+  try {
+    await run("git", ["pull", "--ff-only", "origin", baseRef], { cwd: repoRoot, env });
+  } catch (error) {
+    return {
+      ...first,
+      developmentAllowed: false,
+      safeToFastForward: false,
+      syncAction: "pull_ff_only_failed",
+      reason: `bridge repo is behind origin/${baseRef}, but git pull --ff-only failed: ${
+        summarizeBridgeDiagnostic(error?.stderr || error?.message) || "unknown failure"
+      }`,
+      error: summarizeBridgeDiagnostic(error?.stderr || error?.message)
+    };
+  }
+  const second = await collectDashboardBridgeRepoSyncStatus({
+    repoRoot,
+    baseRef,
+    env,
+    run,
+    skipFetch: true
+  });
+  return {
+    ...second,
+    syncAction: second.developmentAllowed ? "fast_forwarded" : "fast_forwarded_but_still_blocked"
+  };
+}
+
+export async function collectDashboardBridgeRepoSyncStatus({
+  repoRoot = process.cwd(),
+  baseRef = DEFAULT_REPO_SYNC_BASE_REF,
+  env = process.env,
+  run = runBridgeCommand,
+  skipFetch = false
+} = {}) {
+  const result = {
+    ok: false,
+    developmentAllowed: false,
+    safeToFastForward: false,
+    syncAction: "none",
+    reason: null,
+    repoRoot,
+    baseRef,
+    currentBranch: null,
+    headSha: null,
+    originHeadSha: null,
+    aheadCount: 0,
+    behindCount: 0,
+    inSyncWithOrigin: false,
+    trackedDirtyPaths: [],
+    unknownUntrackedPaths: [],
+    knownUntrackedArtifacts: [],
+    blockedBy: [],
+    error: null
+  };
+  try {
+    if (!skipFetch) {
+      await run("git", ["fetch", "origin", baseRef], { cwd: repoRoot, env });
+    }
+    const [branch, head, originHead, revList, status] = await Promise.all([
+      run("git", ["symbolic-ref", "--short", "HEAD"], { cwd: repoRoot, env }),
+      run("git", ["rev-parse", "HEAD"], { cwd: repoRoot, env }),
+      run("git", ["rev-parse", `origin/${baseRef}`], { cwd: repoRoot, env }),
+      run("git", ["rev-list", "--left-right", "--count", `HEAD...origin/${baseRef}`], { cwd: repoRoot, env }),
+      run("git", ["status", "--porcelain=v1"], { cwd: repoRoot, env })
+    ]);
+    const parsedStatus = parseDashboardBridgeRepoPorcelainStatus(status.stdout);
+    const [aheadText, behindText] = normalizeBridgeText(revList.stdout).split(/\s+/);
+    result.currentBranch = normalizeBridgeText(branch.stdout) || null;
+    result.headSha = normalizeBridgeText(head.stdout) || null;
+    result.originHeadSha = normalizeBridgeText(originHead.stdout) || null;
+    result.aheadCount = Number.parseInt(aheadText || "0", 10) || 0;
+    result.behindCount = Number.parseInt(behindText || "0", 10) || 0;
+    result.inSyncWithOrigin = Boolean(result.headSha && result.headSha === result.originHeadSha);
+    result.trackedDirtyPaths = parsedStatus.trackedDirtyPaths;
+    result.unknownUntrackedPaths = parsedStatus.unknownUntrackedPaths;
+    result.knownUntrackedArtifacts = parsedStatus.knownUntrackedArtifacts;
+    result.ok = true;
+    if (result.currentBranch !== baseRef) {
+      result.blockedBy.push("not_on_base_branch");
+    }
+    if (result.trackedDirtyPaths.length > 0) {
+      result.blockedBy.push("tracked_dirty");
+    }
+    if (result.unknownUntrackedPaths.length > 0) {
+      result.blockedBy.push("unknown_untracked");
+    }
+    if (result.aheadCount > 0 && result.behindCount > 0) {
+      result.blockedBy.push("diverged_from_origin");
+    } else if (result.aheadCount > 0) {
+      result.blockedBy.push("ahead_of_origin");
+    }
+    result.safeToFastForward =
+      result.blockedBy.length === 0 &&
+      result.behindCount > 0 &&
+      result.currentBranch === baseRef;
+    result.developmentAllowed =
+      result.blockedBy.length === 0 &&
+      result.behindCount === 0 &&
+      result.inSyncWithOrigin;
+    result.reason = buildDashboardBridgeRepoSyncReason(result);
+  } catch (error) {
+    result.error = summarizeBridgeDiagnostic(error?.stderr || error?.message);
+    result.reason = `bridge repo sync preflight failed: ${result.error || "unknown failure"}`;
+  }
+  return result;
+}
+
+function parseDashboardBridgeRepoPorcelainStatus(stdout) {
+  const trackedDirtyPaths = [];
+  const unknownUntrackedPaths = [];
+  const knownUntrackedArtifacts = [];
+  for (const line of String(stdout || "").split("\n")) {
+    if (!line.trim()) {
+      continue;
+    }
+    if (line.startsWith("?? ")) {
+      const filePath = normalizeBridgeText(line.slice(3));
+      if (isKnownBridgeUntrackedArtifact(filePath)) {
+        knownUntrackedArtifacts.push(filePath);
+      } else {
+        unknownUntrackedPaths.push(filePath);
+      }
+      continue;
+    }
+    trackedDirtyPaths.push(normalizeBridgeText(line.slice(3)) || normalizeBridgeText(line));
+  }
+  return {
+    trackedDirtyPaths,
+    unknownUntrackedPaths,
+    knownUntrackedArtifacts
+  };
+}
+
+function isKnownBridgeUntrackedArtifact(filePath) {
+  const normalized = normalizeBridgeText(filePath);
+  return KNOWN_BRIDGE_UNTRACKED_ARTIFACT_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function buildDashboardBridgeRepoSyncReason(result) {
+  if (!result.ok) {
+    return result.reason;
+  }
+  if (result.developmentAllowed) {
+    return `bridge repo is synced with origin/${result.baseRef}.`;
+  }
+  if (result.safeToFastForward) {
+    return `bridge repo is behind origin/${result.baseRef} and can be fast-forwarded.`;
+  }
+  const reasons = [];
+  if (result.blockedBy.includes("not_on_base_branch")) {
+    reasons.push(`current branch is ${result.currentBranch || "unknown"}, expected ${result.baseRef}`);
+  }
+  if (result.blockedBy.includes("tracked_dirty")) {
+    reasons.push(`tracked dirty paths: ${result.trackedDirtyPaths.join(", ")}`);
+  }
+  if (result.blockedBy.includes("unknown_untracked")) {
+    reasons.push(`unknown untracked paths: ${result.unknownUntrackedPaths.join(", ")}`);
+  }
+  if (result.blockedBy.includes("diverged_from_origin")) {
+    reasons.push(`HEAD diverged from origin/${result.baseRef} (${result.aheadCount} ahead, ${result.behindCount} behind)`);
+  } else if (result.blockedBy.includes("ahead_of_origin")) {
+    reasons.push(`HEAD is ${result.aheadCount} commit(s) ahead of origin/${result.baseRef}`);
+  }
+  if (result.behindCount > 0 && result.blockedBy.length > 0) {
+    reasons.push(`also ${result.behindCount} commit(s) behind origin/${result.baseRef}`);
+  }
+  return reasons.length > 0
+    ? `bridge repo is not safe to use before recovery: ${reasons.join("; ")}.`
+    : `bridge repo is not synced with origin/${result.baseRef}.`;
+}
+
+function summarizeBridgeDiagnostic(value, maxLength = 500) {
+  const text = normalizeBridgeText(value).replace(/\s+/g, " ");
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength)} [truncated]`;
+}
+
+function runBridgeCommand(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      env: options.env || process.env,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      const error = new Error(`${command} ${args.join(" ")} failed with exit code ${code}: ${stderr || stdout}`);
+      error.exitCode = code;
+      error.stdout = stdout;
+      error.stderr = stderr;
+      reject(error);
+    });
+    child.stdin.end();
+  });
 }
 
 export function buildDashboardBridgeConnectedEvent({ endpoint, threadId = "", cwd = process.cwd(), resumedAt = new Date().toISOString() } = {}) {
