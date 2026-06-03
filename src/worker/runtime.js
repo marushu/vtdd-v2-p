@@ -4541,16 +4541,99 @@ async function handleGitHubActionsEventRequest(request, env) {
     });
   }
 
+  const baseEvent = normalizeDashboardEventRecord(event.event);
+  const existingEvent = await readDashboardEventById(store, baseEvent.id);
+  const acceptedEvent = normalizeDashboardEventRecord({
+    ...baseEvent,
+    pwaNotificationStatus: existingEvent?.pwaNotificationStatus === "sent" ? "sent" : "dashboard_event_received",
+    pwaNotificationError: existingEvent?.pwaNotificationError || null,
+    pwaNotificationReason: existingEvent?.pwaNotificationReason || null,
+    pwaNotificationAttempted: existingEvent?.pwaNotificationAttempted || 0,
+    pwaNotificationDelivered: existingEvent?.pwaNotificationDelivered || 0,
+    pwaNotificationCleaned: existingEvent?.pwaNotificationCleaned || 0
+  });
+  await store.put(acceptedEvent);
+
+  const threadId = event.threadId || buildDashboardEventDefaultThreadId(baseEvent);
+  const chatMessage = buildGitHubActionsDashboardChatMessage({
+    event: baseEvent,
+    threadId
+  });
+  const chatStore = resolveDashboardChatStore(env);
+  let messages = [];
+  let chatAppendStatus = "unavailable";
+  let chatAppendError = null;
+  let chatAppendReason = null;
+  if (chatMessage) {
+    if (chatStore) {
+      try {
+        messages = await chatStore.appendMany(threadId, [chatMessage]);
+        chatAppendStatus = messages.length > 0 ? "appended" : "skipped";
+      } catch (error) {
+        chatAppendStatus = "failed";
+        chatAppendError = "dashboard_event_chat_append_failed";
+        chatAppendReason = error instanceof Error ? error.message : "Dashboard Butler chat append failed";
+      }
+    } else {
+      chatAppendError = "dashboard_chat_store_unavailable";
+      chatAppendReason = "dashboard Butler chat store is not configured";
+    }
+  }
+
+  const duplicateNotificationAlreadySent =
+    existingEvent?.pwaNotificationStatus === "sent" && Number(existingEvent?.pwaNotificationDelivered || 0) > 0;
+  const shouldDispatchNotification = chatAppendStatus === "appended" && !duplicateNotificationAlreadySent;
   const recorded = await recordDashboardNotificationEvent({
     env,
     eventStore: store,
-    event: event.event
+    event: baseEvent,
+    overrides: shouldDispatchNotification
+      ? {}
+      : duplicateNotificationAlreadySent
+        ? {
+            pwaNotificationStatus: "sent",
+            pwaNotificationError: null,
+            pwaNotificationReason: "duplicate event ignored after prior Web Push delivery",
+            pwaNotificationAttempted: existingEvent.pwaNotificationAttempted || 0,
+            pwaNotificationDelivered: existingEvent.pwaNotificationDelivered || 0,
+            pwaNotificationCleaned: existingEvent.pwaNotificationCleaned || 0
+          }
+        : {
+            pwaNotificationStatus: chatAppendError || "dashboard_chat_append_skipped",
+            pwaNotificationError: chatAppendError || null,
+            pwaNotificationReason: chatAppendReason || "dashboard Butler chat append did not complete",
+            pwaNotificationAttempted: 0,
+            pwaNotificationDelivered: 0,
+            pwaNotificationCleaned: 0
+          },
+    dispatch: shouldDispatchNotification
   });
+  const webSocketBroadcast =
+    messages.length > 0 ? await notifyDashboardChatRoom({ env, threadId, messages }) : false;
+
   return json(202, {
     ok: true,
     event: recorded.event,
+    threadId,
+    chatAppendStatus,
+    chatAppendError,
+    chatAppendReason,
+    messages,
+    webSocketBroadcast,
     webPush: recorded.webPush
   });
+}
+
+async function readDashboardEventById(eventStore, eventId) {
+  const id = normalizeDashboardEventText(eventId);
+  if (!id || !eventStore || typeof eventStore.get !== "function") {
+    return null;
+  }
+  try {
+    return await eventStore.get(id);
+  } catch {
+    return null;
+  }
 }
 
 async function recordDashboardNotificationEvent({ env, eventStore, event, overrides = {}, dispatch = true } = {}) {
@@ -9712,6 +9795,24 @@ function createD1DashboardEventStore(d1) {
       return true;
     },
 
+    async get(eventId) {
+      const id = normalizeDashboardEventText(eventId);
+      if (!id) {
+        return null;
+      }
+      await ensureSchema();
+      const result = await d1.prepare("SELECT payload_json FROM vtdd_dashboard_events WHERE id = ? LIMIT 1").bind(id).all();
+      const row = Array.isArray(result?.results) ? result.results[0] : null;
+      if (!row?.payload_json) {
+        return null;
+      }
+      try {
+        return normalizeDashboardEventRecord(JSON.parse(row.payload_json));
+      } catch {
+        return null;
+      }
+    },
+
     async latest(filter = {}) {
       await ensureSchema();
       const kind = normalizeDashboardEventText(filter.kind);
@@ -13106,6 +13207,7 @@ function normalizeGitHubActionsEvent(payload) {
     normalizeIssue(input.pullNumber || input.pull_number || input.prNumber || input.pr_number) ||
     inferPullNumberFromText(`${title} ${changeSummary}`);
   const issueNumber = normalizeIssue(input.issueNumber || input.issue_number);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id);
 
   if (!repository) {
     return {
@@ -13164,8 +13266,84 @@ function normalizeGitHubActionsEvent(payload) {
 
   return {
     ok: true,
-    event
+    event,
+    threadId
   };
+}
+
+function buildDashboardEventDefaultThreadId(event) {
+  const record = normalizeDashboardEventRecord(event);
+  const repository = normalizeCanonicalRepositoryInput(record.repository);
+  if (repository) {
+    return normalizeDashboardThreadId(`dashboard-main-${repository.replace("/", "-")}`);
+  }
+  return "dashboard-main-unresolved";
+}
+
+function buildGitHubActionsDashboardChatMessage({ event, threadId } = {}) {
+  const record = normalizeDashboardEventRecord(event);
+  const resolvedThreadId = normalizeDashboardThreadId(threadId) || buildDashboardEventDefaultThreadId(record);
+  if (!resolvedThreadId || record.kind !== "github_actions_workflow_run") {
+    return null;
+  }
+  const messageId = `dashboard-event:${record.id}`;
+  return normalizeDashboardChatMessage(
+    {
+      threadId: resolvedThreadId,
+      messageId,
+      role: "system",
+      repository: record.repository,
+      relatedIssue: record.issueNumber,
+      status: record.conclusion === "failure" || record.conclusion === "cancelled" ? "blocked" : "replied",
+      text: buildGitHubActionsDashboardChatMessageText(record),
+      createdAt: record.updatedAt || record.createdAt
+    },
+    { threadId: resolvedThreadId }
+  );
+}
+
+function buildGitHubActionsDashboardChatMessageText(event) {
+  const record = normalizeDashboardEventRecord(event);
+  const conclusion = normalizeDashboardEventText(record.conclusion || record.status) || "unknown";
+  const isDeploy = normalize(record.workflowName).includes("deploy");
+  const title = buildDashboardEventDisplayTitle(record, {
+    workflowName: record.workflowName,
+    conclusion
+  });
+  const lines = [
+    isDeploy ? "デプロイ完了イベントを受信しました。" : "GitHub Actions の完了イベントを受信しました。",
+    "",
+    "状態:",
+    `- repo: ${record.repository || "未確認"}`,
+    `- workflow: ${record.workflowName || "未確認"}`,
+    `- status: ${record.status || "未確認"}`,
+    `- conclusion: ${conclusion}`
+  ];
+  if (record.pullNumber) {
+    lines.push(`- PR: PR #${record.pullNumber}`);
+  }
+  if (record.issueNumber) {
+    lines.push(`- Issue: Issue #${record.issueNumber}`);
+  }
+  if (record.headSha) {
+    lines.push(`- sha: ${record.headSha.slice(0, 12)}`);
+  }
+  if (title) {
+    lines.push("", "内容:", title);
+  }
+  lines.push("", "次:");
+  if (isDeploy && conclusion === "success") {
+    lines.push("- production E2E / runtime truth を確認します。");
+  } else if (conclusion === "failure" || conclusion === "cancelled" || conclusion === "timed_out") {
+    lines.push("- deploy / Actions の失敗原因を確認し、blocker と次 action を出します。");
+  } else {
+    lines.push("- 最新 event と残る blocker を確認します。");
+  }
+  lines.push("- merge / deploy / credential / permission は、この event だけでは自動実行しません。");
+  if (record.runUrl) {
+    lines.push("", `Actions: ${record.runUrl}`);
+  }
+  return lines.join("\n");
 }
 
 function normalizeVpsRunnerDashboardEvent(payload) {
