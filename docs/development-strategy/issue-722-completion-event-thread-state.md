@@ -16,7 +16,7 @@ Butler thread には「何が完了したか」「次に何を確認するか」
 
 `handleGitHubActionsEventRequest` は machine auth 済みの GitHub Actions event を受け、`recordDashboardNotificationEvent` で dashboard event store と Web Push へ保存している。
 
-ここに Dashboard chat store への append を追加する。ただし通知保存と chat append のどちらか片方だけが成功した状態を放置しないよう、VPS runner event と同じく chat append 失敗時は dashboard event を rollback する。
+ここに Dashboard chat store への append を追加する。ただし Web Push は一度送ると rollback できないので、順序は chat append 成功を先にする。chat append が成功した場合だけ Web Push を dispatch し、chat store 未設定または append 失敗時は event truth に失敗理由を保存して Web Push を送らない。
 
 thread は payload の `threadId` があればそれを使う。なければ repository から `dashboard-main-<owner-repo>` を導出する。これは repo-less main chat の将来対応とは分ける。
 
@@ -33,7 +33,9 @@ thread は payload の `threadId` があればそれを使う。なければ rep
 - Unit: GitHub Actions deploy completion event が dashboard event store に保存され、同時に Dashboard Butler thread へ system message として append される。
 - Unit: owner-facing message が `PR #...` / `Issue #...` と種別付きで表示され、bare `#...` を主表現にしない。
 - Unit: 同じ deploy event が再送されても同じ messageId で置換され、thread に重複追加されない。
-- Integration: chat append 失敗時は dashboard event を rollback し、通知だけが残る状態を防ぐ。
+- Integration: chat append 成功後だけ Web Push が送られる。
+- Integration: chat append 失敗時または `DASHBOARD_CHAT_STORE` 未設定時は 202 で event truth を残し、Web Push は送らず、`pwaNotificationStatus` に失敗理由を残す。
+- Integration: production D1 chat message は `(thread_id, message_id)` 主キーと `INSERT OR REPLACE` で idempotent に保存される。
 - Build: `npm run build:worker`
 - Generated check: `npm run check:generated-worker`
 - Worker test: `node --test test/worker.test.js`
@@ -42,7 +44,7 @@ thread は payload の `threadId` があればそれを使う。なければ rep
 
 | path | 境界 | 変更 | risk |
 | --- | --- | --- | --- |
-| `src/worker/runtime.js` | `handleGitHubActionsEventRequest` | deploy completion event の chat append と broadcast を追加 | event store / chat store 片側成功の扱いを誤ると runtime truth が割れる |
+| `src/worker/runtime.js` | `handleGitHubActionsEventRequest` | deploy completion event の chat append と chat 成功後 Web Push dispatch を追加 | Web Push を先に送ると rollback 不能になり通知だけ残る |
 | `src/worker/runtime.js` | formatter helper | owner-facing deploy completion message を生成 | 長文・bare `#...`・secret 混入の risk |
 | `test/worker.test.js` | deploy completion tests | thread append / dedupe / rollback を追加 | 既存通知テストとの fixture ずれ |
 | `worker.js` | generated worker | source 変更を反映 | generated mismatch |
@@ -62,7 +64,7 @@ thread は payload の `threadId` があればそれを使う。なければ rep
 
 ## 穴が出そうな箇所
 
-- `DASHBOARD_CHAT_STORE` が未設定の environment で deploy event を受けた時の挙動。
+- `DASHBOARD_CHAT_STORE` が未設定の environment で deploy event を受けた時は、event truth を残して Web Push を送らない fallback にする。
 - duplicate webhook / workflow retry で同じ event が複数回届く場合。
 - `threadId` 未指定時に owner が見ている thread と導出 thread がズレる場合。
 
@@ -93,6 +95,6 @@ owner が別アプリへ移動して戻っても、同じ thread で直近 deplo
 ## 停止条件
 
 - deploy completion event の chat append に必要な store が production で未設定と分かった場合。
-- rollback なしで通知だけ残る状態しか作れない場合。
+- chat append 成功前に Web Push を送る必要が出た場合。
 - threadId 導出が repository owner の通常 thread と矛盾すると分かった場合。
 - 実装中に deploy / merge / credential / permission mutation が必要になった場合。

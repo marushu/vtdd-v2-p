@@ -4541,43 +4541,49 @@ async function handleGitHubActionsEventRequest(request, env) {
     });
   }
 
+  const threadId = event.threadId || buildDashboardEventDefaultThreadId(event.event);
+  const chatMessage = buildGitHubActionsDashboardChatMessage({
+    event: event.event,
+    threadId
+  });
   const chatStore = resolveDashboardChatStore(env);
-  if (!chatStore) {
-    return json(503, {
-      ok: false,
-      error: "dashboard_chat_store_unavailable",
-      reason: "dashboard Butler chat store is not configured"
-    });
+  let messages = [];
+  let chatAppendStatus = "unavailable";
+  let chatAppendError = null;
+  let chatAppendReason = null;
+  if (chatMessage) {
+    if (chatStore) {
+      try {
+        messages = await chatStore.appendMany(threadId, [chatMessage]);
+        chatAppendStatus = messages.length > 0 ? "appended" : "skipped";
+      } catch (error) {
+        chatAppendStatus = "failed";
+        chatAppendError = "dashboard_event_chat_append_failed";
+        chatAppendReason = error instanceof Error ? error.message : "Dashboard Butler chat append failed";
+      }
+    } else {
+      chatAppendError = "dashboard_chat_store_unavailable";
+      chatAppendReason = "dashboard Butler chat store is not configured";
+    }
   }
 
+  const shouldDispatchNotification = chatAppendStatus === "appended";
   const recorded = await recordDashboardNotificationEvent({
     env,
     eventStore: store,
-    event: event.event
+    event: event.event,
+    overrides: shouldDispatchNotification
+      ? {}
+      : {
+          pwaNotificationStatus: chatAppendError || "dashboard_chat_append_skipped",
+          pwaNotificationError: chatAppendError || null,
+          pwaNotificationReason: chatAppendReason || "dashboard Butler chat append did not complete",
+          pwaNotificationAttempted: 0,
+          pwaNotificationDelivered: 0,
+          pwaNotificationCleaned: 0
+        },
+    dispatch: shouldDispatchNotification
   });
-
-  const threadId = event.threadId || buildDashboardEventDefaultThreadId(event.event);
-  const chatMessage = buildGitHubActionsDashboardChatMessage({
-    event: recorded.event,
-    threadId
-  });
-  let messages = [];
-  if (chatMessage) {
-    try {
-      messages = await chatStore.appendMany(threadId, [chatMessage]);
-    } catch (error) {
-      await store.delete(recorded.event.id);
-      return json(502, {
-        ok: false,
-        error: "dashboard_event_chat_append_failed",
-        reason: "GitHub Actions event was not saved because Butler chat append failed",
-        rollback: {
-          eventId: recorded.event.id,
-          notificationDeleted: true
-        }
-      });
-    }
-  }
   const webSocketBroadcast =
     messages.length > 0 ? await notifyDashboardChatRoom({ env, threadId, messages }) : false;
 
@@ -4585,6 +4591,9 @@ async function handleGitHubActionsEventRequest(request, env) {
     ok: true,
     event: recorded.event,
     threadId,
+    chatAppendStatus,
+    chatAppendError,
+    chatAppendReason,
     messages,
     webSocketBroadcast,
     webPush: recorded.webPush
