@@ -57742,6 +57742,15 @@ var DashboardChatRoom = class {
       now,
       origin
     });
+    const githubReadFastPathMessages = vpsMaintenanceMessages ? null : await buildDashboardGitHubReadFastPathMessages({
+      env: this.env,
+      threadId,
+      repository,
+      relatedIssue,
+      text,
+      mediaReferences: mediaValidation.mediaReferences,
+      now
+    });
     const costAwareFastPathMessages = vpsMaintenanceMessages ? null : buildDashboardCostAwareFastPathMessages({
       threadId,
       repository,
@@ -57756,6 +57765,17 @@ var DashboardChatRoom = class {
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
       if (vpsMaintenanceMessages) {
         const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
+        await this.broadcastThread({ threadId, messages: [...messages2, ...butlerMessages] });
+        this.sendSocket(socket, {
+          type: "owner_message_accepted",
+          ok: true,
+          clientMessageId,
+          messageId: ownerMessage.messageId
+        });
+        return;
+      }
+      if (githubReadFastPathMessages) {
+        const butlerMessages = store ? await store.appendMany(threadId, githubReadFastPathMessages) : githubReadFastPathMessages;
         await this.broadcastThread({ threadId, messages: [...messages2, ...butlerMessages] });
         this.sendSocket(socket, {
           type: "owner_message_accepted",
@@ -57806,6 +57826,11 @@ var DashboardChatRoom = class {
     });
     if (vpsMaintenanceMessages) {
       const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
+      await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
+      return;
+    }
+    if (githubReadFastPathMessages) {
+      const butlerMessages = store ? await store.appendMany(threadId, githubReadFastPathMessages) : githubReadFastPathMessages;
       await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
       return;
     }
@@ -65333,6 +65358,204 @@ function buildDashboardAppServerUsageTransientText({ text = "", repository = "",
     return `\u8EFD\u91CF\u76F8\u8AC7\u3068\u3057\u3066\u6271\u3048\u306A\u3044\u6587\u8108\u304C\u542B\u307E\u308C\u308B\u305F\u3081\u3001Codex app-server \u306B\u6E21\u3057\u307E\u3059\u3002Codex usage \u3092\u6D88\u8CBB\u3057\u5F97\u307E\u3059\u3002${scope}`;
   }
   return `Codex app-server \u306B\u6E21\u3057\u3066\u3044\u307E\u3059\u3002Codex usage \u3092\u6D88\u8CBB\u3057\u5F97\u307E\u3059\u3002${scope}`;
+}
+async function buildDashboardGitHubReadFastPathMessages({
+  env,
+  threadId,
+  repository = "",
+  relatedIssue = "",
+  text = "",
+  mediaReferences = [],
+  now = ""
+} = {}) {
+  const intent = parseDashboardGitHubReadFastPathIntent({ text, repository, relatedIssue, mediaReferences });
+  if (!intent.ok) {
+    return null;
+  }
+  let result;
+  if (intent.blocked) {
+    result = { ok: true, read: { records: [] } };
+  } else {
+    try {
+      result = await retrieveGitHubReadPlane({
+        resource: intent.resource,
+        repository: intent.repository,
+        issueNumber: intent.issueNumber,
+        pullNumber: intent.pullNumber,
+        limit: 1,
+        env
+      });
+    } catch (error2) {
+      result = {
+        ok: false,
+        error: "github_read_exception",
+        reason: normalizeText32(error2?.message) || "GitHub read threw"
+      };
+    }
+  }
+  const createdAt = normalizeIsoTimestamp(now) || (/* @__PURE__ */ new Date()).toISOString();
+  const message = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      repository: intent.repository,
+      relatedIssue: intent.issueNumber || relatedIssue,
+      status: result?.ok ? "replied" : "failed",
+      messageId: `dashboard_butler_github_read_fast_path:${crypto.randomUUID()}`,
+      createdAt,
+      text: buildDashboardGitHubReadFastPathReplyText({ intent, result })
+    },
+    { threadId }
+  );
+  return message ? [message] : null;
+}
+function parseDashboardGitHubReadFastPathIntent({ text = "", repository = "", relatedIssue = "", mediaReferences = [] } = {}) {
+  if (Array.isArray(mediaReferences) && mediaReferences.length > 0) {
+    return { ok: false, reason: "media references require app-server context" };
+  }
+  const normalized = sanitizeDashboardChatText(text);
+  const resolvedRepository = normalizeCanonicalRepositoryInput(repository);
+  if (!normalized) {
+    return { ok: false, reason: "message text is required" };
+  }
+  if (!isDashboardNarrowStatusReadIntent(normalized)) {
+    return { ok: false, reason: "not a narrow status read intent" };
+  }
+  const number3 = extractIssueNumberFromDashboardChatText(normalized) || normalizePositiveInteger10(relatedIssue);
+  if (!number3) {
+    return { ok: false, reason: "issue or pull number is required" };
+  }
+  const lower = normalized.toLowerCase();
+  const isPull = /\b(pr|pull request|pull)\b/i.test(normalized) || normalized.includes("\u30D7\u30EB\u30EA\u30AF") || normalized.includes("PR");
+  const isIssue = /\bissue\b/i.test(normalized) || normalized.includes("Issue") || normalized.includes("\u30A4\u30B7\u30E5\u30FC");
+  if (!resolvedRepository) {
+    return {
+      ok: true,
+      blocked: true,
+      repository: "",
+      resource: isPull ? "pulls" : "issues",
+      pullNumber: isPull ? number3 : null,
+      issueNumber: isPull ? null : number3,
+      source: "dashboard_github_read_fast_path",
+      reason: "repository is required for GitHub read fast path"
+    };
+  }
+  if (isPull) {
+    return {
+      ok: true,
+      repository: resolvedRepository,
+      resource: "pulls",
+      pullNumber: number3,
+      issueNumber: null,
+      source: "dashboard_github_read_fast_path"
+    };
+  }
+  if (isIssue || !lower.includes("pr")) {
+    return {
+      ok: true,
+      repository: resolvedRepository,
+      resource: "issues",
+      issueNumber: number3,
+      pullNumber: null,
+      source: "dashboard_github_read_fast_path"
+    };
+  }
+  return { ok: false, reason: "ambiguous GitHub read intent" };
+}
+function isDashboardNarrowStatusReadIntent(value) {
+  const text = sanitizeDashboardChatText(value);
+  if (!text) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  if (/\bGO\b/.test(text)) {
+    return false;
+  }
+  if (/(実装|修正|直して|作って|追加|削除|デプロイして|レビューして|レビュアー起動|テストして|調査して|探して|開発して)/.test(text)) {
+    return false;
+  }
+  if (/(merge\s+it|mergeして|マージして|deploy\s+it|deployして)/i.test(text)) {
+    return false;
+  }
+  const hasNumber = /#([1-9][0-9]*)/.test(text);
+  if (!hasNumber) {
+    return false;
+  }
+  return /\b(status|state|open|closed|merged|mergeable|checks?)\b/i.test(text) || /(状況|状態|どう|開いて|閉じて|マージ済み|マージされた|自動マージ|チェック|確認だけ|見るだけ|読んで|見て)/.test(text);
+}
+function buildDashboardGitHubReadFastPathReplyText({ intent, result } = {}) {
+  const resourceLabel = intent?.resource === "pulls" ? `PR #${intent.pullNumber}` : `Issue #${intent?.issueNumber || ""}`;
+  const scope = [
+    `\u5BFE\u8C61 repo: ${intent?.repository || "\u672A\u6307\u5B9A"}`,
+    `\u5BFE\u8C61: ${resourceLabel}`,
+    "cost_boundary: github_read_plane_lightweight",
+    "codexWillStart: false"
+  ].join("\n");
+  if (!result?.ok) {
+    return [
+      "GitHub read plane \u306E\u8EFD\u91CF fast path \u3067\u8AAD\u307F\u53D6\u308A\u3092\u8A66\u307F\u307E\u3057\u305F\u304C\u3001\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002Codex app-server / VPS Codex CLI \u306F\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
+      "",
+      scope,
+      `status: failed`,
+      `reason: ${sanitizeDashboardChatText(result?.reason || result?.error || "GitHub read failed")}`,
+      "",
+      "\u6B21\u306B\u9032\u3081\u308B\u306A\u3089\u3001repository / Issue / PR \u756A\u53F7\u3092\u78BA\u8A8D\u3059\u308B\u304B\u3001\u660E\u793A\u7684\u306B\u8ABF\u67FB\u3092\u4F9D\u983C\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u305D\u306E\u5834\u5408\u306F Codex usage \u3092\u6D88\u8CBB\u3057\u5F97\u307E\u3059\u3002"
+    ].join("\n");
+  }
+  if (intent?.blocked) {
+    return [
+      "GitHub read plane \u306E\u8EFD\u91CF fast path \u3067\u6B62\u3081\u307E\u3057\u305F\u3002Codex app-server / VPS Codex CLI \u306F\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
+      "",
+      scope,
+      "status: blocked",
+      `reason: ${sanitizeDashboardChatText(intent.reason || "repository is required")}`,
+      "",
+      "repo \u672A\u6307\u5B9A\u306E main chat \u3067\u306F\u3001\u5BFE\u8C61 repository \u3092\u63A8\u6E2C\u3057\u307E\u305B\u3093\u3002owner/repo \u3092\u4ED8\u3051\u3066\u3082\u3046\u4E00\u5EA6\u9001\u308B\u3068\u3001GitHub read plane \u3060\u3051\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002"
+    ].join("\n");
+  }
+  const record2 = Array.isArray(result.read?.records) ? result.read.records[0] : null;
+  if (!record2) {
+    return [
+      "GitHub read plane \u306E\u8EFD\u91CF fast path \u3067\u8AAD\u307F\u307E\u3057\u305F\u304C\u3001\u5BFE\u8C61 record \u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002Codex app-server / VPS Codex CLI \u306F\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
+      "",
+      scope,
+      "status: not_found"
+    ].join("\n");
+  }
+  if (intent.resource === "pulls") {
+    return buildDashboardPullReadFastPathReplyText({ scope, record: record2 });
+  }
+  return buildDashboardIssueReadFastPathReplyText({ scope, record: record2 });
+}
+function buildDashboardPullReadFastPathReplyText({ scope, record: record2 } = {}) {
+  const lines = [
+    "GitHub read plane \u306E\u8EFD\u91CF fast path \u3067 PR \u72B6\u614B\u3092\u8AAD\u307F\u307E\u3057\u305F\u3002Codex app-server / VPS Codex CLI \u306F\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
+    "",
+    scope,
+    `title: ${record2.title || "\u672A\u53D6\u5F97"}`,
+    `state: ${record2.state || "unknown"}`,
+    `draft: ${record2.draft === true ? "true" : "false"}`,
+    `merged: ${record2.merged === true ? "true" : "false"}`,
+    record2.mergedAt ? `mergedAt: ${record2.mergedAt}` : "",
+    record2.mergeCommitSha ? `mergeCommitSha: ${record2.mergeCommitSha}` : "",
+    `head: ${record2.headRef || "unknown"} ${record2.headSha || ""}`.trim(),
+    `base: ${record2.baseRef || "unknown"}`,
+    record2.mergeableState ? `mergeableState: ${record2.mergeableState}` : "",
+    record2.mergeBlockedReason ? `mergeBlockedReason: ${record2.mergeBlockedReason}` : "",
+    record2.htmlUrl ? `source: ${record2.htmlUrl}` : ""
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+function buildDashboardIssueReadFastPathReplyText({ scope, record: record2 } = {}) {
+  return [
+    "GitHub read plane \u306E\u8EFD\u91CF fast path \u3067 Issue \u72B6\u614B\u3092\u8AAD\u307F\u307E\u3057\u305F\u3002Codex app-server / VPS Codex CLI \u306F\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
+    "",
+    scope,
+    `title: ${record2.title || "\u672A\u53D6\u5F97"}`,
+    `state: ${record2.state || "unknown"}`,
+    record2.author ? `author: ${record2.author}` : "",
+    record2.htmlUrl ? `source: ${record2.htmlUrl}` : ""
+  ].filter(Boolean).join("\n");
 }
 function buildDashboardCostAwareFastPathMessages({
   threadId,
