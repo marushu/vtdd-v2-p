@@ -3624,7 +3624,52 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   const status = JSON.parse(dashboardSocket.sent[2]);
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
-  assert.equal(status.text, "app-server bridge の返信を待っています");
+  assert.match(status.text, /Codex app-server に渡しています/);
+  assert.match(status.text, /Codex usage を消費し得ます/);
+});
+
+test("DashboardChatRoom answers cost-aware lightweight owner turns without starting app-server Codex", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "Codex クレジット消費を削るとVTDD自体が思ったものにならなくなるんじゃない？"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 0);
+  assert.equal(dashboardSocket.sent.length, 3);
+  const ownerBroadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(ownerBroadcast.messages.length, 1);
+  assert.equal(ownerBroadcast.messages[0].role, "owner");
+  const ack = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(ack.type, "owner_message_accepted");
+  assert.equal(ack.ok, true);
+  const fastPathBroadcast = JSON.parse(dashboardSocket.sent[2]);
+  assert.equal(fastPathBroadcast.type, "thread");
+  assert.equal(fastPathBroadcast.messages.length, 2);
+  const reply = fastPathBroadcast.messages[1];
+  assert.equal(reply.role, "butler");
+  assert.equal(reply.status, "replied");
+  assert.match(reply.text, /軽量 fast path/);
+  assert.match(reply.text, /Codex app-server \/ VPS Codex CLI は起動していません/);
+  assert.match(reply.text, /cost_boundary: lightweight_worker_reply/);
+  assert.match(reply.text, /codexWillStart: false/);
 });
 
 test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal before app-server bridge", async () => {

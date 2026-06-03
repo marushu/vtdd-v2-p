@@ -350,12 +350,33 @@ export class DashboardChatRoom {
       now,
       origin
     });
+    const costAwareFastPathMessages = vpsMaintenanceMessages
+      ? null
+      : buildDashboardCostAwareFastPathMessages({
+          threadId,
+          repository,
+          relatedIssue,
+          text,
+          mediaReferences: mediaValidation.mediaReferences,
+          now
+        });
     const bridgeSockets = this.connectedAppServerBridgeSockets(threadId);
     if (bridgeSockets.length === 0) {
       const messages = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
       if (vpsMaintenanceMessages) {
         const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
+        await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
+        this.sendSocket(socket, {
+          type: "owner_message_accepted",
+          ok: true,
+          clientMessageId,
+          messageId: ownerMessage.messageId
+        });
+        return;
+      }
+      if (costAwareFastPathMessages) {
+        const butlerMessages = store ? await store.appendMany(threadId, costAwareFastPathMessages) : costAwareFastPathMessages;
         await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
         this.sendSocket(socket, {
           type: "owner_message_accepted",
@@ -399,10 +420,15 @@ export class DashboardChatRoom {
       await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
       return;
     }
+    if (costAwareFastPathMessages) {
+      const butlerMessages = store ? await store.appendMany(threadId, costAwareFastPathMessages) : costAwareFastPathMessages;
+      await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
+      return;
+    }
     await this.broadcastTransientStatus({
       threadId,
       status: "thinking",
-      text: "app-server bridge の返信を待っています"
+      text: buildDashboardAppServerUsageTransientText({ text, repository, relatedIssue })
     });
     await this.dispatchOwnerMessageToAppServerBridge({
       threadId,
@@ -8930,6 +8956,102 @@ function buildDashboardAppServerFailureTransientText({ messageStatus = "", failu
     return "再接続と状態確認を続けています。入力と文脈は保持しています。";
   }
   return sanitizeDashboardChatText(failureText) || "app-server bridge の返信を待っています";
+}
+
+function buildDashboardAppServerUsageTransientText({ text = "", repository = "", relatedIssue = "" } = {}) {
+  const scope = [
+    repository ? `repo=${repository}` : "repo=未指定",
+    relatedIssue ? `Issue #${relatedIssue}` : "Issue=未指定"
+  ].join(" / ");
+  if (isDashboardCostAwareLightweightIntent({ text })) {
+    return `軽量相談として扱えない文脈が含まれるため、Codex app-server に渡します。Codex usage を消費し得ます。${scope}`;
+  }
+  return `Codex app-server に渡しています。Codex usage を消費し得ます。${scope}`;
+}
+
+function buildDashboardCostAwareFastPathMessages({
+  threadId,
+  repository = "",
+  relatedIssue = "",
+  text = "",
+  mediaReferences = [],
+  now = ""
+} = {}) {
+  if (!isDashboardCostAwareLightweightIntent({ text, mediaReferences })) {
+    return null;
+  }
+  const createdAt = normalizeIsoTimestamp(now) || new Date().toISOString();
+  const message = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      repository,
+      relatedIssue,
+      status: "replied",
+      messageId: `dashboard_butler_cost_fast_path:${crypto.randomUUID()}`,
+      createdAt,
+      text: buildDashboardCostAwareFastPathReplyText({ repository, relatedIssue })
+    },
+    { threadId }
+  );
+  return message ? [message] : null;
+}
+
+function isDashboardCostAwareLightweightIntent({ text = "", mediaReferences = [] } = {}) {
+  if (Array.isArray(mediaReferences) && mediaReferences.length > 0) {
+    return false;
+  }
+  const normalized = sanitizeDashboardChatText(text);
+  if (!normalized) {
+    return false;
+  }
+  const lower = normalized.toLowerCase();
+  const hasCostTerm =
+    lower.includes("codex usage") ||
+    lower.includes("usage") ||
+    lower.includes("quota") ||
+    lower.includes("credit") ||
+    lower.includes("cost") ||
+    lower.includes("fast path") ||
+    normalized.includes("クレジット") ||
+    normalized.includes("使用量") ||
+    normalized.includes("消費") ||
+    normalized.includes("節約") ||
+    normalized.includes("削る") ||
+    normalized.includes("軽量") ||
+    normalized.includes("コスト");
+  if (!hasCostTerm) {
+    return false;
+  }
+  const heavyPatterns = [
+    /\bGO\b/,
+    /\bmerge\b/i,
+    /\bdeploy\b/i,
+    /\breviewer\b/i,
+    /\bci\b/i,
+    /\bpr\s*#?\d+/i,
+    /#\d+\b/,
+    /実装|修正|直して|作って|追加|削除|マージ|デプロイ|レビュー|レビュアー|テスト|CI|PR|Issue|ファイル|画像|動画|添付|調査して|探して/
+  ];
+  return !heavyPatterns.some((pattern) => pattern.test(normalized));
+}
+
+function buildDashboardCostAwareFastPathReplyText({ repository = "", relatedIssue = "" } = {}) {
+  const scope = [
+    repository ? `対象 repo: ${repository}` : "対象 repo: 未指定",
+    relatedIssue ? `関連 Issue: #${relatedIssue}` : "関連 Issue: 未指定"
+  ].join("\n");
+  return [
+    "この返答は Dashboard Worker の軽量 fast path で返しています。Codex app-server / VPS Codex CLI は起動していません。",
+    "",
+    scope,
+    "cost_boundary: lightweight_worker_reply",
+    "codexWillStart: false",
+    "",
+    "削る対象は、通常会話や cost/status の入口で毎回 Codex turn を起動する部分です。Issue / PR / reviewer / CI / E2E / merge / deploy の gate は削りません。",
+    "",
+    "次に重い実装や深い repo truth 読みが必要になった時だけ、Butler は Codex app-server に渡し、その時点で Codex usage を消費し得ることを表示します。"
+  ].join("\n");
 }
 
 async function filterDashboardAppServerBridgeMessagesForAppend({ store, threadId, messages = [] } = {}) {
