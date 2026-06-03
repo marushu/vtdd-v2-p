@@ -694,12 +694,15 @@ function createMockDashboardChatRoomNamespace() {
 
 function createMockDurableObjectStorage() {
   const values = new Map();
+  const putCalls = [];
   return {
     values,
+    putCalls,
     async get(key) {
       return values.get(key);
     },
     async put(key, value) {
+      putCalls.push({ key, value });
       values.set(key, value);
     }
   };
@@ -4161,6 +4164,75 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
   assert.equal(stored[0].role, "butler");
   assert.equal(stored[0].status, "replied");
   assert.equal(stored[0].text, "日本時間では、今日は 05月22日 20時09分です。");
+});
+
+test("DashboardChatRoom does not rewrite unchanged app-server thread mapping during transient bursts", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const transientEvents = [
+    {
+      type: "app_server_reply_delta",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      delta: "調"
+    },
+    {
+      type: "app_server_status",
+      status: "thinking",
+      stage: "planning",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "方針を整理しています。"
+    },
+    {
+      type: "app_server_reply_delta",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      delta: "査"
+    },
+    {
+      type: "app_server_status",
+      status: "thinking",
+      stage: "command",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "コマンドを実行しています。"
+    }
+  ];
+
+  for (const event of transientEvents) {
+    await room.webSocketMessage(bridgeSocket, JSON.stringify(event));
+  }
+
+  assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-450");
+  assert.equal(storage.putCalls.filter((call) => call.key === "app_server_thread:dashboard-main-unresolved").length, 1);
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+  assert.equal(dashboardSocket.sent.map((message) => JSON.parse(message)).filter((message) => message.type === "transient_status").length, 4);
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-451",
+      text: "新しい Codex thread で再開しています。"
+    })
+  );
+
+  assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-451");
+  assert.equal(storage.putCalls.filter((call) => call.key === "app_server_thread:dashboard-main-unresolved").length, 2);
 });
 
 test("DashboardChatRoom persists app-server timeout as recoverable Japanese thread message", async () => {
