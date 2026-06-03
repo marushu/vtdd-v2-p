@@ -15347,6 +15347,33 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return releasePendingOwnerSend(pendingClientMessageId, { clearComposer: true });
       }
 
+      function restoreThreadRecoveryState(messages) {
+        if (!Array.isArray(messages) || messages.length === 0 || pendingOwnerSend) return;
+        const latestConversationMessage = [...messages]
+          .reverse()
+          .find((message) => message && (message.role === "owner" || message.role === "butler"));
+        if (!latestConversationMessage) return;
+        if (latestConversationMessage.role === "butler") {
+          if (latestConversationMessage.status === "replied") {
+            clearTransientProgress();
+            return;
+          }
+          if (latestConversationMessage.status === "failed" || latestConversationMessage.status === "stalled") {
+            clearTransientProgress();
+            releaseComposerForFollowUp(latestConversationMessage.text || "応答生成が止まっています。同じ thread で続けられます。");
+            return;
+          }
+        }
+        if (latestConversationMessage.role === "owner") {
+          updateTransientProgress("送信済みです。app-server bridge の返信を待っています。復帰中なら同じ thread で再接続します。", {
+            status: "pending_app_server_bridge",
+            thinking: true,
+            title: "返信待ち"
+          });
+          setStatus("送信済みです。app-server bridge の返信を待っています。", { thinking: true });
+        }
+      }
+
       function normalizeMessageId(value) {
         const id = String(value || "").trim();
         return id || "";
@@ -16203,6 +16230,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             releasePendingOwnerSendFromThread(body.messages || []);
+            restoreThreadRecoveryState(body.messages || []);
             status.dataset.websocketState = describeChatSocketState();
             return { ok: true };
           }
@@ -16554,10 +16582,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         if (await resumeDashboardSessionAfterAuthReturn("画面復帰後、再ログイン状態を確認しています。入力は保持しています。")) return;
         refreshDashboardFreshnessStatus({ pill: "表示中" });
+        refreshThread();
         if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
           setConnectionRecoveryStatus("画面復帰を検知しました。接続を復帰しています。");
           dropStaleSocketIfNeeded();
-          refreshThread();
           scheduleReconnect();
         }
       });

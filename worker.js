@@ -71149,6 +71149,33 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return releasePendingOwnerSend(pendingClientMessageId, { clearComposer: true });
       }
 
+      function restoreThreadRecoveryState(messages) {
+        if (!Array.isArray(messages) || messages.length === 0 || pendingOwnerSend) return;
+        const latestConversationMessage = [...messages]
+          .reverse()
+          .find((message) => message && (message.role === "owner" || message.role === "butler"));
+        if (!latestConversationMessage) return;
+        if (latestConversationMessage.role === "butler") {
+          if (latestConversationMessage.status === "replied") {
+            clearTransientProgress();
+            return;
+          }
+          if (latestConversationMessage.status === "failed" || latestConversationMessage.status === "stalled") {
+            clearTransientProgress();
+            releaseComposerForFollowUp(latestConversationMessage.text || "\u5FDC\u7B54\u751F\u6210\u304C\u6B62\u307E\u3063\u3066\u3044\u307E\u3059\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002");
+            return;
+          }
+        }
+        if (latestConversationMessage.role === "owner") {
+          updateTransientProgress("\u9001\u4FE1\u6E08\u307F\u3067\u3059\u3002app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002\u5FA9\u5E30\u4E2D\u306A\u3089\u540C\u3058 thread \u3067\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002", {
+            status: "pending_app_server_bridge",
+            thinking: true,
+            title: "\u8FD4\u4FE1\u5F85\u3061"
+          });
+          setStatus("\u9001\u4FE1\u6E08\u307F\u3067\u3059\u3002app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002", { thinking: true });
+        }
+      }
+
       function normalizeMessageId(value) {
         const id = String(value || "").trim();
         return id || "";
@@ -72005,6 +72032,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             releasePendingOwnerSendFromThread(body.messages || []);
+            restoreThreadRecoveryState(body.messages || []);
             status.dataset.websocketState = describeChatSocketState();
             return { ok: true };
           }
@@ -72356,10 +72384,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         if (await resumeDashboardSessionAfterAuthReturn("\u753B\u9762\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
         refreshDashboardFreshnessStatus({ pill: "\u8868\u793A\u4E2D" });
+        refreshThread();
         if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
           setConnectionRecoveryStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           dropStaleSocketIfNeeded();
-          refreshThread();
           scheduleReconnect();
         }
       });
