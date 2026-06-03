@@ -2990,6 +2990,38 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.equal(queueCommentBody.includes('"handoff"'), true);
 });
 
+test("worker keeps ordinary Dashboard Butler planning chat out of VPS helper queue", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 455,
+        text: "今VTDDの状況は？次に進めるべきタスクも示して。app-server bridge の設定も確認しながら、Butlerで進められるか教えて。"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: createInMemoryMemoryProvider(),
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution, null);
+  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages[0].role, "owner");
+  assert.doesNotMatch(JSON.stringify(body.messages), /VPS helper queue/);
+  assert.doesNotMatch(JSON.stringify(body.messages), /途中で止まりました/);
+});
+
 test("worker maps Dashboard Butler VPS runner status text to the low-risk preset", async () => {
   const store = createInMemoryDashboardChatStore();
   const provider = createInMemoryMemoryProvider();

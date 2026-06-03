@@ -67550,7 +67550,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
     return {
       messageStatus: "blocked",
       reply: [
-        "Dashboard Butler \u306E\u81EA\u7136\u6587\u304B\u3089 VPS helper queue \u3078\u9032\u3081\u3088\u3046\u3068\u3057\u307E\u3057\u305F\u304C\u3001memory provider \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002",
+        "VPS maintenance request \u3068\u3057\u3066\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u304C\u3001\u3053\u306E\u30C1\u30E3\u30C3\u30C8\u3067\u306F\u5B9F\u884C\u3092\u958B\u59CB\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
         "",
         `- \u5BFE\u8C61 repo: ${repository || "\u672A\u6307\u5B9A"}`,
         `- \u95A2\u9023 Issue: ${relatedIssue ? `#${relatedIssue}` : "\u672A\u6307\u5B9A"}`,
@@ -67814,7 +67814,7 @@ function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
   if (!normalized) return false;
   const lower = normalized.toLowerCase();
   const mentionsRecoveryTarget = lower.includes("runner") || lower.includes("app-server") || lower.includes("app server") || lower.includes("bridge") || normalized.includes("\u30E9\u30F3\u30CA\u30FC") || normalized.includes("\u5B9F\u884C\u5668") || normalized.includes("\u30D6\u30EA\u30C3\u30B8");
-  const mentionsRecoveryAction = lower.includes("status") || lower.includes("health") || lower.includes("state") || lower.includes("logs") || lower.includes("log") || lower.includes("restart") || lower.includes("reconnect") || normalized.includes("\u72B6\u614B") || normalized.includes("\u78BA\u8A8D") || normalized.includes("\u751F\u5B58") || normalized.includes("\u7A3C\u50CD") || normalized.includes("\u30ED\u30B0") || normalized.includes("\u518D\u8D77\u52D5") || normalized.includes("\u5FA9\u65E7") || normalized.includes("\u843D\u3061") || normalized.includes("\u6B62\u307E");
+  const mentionsRecoveryAction = lower.includes("status") || lower.includes("health") || lower.includes("is-active") || lower.includes("logs") || lower.includes("log") || lower.includes("restart") || lower.includes("reconnect") || normalized.includes("\u751F\u5B58") || normalized.includes("\u30ED\u30B0") || normalized.includes("\u518D\u8D77\u52D5") || normalized.includes("\u5FA9\u65E7") || normalized.includes("\u843D\u3061") || normalized.includes("\u6B62\u307E");
   const hasVpsMaintenance = lower.includes("vps") && (lower.includes("privileged") || lower.includes("maintenance") || lower.includes("root") || lower.includes("sudo") || lower.includes("helper") || lower.includes("passkey"));
   const hasJapaneseMaintenance = (lower.includes("root") || lower.includes("sudo") || lower.includes("helper")) && (normalized.includes("\u4FDD\u5B88") || normalized.includes("\u5FA9\u65E7") || normalized.includes("\u627F\u8A8D"));
   return hasVpsMaintenance || hasJapaneseMaintenance || mentionsRecoveryTarget && mentionsRecoveryAction;
@@ -67941,7 +67941,7 @@ function buildDashboardVpsPrivilegedMaintenanceQueuedReply({ repository, related
 function buildDashboardVpsPrivilegedMaintenanceBlockedReply({ repository, relatedIssue, error: error2, reason, issues, nextAction } = {}) {
   const issueText = Array.isArray(issues) && issues.length > 0 ? issues.join("; ") : reason || "blocked";
   const lines = [
-    "Dashboard Butler \u306E\u81EA\u7136\u6587 intent \u304B\u3089 VPS helper queue \u3078\u9032\u3081\u3088\u3046\u3068\u3057\u307E\u3057\u305F\u304C\u3001\u9014\u4E2D\u3067\u6B62\u307E\u308A\u307E\u3057\u305F\u3002",
+    "VPS maintenance request \u3068\u3057\u3066\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u304C\u3001\u3053\u306E\u30C1\u30E3\u30C3\u30C8\u3067\u306F\u5B9F\u884C\u3092\u958B\u59CB\u3057\u3066\u3044\u307E\u305B\u3093\u3002",
     "",
     `- \u5BFE\u8C61 repo: ${repository || "\u672A\u6307\u5B9A"}`,
     `- \u95A2\u9023 Issue: ${relatedIssue ? `#${relatedIssue}` : "\u672A\u6307\u5B9A"}`,
