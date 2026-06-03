@@ -182,12 +182,17 @@ for (const viewport of viewports) {
         const body = element.querySelector(".message-body") || bubble;
         const bubbleRect = bubble.getBoundingClientRect();
         const bodyRect = body.getBoundingClientRect();
+        const link = element.querySelector(".chat-link, a[href]");
+        const linkRect = link?.getBoundingClientRect();
         const bubbleStyle = getComputedStyle(bubble);
         const bodyStyle = getComputedStyle(body);
         return {
           entry: { left: rect.left, right: rect.right, width: rect.width },
           bubble: { left: bubbleRect.left, right: bubbleRect.right, width: bubbleRect.width },
           body: { left: bodyRect.left, right: bodyRect.right, width: bodyRect.width, height: bodyRect.height },
+          link: linkRect
+            ? { left: linkRect.left, right: linkRect.right, width: linkRect.width, height: linkRect.height }
+            : null,
           styles: {
             bubbleBackgroundColor: bubbleStyle.backgroundColor,
             bodyColor: bodyStyle.color,
@@ -273,6 +278,18 @@ function assertLayout(state) {
   }
   if (state.ownerNoSpace.bubble.width < Math.min(420, state.ownerNoSpace.entry.width * 0.45)) {
     throw new Error(`no-space Japanese owner bubble collapsed too narrow: ${JSON.stringify(state.ownerNoSpace.bubble)}`);
+  }
+  if (!state.owner.link) {
+    throw new Error("owner long URL link is not rendered as a measurable link");
+  }
+  if (state.owner.link.right > state.owner.bubble.right || state.owner.link.left < state.owner.bubble.left) {
+    throw new Error(`owner long URL link overflows bubble: ${JSON.stringify({ link: state.owner.link, bubble: state.owner.bubble })}`);
+  }
+  if (state.owner.link.width > state.owner.body.width + 1) {
+    throw new Error(`owner long URL link is wider than message body: ${JSON.stringify({ link: state.owner.link, body: state.owner.body })}`);
+  }
+  if (state.owner.link.height < 32) {
+    throw new Error(`owner long URL link did not wrap across lines: ${JSON.stringify(state.owner.link)}`);
   }
   if (state.ownerShort.bubble.width > state.ownerShort.entry.width * 0.9) {
     throw new Error(

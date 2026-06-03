@@ -21,6 +21,7 @@ owner message entry は `justify-items: end` のまま維持する。owner bubbl
 - Unit: Worker HTML に owner bubble の `width: fit-content` と `max-width` が含まれ、旧 `width: min(720px, 100%)` が残らないことを確認する。
 - VRT: iPhone / iPad portrait / iPad landscape / iPad real landscape で、owner 短文 bubble が owner entry 全幅より十分小さいことを確認する。
 - VRT: owner 長文・スペースなし日本語・長い URL が viewport 外へ見切れず、右寄せのまま表示されることを確認する。
+- VRT: 長い URL のリンク要素が owner bubble / message body の幅を超えず、複数行へ折り返されることを bounding box で確認する。
 - Local: `node --test test/worker.test.js`
 - Local: `npm run e2e:issue744-chat-layout:chromium`
 - Local: `npm run check:generated-worker`

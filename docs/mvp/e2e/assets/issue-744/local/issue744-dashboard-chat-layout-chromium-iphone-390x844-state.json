@@ -28,6 +28,12 @@
         "width": 223.015625,
         "height": 395.859375
       },
+      "link": {
+        "left": 111.484375,
+        "right": 334.171875,
+        "width": 222.6875,
+        "height": 254.515625
+      },
       "styles": {
         "bubbleBackgroundColor": "rgb(23, 23, 23)",
         "bodyColor": "rgb(247, 247, 244)",
@@ -53,6 +59,7 @@
         "width": 223.015625,
         "height": 52.78125
       },
+      "link": null,
       "styles": {
         "bubbleBackgroundColor": "rgb(23, 23, 23)",
         "bodyColor": "rgb(247, 247, 244)",
@@ -78,6 +85,7 @@
         "width": 223.015625,
         "height": 52.78125
       },
+      "link": null,
       "styles": {
         "bubbleBackgroundColor": "rgb(23, 23, 23)",
         "bodyColor": "rgb(247, 247, 244)",
@@ -103,6 +111,7 @@
         "width": 311,
         "height": 327.125
       },
+      "link": null,
       "styles": {
         "bubbleBackgroundColor": "rgba(0, 0, 0, 0)",
         "bodyColor": "rgb(21, 21, 21)",
