@@ -20,6 +20,8 @@ import {
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
+  collectVpsRunnerCanonicalRepoSyncStatus,
+  ensureVpsRunnerCanonicalRepoSynced,
   formatPullRequestContext,
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
@@ -1227,6 +1229,124 @@ test("VPS runner PR body describes ready PR handoff without draft blocking seman
   assert.equal(body.includes("reviewer approve、required checks、head SHA一致、mergeability、approve_auto_merge policy"), true);
 });
 
+test("VPS runner repo sync preflight allows clean in-sync main with known artifacts", async () => {
+  const status = await collectVpsRunnerCanonicalRepoSyncStatus({
+    repoRoot: "/tmp/vtdd-runner/repos/vtdd-v2-p",
+    baseRef: "main",
+    run: mockRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "abc123",
+      ahead: 0,
+      behind: 0,
+      status: "?? .tmp/runtime.json\n?? test-results/runner/output.log\n"
+    })
+  });
+
+  assert.equal(status.ok, true);
+  assert.equal(status.developmentAllowed, true);
+  assert.equal(status.inSyncWithOrigin, true);
+  assert.deepEqual(status.knownUntrackedArtifacts, [".tmp/runtime.json", "test-results/runner/output.log"]);
+  assert.deepEqual(status.unknownUntrackedPaths, []);
+});
+
+test("VPS runner repo sync preflight fast-forwards clean behind-only main", async () => {
+  const calls = [];
+  let pulled = false;
+  const status = await ensureVpsRunnerCanonicalRepoSynced({
+    repoRoot: "/tmp/vtdd-runner/repos/vtdd-v2-p",
+    baseRef: "main",
+    run: async (command, args, options) => {
+      calls.push(args.join(" "));
+      if (args[0] === "pull") {
+        pulled = true;
+        return { stdout: "", stderr: "" };
+      }
+      return mockRepoSyncRun({
+        branch: "main",
+        headSha: pulled ? "def456" : "abc123",
+        originHeadSha: "def456",
+        ahead: 0,
+        behind: pulled ? 0 : 1,
+        status: ""
+      })(command, args, options);
+    }
+  });
+
+  assert.equal(status.developmentAllowed, true);
+  assert.equal(status.syncAction, "fast_forwarded");
+  assert.equal(status.headSha, "def456");
+  assert.equal(calls.includes("pull --ff-only origin main"), true);
+});
+
+test("VPS runner repo sync preflight blocks tracked dirty, ahead, and unknown untracked drift", async () => {
+  const dirty = await collectVpsRunnerCanonicalRepoSyncStatus({
+    run: mockRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "abc123",
+      ahead: 0,
+      behind: 0,
+      status: " M scripts/run-vps-runner.mjs\n"
+    })
+  });
+  const ahead = await collectVpsRunnerCanonicalRepoSyncStatus({
+    run: mockRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "def456",
+      ahead: 1,
+      behind: 0,
+      status: ""
+    })
+  });
+  const unknownUntracked = await collectVpsRunnerCanonicalRepoSyncStatus({
+    run: mockRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "abc123",
+      ahead: 0,
+      behind: 0,
+      status: "?? scripts/local-hotfix.mjs\n"
+    })
+  });
+
+  assert.equal(dirty.developmentAllowed, false);
+  assert.deepEqual(dirty.blockedBy, ["tracked_dirty"]);
+  assert.equal(ahead.developmentAllowed, false);
+  assert.deepEqual(ahead.blockedBy, ["ahead_of_origin"]);
+  assert.equal(unknownUntracked.developmentAllowed, false);
+  assert.deepEqual(unknownUntracked.blockedBy, ["unknown_untracked"]);
+});
+
+test("VPS runner repo sync preflight blocks queue pickup before GitHub reads", async () => {
+  let githubRead = false;
+  const result = await runVpsRunnerOnce({
+    token: "ghs_test",
+    allowedRepositories: ["sample-org/vtdd-v2"],
+    workRoot: "/tmp/vtdd-runner-test",
+    dryRun: true,
+    githubFetch: async () => {
+      githubRead = true;
+      return [];
+    },
+    repoSyncPreflight: true,
+    run: mockRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "abc123",
+      ahead: 0,
+      behind: 0,
+      status: "?? scripts/local-hotfix.mjs\n"
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.message.includes("preflight blocked queue pickup"), true);
+  assert.equal(result.repoSync.developmentAllowed, false);
+  assert.equal(githubRead, false);
+});
+
 test("VPS runner dry run reports selected execution without side effects", async () => {
   const calls = [];
   const result = await runVpsRunnerOnce({
@@ -1234,6 +1354,7 @@ test("VPS runner dry run reports selected execution without side effects", async
     allowedRepositories: ["sample-org/vtdd-v2"],
     workRoot: "/tmp/vtdd-runner-test",
     dryRun: true,
+    repoSyncPreflight: false,
     githubFetch: async (url) => {
       calls.push(url);
       if (url.includes("/issues?")) {
@@ -2345,6 +2466,38 @@ function queueComment({
   }
 }
 \`\`\``;
+}
+
+function mockRepoSyncRun({
+  branch = "main",
+  headSha = "abc123",
+  originHeadSha = "abc123",
+  ahead = 0,
+  behind = 0,
+  status = ""
+} = {}) {
+  return async (_command, args) => {
+    const signature = args.join(" ");
+    if (signature.startsWith("fetch origin ")) {
+      return { stdout: "", stderr: "" };
+    }
+    if (signature === "symbolic-ref --short HEAD") {
+      return { stdout: `${branch}\n`, stderr: "" };
+    }
+    if (signature === "rev-parse HEAD") {
+      return { stdout: `${headSha}\n`, stderr: "" };
+    }
+    if (signature.startsWith("rev-parse origin/")) {
+      return { stdout: `${originHeadSha}\n`, stderr: "" };
+    }
+    if (signature.startsWith("rev-list --left-right --count HEAD...origin/")) {
+      return { stdout: `${ahead}\t${behind}\n`, stderr: "" };
+    }
+    if (signature === "status --porcelain=v1") {
+      return { stdout: status, stderr: "" };
+    }
+    throw new Error(`Unexpected git command in mock: ${signature}`);
+  };
 }
 
 function privilegedMaintenanceQueueComment({
