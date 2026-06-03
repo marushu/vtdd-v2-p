@@ -31,6 +31,8 @@ const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_HEARTBEAT_SECONDS = 120;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.dirname(SCRIPT_DIR);
+const DEFAULT_REPO_SYNC_BASE_REF = "main";
+const KNOWN_RUNNER_UNTRACKED_ARTIFACT_PREFIXES = [".tmp/", "test-results/"];
 const VTDD_INCIDENT_ACTOR_IDENTITY_FAILURE_MARKER = "<!-- vtdd:incident=actor_identity_failure -->";
 const ROLE_GITHUB_APP_ENV = {
   codex_fallback_reviewer: {
@@ -108,8 +110,29 @@ async function runVpsRunnerOnce({
   allowedRepositories,
   repositoryPolicies,
   workRoot,
-  dryRun = false
+  dryRun = false,
+  repoSyncPreflight = process.env.VTDD_VPS_RUNNER_REPO_SYNC_PREFLIGHT !== "0",
+  repoRoot = normalizeText(process.env.VTDD_VPS_RUNNER_REPO_ROOT) || REPOSITORY_ROOT,
+  repoSyncBaseRef = normalizeText(process.env.VTDD_VPS_RUNNER_REPO_SYNC_BASE_REF) || DEFAULT_REPO_SYNC_BASE_REF,
+  env = process.env,
+  run = runCommand
 }) {
+  if (repoSyncPreflight) {
+    const repoSync = await ensureVpsRunnerCanonicalRepoSynced({
+      repoRoot,
+      baseRef: repoSyncBaseRef,
+      env,
+      run
+    });
+    if (!repoSync.developmentAllowed) {
+      return {
+        ok: true,
+        message: `VPS runner repository sync preflight blocked queue pickup: ${repoSync.reason}`,
+        repoSync
+      };
+    }
+  }
+
   const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
   const issueCommentsByRepository = new Map();
   for (const repository of policies.map((policy) => policy.repository)) {
@@ -668,6 +691,196 @@ function buildPostMergePullTruth({ pull, target }) {
   };
 }
 
+async function ensureVpsRunnerCanonicalRepoSynced({
+  repoRoot = REPOSITORY_ROOT,
+  baseRef = DEFAULT_REPO_SYNC_BASE_REF,
+  env = process.env,
+  run = runCommand
+} = {}) {
+  const first = await collectVpsRunnerCanonicalRepoSyncStatus({ repoRoot, baseRef, env, run });
+  if (!first.ok || first.developmentAllowed || first.behindCount <= 0) {
+    return first;
+  }
+  if (!first.safeToFastForward) {
+    return first;
+  }
+
+  try {
+    await run("git", ["pull", "--ff-only", "origin", baseRef], { cwd: repoRoot, env });
+  } catch (error) {
+    return {
+      ...first,
+      developmentAllowed: false,
+      safeToFastForward: false,
+      syncAction: "pull_ff_only_failed",
+      reason: `VPS runner repo is behind origin/${baseRef}, but git pull --ff-only failed: ${
+        summarizeDiagnosticText(error?.stderr || error?.message) || "unknown failure"
+      }`,
+      error: summarizeDiagnosticText(error?.stderr || error?.message)
+    };
+  }
+
+  const second = await collectVpsRunnerCanonicalRepoSyncStatus({
+    repoRoot,
+    baseRef,
+    env,
+    run,
+    skipFetch: true
+  });
+  return {
+    ...second,
+    syncAction: second.developmentAllowed ? "fast_forwarded" : "fast_forwarded_but_still_blocked"
+  };
+}
+
+async function collectVpsRunnerCanonicalRepoSyncStatus({
+  repoRoot = REPOSITORY_ROOT,
+  baseRef = DEFAULT_REPO_SYNC_BASE_REF,
+  env = process.env,
+  run = runCommand,
+  skipFetch = false
+} = {}) {
+  const result = {
+    ok: false,
+    developmentAllowed: false,
+    safeToFastForward: false,
+    syncAction: "none",
+    reason: null,
+    repoRoot,
+    baseRef,
+    currentBranch: null,
+    headSha: null,
+    originHeadSha: null,
+    aheadCount: 0,
+    behindCount: 0,
+    inSyncWithOrigin: false,
+    trackedDirtyPaths: [],
+    unknownUntrackedPaths: [],
+    knownUntrackedArtifacts: [],
+    blockedBy: [],
+    error: null
+  };
+
+  try {
+    if (!skipFetch) {
+      await run("git", ["fetch", "origin", baseRef], { cwd: repoRoot, env });
+    }
+    const [branch, head, originHead, revList, status] = await Promise.all([
+      run("git", ["symbolic-ref", "--short", "HEAD"], { cwd: repoRoot, env }),
+      run("git", ["rev-parse", "HEAD"], { cwd: repoRoot, env }),
+      run("git", ["rev-parse", `origin/${baseRef}`], { cwd: repoRoot, env }),
+      run("git", ["rev-list", "--left-right", "--count", `HEAD...origin/${baseRef}`], { cwd: repoRoot, env }),
+      run("git", ["status", "--porcelain=v1"], { cwd: repoRoot, env })
+    ]);
+    const parsedStatus = parseVpsRunnerRepoPorcelainStatus(status.stdout);
+    const [aheadText, behindText] = normalizeText(revList.stdout).split(/\s+/);
+    result.currentBranch = normalizeText(branch.stdout) || null;
+    result.headSha = normalizeText(head.stdout) || null;
+    result.originHeadSha = normalizeText(originHead.stdout) || null;
+    result.aheadCount = Number.parseInt(aheadText || "0", 10) || 0;
+    result.behindCount = Number.parseInt(behindText || "0", 10) || 0;
+    result.inSyncWithOrigin = Boolean(result.headSha && result.headSha === result.originHeadSha);
+    result.trackedDirtyPaths = parsedStatus.trackedDirtyPaths;
+    result.unknownUntrackedPaths = parsedStatus.unknownUntrackedPaths;
+    result.knownUntrackedArtifacts = parsedStatus.knownUntrackedArtifacts;
+    result.ok = true;
+
+    if (result.currentBranch !== baseRef) {
+      result.blockedBy.push("not_on_base_branch");
+    }
+    if (result.trackedDirtyPaths.length > 0) {
+      result.blockedBy.push("tracked_dirty");
+    }
+    if (result.unknownUntrackedPaths.length > 0) {
+      result.blockedBy.push("unknown_untracked");
+    }
+    if (result.aheadCount > 0 && result.behindCount > 0) {
+      result.blockedBy.push("diverged_from_origin");
+    } else if (result.aheadCount > 0) {
+      result.blockedBy.push("ahead_of_origin");
+    }
+
+    result.safeToFastForward =
+      result.blockedBy.length === 0 &&
+      result.behindCount > 0 &&
+      result.currentBranch === baseRef;
+    result.developmentAllowed =
+      result.blockedBy.length === 0 &&
+      result.behindCount === 0 &&
+      result.inSyncWithOrigin;
+    result.reason = buildVpsRunnerRepoSyncReason(result);
+  } catch (error) {
+    result.error = summarizeDiagnosticText(error?.stderr || error?.message);
+    result.reason = `VPS runner repo sync preflight failed: ${result.error || "unknown failure"}`;
+  }
+
+  return result;
+}
+
+function parseVpsRunnerRepoPorcelainStatus(stdout) {
+  const trackedDirtyPaths = [];
+  const unknownUntrackedPaths = [];
+  const knownUntrackedArtifacts = [];
+  for (const line of String(stdout || "").split("\n")) {
+    if (!line.trim()) {
+      continue;
+    }
+    if (line.startsWith("?? ")) {
+      const filePath = normalizeText(line.slice(3));
+      if (isKnownRunnerUntrackedArtifact(filePath)) {
+        knownUntrackedArtifacts.push(filePath);
+      } else {
+        unknownUntrackedPaths.push(filePath);
+      }
+      continue;
+    }
+    trackedDirtyPaths.push(normalizeText(line.slice(3)) || normalizeText(line));
+  }
+  return {
+    trackedDirtyPaths,
+    unknownUntrackedPaths,
+    knownUntrackedArtifacts
+  };
+}
+
+function isKnownRunnerUntrackedArtifact(filePath) {
+  const normalized = normalizeText(filePath);
+  return KNOWN_RUNNER_UNTRACKED_ARTIFACT_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function buildVpsRunnerRepoSyncReason(result) {
+  if (!result.ok) {
+    return result.reason;
+  }
+  if (result.developmentAllowed) {
+    return `VPS runner repo is synced with origin/${result.baseRef}.`;
+  }
+  if (result.safeToFastForward) {
+    return `VPS runner repo is behind origin/${result.baseRef} and can be fast-forwarded.`;
+  }
+  const reasons = [];
+  if (result.blockedBy.includes("not_on_base_branch")) {
+    reasons.push(`current branch is ${result.currentBranch || "unknown"}, expected ${result.baseRef}`);
+  }
+  if (result.blockedBy.includes("tracked_dirty")) {
+    reasons.push(`tracked dirty paths: ${result.trackedDirtyPaths.join(", ")}`);
+  }
+  if (result.blockedBy.includes("unknown_untracked")) {
+    reasons.push(`unknown untracked paths: ${result.unknownUntrackedPaths.join(", ")}`);
+  }
+  if (result.blockedBy.includes("diverged_from_origin")) {
+    reasons.push(`HEAD diverged from origin/${result.baseRef} (${result.aheadCount} ahead, ${result.behindCount} behind)`);
+  } else if (result.blockedBy.includes("ahead_of_origin")) {
+    reasons.push(`HEAD is ${result.aheadCount} commit(s) ahead of origin/${result.baseRef}`);
+  }
+  if (result.behindCount > 0 && result.blockedBy.length > 0) {
+    reasons.push(`also ${result.behindCount} commit(s) behind origin/${result.baseRef}`);
+  }
+  return reasons.length > 0
+    ? `VPS runner repo is not safe to use before recovery: ${reasons.join("; ")}.`
+    : `VPS runner repo is not synced with origin/${result.baseRef}.`;
+}
+
 async function collectVpsMainSyncStatus({ repoRoot, baseRef, mergeCommitSha, env }) {
   const result = {
     ok: false,
@@ -751,7 +964,10 @@ async function collectVpsRunnerPendingSnapshot({ githubFetch, repositoryPolicies
     pendingReviewerFallbacks: reviewerFallbacks.map((item) => ({
       repository: item.repository,
       pullRequestNumber: item.pullRequestNumber,
-      fallbackCommentId: item.commentId
+      fallbackCommentId: item.commentId,
+      dedupeKey: item.dedupeKey,
+      codexWillStart: item.codexWillStart === true,
+      codexUsageImpact: item.codexUsageImpact || "unknown"
     }))
   };
 }
@@ -912,6 +1128,7 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
       if (!policies.some((policy) => policy.repository === repository)) {
         return null;
       }
+      const headSha = normalizeText(parsed.headSha || comment.headSha);
       const samePullRequestComments = comments.filter(
         (candidate) =>
           normalizeRepository(candidate.repository) === repository &&
@@ -921,7 +1138,7 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
         isReviewerTerminalResolved({
           comments: samePullRequestComments,
           after: comment.created_at,
-          headSha: normalizeText(comment.headSha)
+          headSha
         })
       ) {
         return null;
@@ -930,11 +1147,17 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
         hasVpsReviewerFallbackActorIdentityIncident({
           comments: samePullRequestComments,
           after: comment.created_at,
-          headSha: normalizeText(comment.headSha)
+          headSha
         })
       ) {
         return null;
       }
+      const dedupeKey = [
+        "codex-fallback",
+        repository,
+        `pr-${pullRequestNumber}`,
+        headSha || "head-unknown"
+      ].join(":");
       return {
         repository,
         pullRequestNumber,
@@ -943,7 +1166,10 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
         createdAt: comment.created_at,
         commentId: comment.id,
         commentUrl: comment.html_url,
-        headSha: normalizeText(comment.headSha)
+        headSha,
+        dedupeKey,
+        codexWillStart: true,
+        codexUsageImpact: "high"
       };
     })
     .filter(Boolean);
@@ -2996,6 +3222,8 @@ export {
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
+  collectVpsRunnerCanonicalRepoSyncStatus,
+  ensureVpsRunnerCanonicalRepoSynced,
   formatPullRequestContext,
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
