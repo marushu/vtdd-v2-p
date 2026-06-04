@@ -826,7 +826,14 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
                 text: params.message || params.reason || params.error,
                 status: turnStatus,
                 mediaReferences: context.mediaReferences
-              })
+              }),
+        recovery: buildDashboardAppServerFailureRecovery({
+          text: params.message || params.reason || params.error,
+          status: turnStatus,
+          ownerText: context.ownerText,
+          ownerMessageId: context.ownerMessageId,
+          resumedExistingThread: context.resumedExistingThread
+        })
       };
     }
     return {
@@ -848,7 +855,45 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
         text: params.message || params.reason || params.error,
         status: "failed",
         mediaReferences: context.mediaReferences
+      }),
+      recovery: buildDashboardAppServerFailureRecovery({
+        text: params.message || params.reason || params.error,
+        status: "failed",
+        ownerText: context.ownerText,
+        ownerMessageId: context.ownerMessageId,
+        resumedExistingThread: context.resumedExistingThread
       })
+    };
+  }
+  return null;
+}
+
+export function isDashboardAppServerContextWindowExceededText(text = "") {
+  return /ran out of room in the model'?s context window|context window|clear earlier history/i.test(
+    normalizeBridgeText(text)
+  );
+}
+
+export function buildDashboardAppServerFailureRecovery({
+  text = "",
+  status = "",
+  ownerText = "",
+  ownerMessageId = "",
+  resumedExistingThread = false
+} = {}) {
+  const detail = sanitizeOptionalBridgeError(text);
+  if (
+    normalizeBridgeText(status).toLowerCase() !== "interrupted" &&
+    resumedExistingThread === true &&
+    isDashboardAppServerContextWindowExceededText(detail)
+  ) {
+    return {
+      status: "context_window_exceeded",
+      retryable: true,
+      resetBackendThread: true,
+      autoRetry: true,
+      originalText: normalizeBridgeText(ownerText),
+      originalMessageId: normalizeBridgeText(ownerMessageId)
     };
   }
   return null;
@@ -1696,7 +1741,10 @@ export async function handleDashboardTurnRequest({
       dashboardThreadId,
       codexThreadId,
       accumulatedText,
-      mediaReferences: materializedMediaReferences
+      mediaReferences: materializedMediaReferences,
+      ownerText: text,
+      ownerMessageId: request.messageId,
+      resumedExistingThread
     });
     if (!event) return;
     if (event.type === "app_server_reply_delta") {
@@ -2412,6 +2460,13 @@ export async function connectDashboardAppServerBridgeOnce({
               text: error?.message,
               status: "failed",
               mediaReferences: payload.mediaReferences
+            }),
+            recovery: buildDashboardAppServerFailureRecovery({
+              text: error?.message,
+              status: "failed",
+              ownerText: payload.text,
+              ownerMessageId: payload.messageId,
+              resumedExistingThread: Boolean(payload.codexThreadId)
             })
           });
         });

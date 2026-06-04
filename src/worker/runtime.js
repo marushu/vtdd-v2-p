@@ -568,6 +568,22 @@ export class DashboardChatRoom {
         updatedAt: normalized.createdAt
       });
     }
+    if (shouldResetDashboardAppServerBackendThread(normalized.recovery)) {
+      await this.clearAppServerThreadMapping(normalized.threadId);
+      const retried = await this.retryDashboardAppServerTurnAfterContextReset({
+        socket,
+        normalized
+      });
+      if (retried) {
+        await this.broadcastTransientStatus({
+          threadId: normalized.threadId,
+          status: "thinking",
+          text: "codex app-server の古い backend thread を切り替えて、同じ入力を再送しています。",
+          snapshot: false
+        });
+        return;
+      }
+    }
     const finalProgressSnapshot =
       normalized.transientStatus === "replied"
         ? await this.readTransientProgressSnapshot(normalized.threadId)
@@ -826,6 +842,60 @@ export class DashboardChatRoom {
       updatedAt: normalizeIsoTimestamp(mapping?.updatedAt) || new Date().toISOString()
     });
     return true;
+  }
+
+  async clearAppServerThreadMapping(threadId) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    const key = normalizedThreadId ? `app_server_thread:${normalizedThreadId}` : "";
+    if (!key || !this.ctx?.storage) {
+      return false;
+    }
+    if (typeof this.ctx.storage.delete === "function") {
+      await this.ctx.storage.delete(key);
+      return true;
+    }
+    if (typeof this.ctx.storage.put === "function") {
+      await this.ctx.storage.put(key, null);
+      return true;
+    }
+    return false;
+  }
+
+  async retryDashboardAppServerTurnAfterContextReset({ socket, normalized } = {}) {
+    if (!isSocketOpen(socket) || !shouldResetDashboardAppServerBackendThread(normalized?.recovery)) {
+      return false;
+    }
+    const originalText = sanitizeDashboardChatText(normalized.recovery.originalText);
+    const originalMessageId = normalizeDashboardEventText(normalized.recovery.originalMessageId);
+    if (!normalized.threadId || !originalText || !originalMessageId) {
+      return false;
+    }
+    const retryKey = `app_server_context_retry:${normalized.threadId}:${originalMessageId}`;
+    if (typeof this.ctx?.storage?.get === "function") {
+      const previous = await this.ctx.storage.get(retryKey);
+      if (previous) {
+        return false;
+      }
+    }
+    if (typeof this.ctx?.storage?.put === "function") {
+      await this.ctx.storage.put(retryKey, {
+        at: new Date().toISOString(),
+        reason: "context_window_exceeded"
+      });
+    }
+    return this.dispatchOwnerMessageToAppServerBridge({
+      threadId: normalized.threadId,
+      bridgeSocket: socket,
+      ownerMessage: {
+        threadId: normalized.threadId,
+        messageId: originalMessageId,
+        role: "owner",
+        repository: normalized.repository || null,
+        relatedIssue: normalized.relatedIssue || null,
+        text: originalText,
+        createdAt: new Date().toISOString()
+      }
+    });
   }
 
   async hasAcceptedOwnerMessage({ threadId, clientMessageId, store }) {
@@ -9868,6 +9938,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || new Date().toISOString();
+  const recovery = normalizeDashboardAppServerRecovery(input.recovery);
   const messages = [];
   let transientStatus = "";
   let snapshotTransientStatus = false;
@@ -9900,8 +9971,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
     const failureText = buildDashboardAppServerFailureThreadText({ text, status });
     const messageStatus =
-      normalizeDashboardEventText(input?.recovery?.status).toLowerCase() === "stalled" ||
-      status === "timeout"
+      normalizeDashboardEventText(recovery?.status).toLowerCase() === "stalled" || status === "timeout"
         ? "stalled"
         : "failed";
     messages.push(
@@ -9950,14 +10020,47 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     ok: true,
     threadId,
     codexThreadId,
+    repository,
+    relatedIssue,
     createdAt,
     text,
+    recovery,
     transientText,
     transientStatus,
     snapshotTransientStatus,
     snapshotSource,
     messages: messages.filter(Boolean)
   };
+}
+
+function normalizeDashboardAppServerRecovery(value) {
+  const input = normalizeObject(value);
+  const status = normalizeDashboardEventText(input.status).toLowerCase();
+  const originalText = sanitizeDashboardChatText(input.originalText || input.original_text);
+  const originalMessageId = normalizeDashboardEventText(input.originalMessageId || input.original_message_id);
+  const resetBackendThread = input.resetBackendThread === true || input.reset_backend_thread === true;
+  const retryable = input.retryable === true || status === "context_window_exceeded";
+  const autoRetry = input.autoRetry === true || input.auto_retry === true;
+  if (!status && !originalText && !originalMessageId && !resetBackendThread && !retryable && !autoRetry) {
+    return null;
+  }
+  return {
+    status,
+    retryable,
+    resetBackendThread,
+    autoRetry,
+    originalText,
+    originalMessageId
+  };
+}
+
+function shouldResetDashboardAppServerBackendThread(recovery) {
+  const normalized = normalizeDashboardAppServerRecovery(recovery);
+  return (
+    normalized?.status === "context_window_exceeded" &&
+    normalized.retryable === true &&
+    normalized.resetBackendThread === true
+  );
 }
 
 function normalizeDashboardTransientProgressSnapshot(value) {
