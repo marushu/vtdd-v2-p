@@ -182,13 +182,55 @@ export function buildDashboardAppServerCommandArgs({
   return args;
 }
 
+function parseDashboardAppServerErrorPayload(value) {
+  if (!value || typeof value !== "string") {
+    return value;
+  }
+  const text = normalizeBridgeText(value);
+  if (!text || !/^[{[]/.test(text)) {
+    return value;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return value;
+  }
+}
+
+function collectDashboardAppServerErrorMessages(value, seen = new Set()) {
+  const parsed = parseDashboardAppServerErrorPayload(value);
+  if (!parsed || seen.has(parsed)) {
+    return [];
+  }
+  if (typeof parsed === "object") {
+    seen.add(parsed);
+  }
+  if (typeof parsed === "string") {
+    return [parsed];
+  }
+  if (parsed instanceof Error) {
+    return [parsed.message, ...collectDashboardAppServerErrorMessages(parsed.cause, seen)];
+  }
+  if (typeof parsed !== "object") {
+    return [];
+  }
+  const messages = [];
+  for (const key of ["message", "reason", "detail", "text"]) {
+    if (typeof parsed[key] === "string") {
+      messages.push(parsed[key]);
+    }
+  }
+  for (const key of ["error", "cause"]) {
+    messages.push(...collectDashboardAppServerErrorMessages(parsed[key], seen));
+  }
+  return messages;
+}
+
 export function isDashboardAppServerUnsupportedChatGptAccountModelError(errorLike = null) {
-  const text = normalizeBridgeText(
-    typeof errorLike === "string"
-      ? errorLike
-      : errorLike?.message || errorLike?.error?.message || JSON.stringify(errorLike || "")
+  const messages = collectDashboardAppServerErrorMessages(errorLike);
+  return messages.some((message) =>
+    /\bmodel\b.*\bnot supported\b.*\bCodex\b.*\bChatGPT account\b/i.test(normalizeBridgeText(message))
   );
-  return /model is not supported when using Codex with a ChatGPT account/i.test(text);
 }
 
 export function stripDashboardAppServerModelFromUsageProfile(usageProfile = null) {
@@ -1788,6 +1830,17 @@ export async function handleDashboardTurnRequest({
       return;
     }
     if (event.type === "app_server_turn_failed") {
+      if (
+        turnCostBoundary?.modelConfigured === true &&
+        isDashboardAppServerUnsupportedChatGptAccountModelError(event.text)
+      ) {
+        if (timedOut) {
+          cleanupNotifications();
+          return;
+        }
+        finishTurn(() => rejectTurn(new Error(event.text)));
+        return;
+      }
       void sendDashboardEvent(event);
       if (timedOut) {
         cleanupNotifications();
@@ -2039,7 +2092,7 @@ export function createDashboardAppServerClientSelector({
         rejectedModel: normalizeBridgeText(rejectedModel)
       };
     }
-    if (staticAppServer || !request.usageProfile) {
+    if (staticAppServer || (!request.usageProfile && !ignoreDefaultModel)) {
       return {
         appServer: defaultAppServer,
         ...config

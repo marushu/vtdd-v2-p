@@ -225,6 +225,17 @@ test("dashboard app-server bridge detects ChatGPT account unsupported model erro
     ),
     true
   );
+  assert.equal(
+    isDashboardAppServerUnsupportedChatGptAccountModelError({
+      type: "error",
+      status: 400,
+      error: {
+        type: "invalid_request_error",
+        message: "The configured model is not supported when using Codex with a ChatGPT account."
+      }
+    }),
+    true
+  );
   assert.equal(isDashboardAppServerUnsupportedChatGptAccountModelError(new Error("network timeout")), false);
 });
 
@@ -2759,6 +2770,421 @@ test("dashboard app-server bridge retries unsupported ChatGPT account model with
   await once;
 });
 
+test("dashboard app-server bridge retries unsupported default model when request has no usage profile", async () => {
+  const sockets = [];
+  const created = [];
+  class MockWebSocket {
+    constructor(endpoint, protocols) {
+      this.endpoint = endpoint;
+      this.protocols = protocols;
+      this.listeners = new Map();
+      this.sent = [];
+      sockets.push(this);
+    }
+
+    addEventListener(type, handler) {
+      if (!this.listeners.has(type)) {
+        this.listeners.set(type, new Set());
+      }
+      this.listeners.get(type).add(handler);
+    }
+
+    send(payload) {
+      this.sent.push(payload);
+    }
+
+    emit(type, event = {}) {
+      for (const handler of this.listeners.get(type) || []) {
+        handler(event);
+      }
+    }
+  }
+  const appServerFactory = (options) => {
+    const handlers = new Set();
+    const clientIndex = created.length;
+    const client = {
+      args: options.args,
+      nextId: 1,
+      async initialize() {},
+      nextRequestId() {
+        return this.nextId++;
+      },
+      onNotification(handler) {
+        handlers.add(handler);
+        return () => handlers.delete(handler);
+      },
+      drainApprovalRequests() {
+        return Promise.resolve();
+      },
+      async request(message) {
+        if (message.method === "thread/start") {
+          return { thread: { id: `codex-thread-default-fallback-${clientIndex}` } };
+        }
+        if (message.method === "turn/start") {
+          setTimeout(() => {
+            for (const handler of handlers) {
+              handler({
+                method: "item/agentMessage/delta",
+                params: {
+                  threadId: `codex-thread-default-fallback-${clientIndex}`,
+                  turnId: "turn-default-fallback",
+                  delta: "usageProfile なしでも復旧しました。"
+                }
+              });
+              handler({
+                method: "turn/completed",
+                params: {
+                  threadId: `codex-thread-default-fallback-${clientIndex}`,
+                  turn: { id: "turn-default-fallback", status: "completed" }
+                }
+              });
+            }
+          }, 0);
+          return { turn: { id: "turn-default-fallback" } };
+        }
+        throw new Error(`unexpected method ${message.method}`);
+      }
+    };
+    created.push(client);
+    return client;
+  };
+  const defaultAppServer = {
+    nextId: 1,
+    async initialize() {},
+    nextRequestId() {
+      return this.nextId++;
+    },
+    onNotification() {
+      return () => {};
+    },
+    drainApprovalRequests() {
+      return Promise.resolve();
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-default-model" } };
+      }
+      if (message.method === "turn/start") {
+        throw new Error(
+          `{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account."}}`
+        );
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+  const selector = createDashboardAppServerClientSelector({
+    defaultAppServer,
+    appServerFactory,
+    cwd: "/repo",
+    defaultModel: "gpt-5.3-codex"
+  });
+
+  const once = connectDashboardAppServerBridgeOnce({
+    endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
+    token: "secret-token",
+    appServer: defaultAppServer,
+    selectAppServerForRequest: selector,
+    WebSocketImpl: MockWebSocket,
+    turnTimeoutMs: 1000,
+    liveProgressInitialDelayMs: 1000
+  });
+  const socket = sockets[0];
+  socket.emit("message", {
+    data: JSON.stringify({
+      type: "app_server_turn_requested",
+      threadId: "dashboard-main",
+      text: "君は誰？"
+    })
+  });
+
+  await waitFor(() => socket.sent.map((payload) => JSON.parse(payload)).some((payload) => payload.type === "app_server_reply"));
+  const parsed = socket.sent.map((payload) => JSON.parse(payload));
+  const fallbackStatus = parsed.find((payload) => payload.status === "unsupported_model_fallback");
+  assert.ok(fallbackStatus);
+  assert.equal(fallbackStatus.costBoundary.modelConfigured, false);
+  assert.equal(fallbackStatus.costBoundary.unsupportedModelFallback, true);
+  assert.equal(fallbackStatus.costBoundary.rejectedModel, "gpt-5.3-codex");
+  assert.equal(parsed.some((payload) => payload.type === "app_server_turn_failed"), false);
+  assert.equal(parsed.find((payload) => payload.type === "app_server_reply").text, "usageProfile なしでも復旧しました。");
+  assert.deepEqual(created.map((client) => client.args), [["app-server", "--listen", "stdio://", "-c", 'model_reasoning_effort="low"']]);
+  socket.emit("close");
+  await once;
+});
+
+test("dashboard app-server bridge retries unsupported model reported as app-server error notification", async () => {
+  const sockets = [];
+  const created = [];
+  class MockWebSocket {
+    constructor(endpoint, protocols) {
+      this.endpoint = endpoint;
+      this.protocols = protocols;
+      this.listeners = new Map();
+      this.sent = [];
+      sockets.push(this);
+    }
+
+    addEventListener(type, handler) {
+      if (!this.listeners.has(type)) {
+        this.listeners.set(type, new Set());
+      }
+      this.listeners.get(type).add(handler);
+    }
+
+    send(payload) {
+      this.sent.push(payload);
+    }
+
+    emit(type, event = {}) {
+      for (const handler of this.listeners.get(type) || []) {
+        handler(event);
+      }
+    }
+  }
+  const appServerFactory = (options) => {
+    const handlers = new Set();
+    const clientIndex = created.length;
+    const client = {
+      args: options.args,
+      nextId: 1,
+      async initialize() {},
+      nextRequestId() {
+        return this.nextId++;
+      },
+      onNotification(handler) {
+        handlers.add(handler);
+        return () => handlers.delete(handler);
+      },
+      drainApprovalRequests() {
+        return Promise.resolve();
+      },
+      async request(message) {
+        if (message.method === "thread/start") {
+          return { thread: { id: `codex-thread-notification-fallback-${clientIndex}` } };
+        }
+        if (message.method === "turn/start" && options.args.includes('model="gpt-5.3-codex"')) {
+          setTimeout(() => {
+            for (const handler of handlers) {
+              handler({
+                method: "error",
+                params: {
+                  threadId: `codex-thread-notification-fallback-${clientIndex}`,
+                  turnId: "turn-notification-fallback",
+                  message:
+                    `{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account."}}`
+                }
+              });
+            }
+          }, 0);
+          return { turn: { id: "turn-notification-fallback" } };
+        }
+        if (message.method === "turn/start") {
+          setTimeout(() => {
+            for (const handler of handlers) {
+              handler({
+                method: "item/agentMessage/delta",
+                params: {
+                  threadId: `codex-thread-notification-fallback-${clientIndex}`,
+                  turnId: "turn-notification-fallback",
+                  delta: "通知経由でも復旧しました。"
+                }
+              });
+              handler({
+                method: "turn/completed",
+                params: {
+                  threadId: `codex-thread-notification-fallback-${clientIndex}`,
+                  turn: { id: "turn-notification-fallback", status: "completed" }
+                }
+              });
+            }
+          }, 0);
+          return { turn: { id: "turn-notification-fallback" } };
+        }
+        throw new Error(`unexpected method ${message.method}`);
+      }
+    };
+    created.push(client);
+    return client;
+  };
+  const defaultAppServer = {
+    async initialize() {},
+    nextRequestId() {
+      return 1;
+    },
+    onNotification() {
+      return () => {};
+    },
+    drainApprovalRequests() {
+      return Promise.resolve();
+    }
+  };
+  const selector = createDashboardAppServerClientSelector({
+    defaultAppServer,
+    appServerFactory,
+    cwd: "/repo",
+    defaultModel: "gpt-5.3-codex"
+  });
+
+  const once = connectDashboardAppServerBridgeOnce({
+    endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
+    token: "secret-token",
+    appServer: defaultAppServer,
+    selectAppServerForRequest: selector,
+    WebSocketImpl: MockWebSocket,
+    turnTimeoutMs: 1000,
+    liveProgressInitialDelayMs: 1000
+  });
+  const socket = sockets[0];
+  socket.emit("message", {
+    data: JSON.stringify({
+      type: "app_server_turn_requested",
+      threadId: "dashboard-main",
+      text: "もしもし。",
+      usageProfile: {
+        profile: "conversation",
+        reasoningEffort: "low",
+        model: "gpt-5.3-codex",
+        reason: "ordinary_conversation"
+      }
+    })
+  });
+
+  await waitFor(() => socket.sent.map((payload) => JSON.parse(payload)).some((payload) => payload.type === "app_server_reply"));
+  const parsed = socket.sent.map((payload) => JSON.parse(payload));
+  const fallbackStatus = parsed.find((payload) => payload.status === "unsupported_model_fallback");
+  assert.ok(fallbackStatus);
+  assert.equal(fallbackStatus.costBoundary.modelConfigured, false);
+  assert.equal(fallbackStatus.costBoundary.unsupportedModelFallback, true);
+  assert.equal(fallbackStatus.costBoundary.rejectedModel, "gpt-5.3-codex");
+  assert.equal(parsed.some((payload) => payload.type === "app_server_turn_failed"), false);
+  assert.equal(parsed.find((payload) => payload.type === "app_server_reply").text, "通知経由でも復旧しました。");
+  assert.deepEqual(created.map((client) => client.args), [
+    ["app-server", "--listen", "stdio://", "-c", 'model="gpt-5.3-codex"', "-c", 'model_reasoning_effort="low"'],
+    ["app-server", "--listen", "stdio://", "-c", 'model_reasoning_effort="low"']
+  ]);
+  socket.emit("close");
+  await once;
+});
+
+test("dashboard app-server bridge does not loop when model-less fallback also fails", async () => {
+  const sockets = [];
+  const created = [];
+  class MockWebSocket {
+    constructor(endpoint, protocols) {
+      this.endpoint = endpoint;
+      this.protocols = protocols;
+      this.listeners = new Map();
+      this.sent = [];
+      sockets.push(this);
+    }
+
+    addEventListener(type, handler) {
+      if (!this.listeners.has(type)) {
+        this.listeners.set(type, new Set());
+      }
+      this.listeners.get(type).add(handler);
+    }
+
+    send(payload) {
+      this.sent.push(payload);
+    }
+
+    emit(type, event = {}) {
+      for (const handler of this.listeners.get(type) || []) {
+        handler(event);
+      }
+    }
+  }
+  const appServerFactory = (options) => {
+    const client = {
+      args: options.args,
+      nextId: 1,
+      async initialize() {},
+      nextRequestId() {
+        return this.nextId++;
+      },
+      onNotification() {
+        return () => {};
+      },
+      drainApprovalRequests() {
+        return Promise.resolve();
+      },
+      async request(message) {
+        if (message.method === "thread/start") {
+          return { thread: { id: `codex-thread-loop-guard-${created.length}` } };
+        }
+        if (message.method === "turn/start" && options.args.includes('model="gpt-5.3-codex"')) {
+          throw new Error(
+            `{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account."}}`
+          );
+        }
+        if (message.method === "turn/start") {
+          throw new Error("model-less fallback still failed");
+        }
+        throw new Error(`unexpected method ${message.method}`);
+      }
+    };
+    created.push(client);
+    return client;
+  };
+  const defaultAppServer = {
+    async initialize() {},
+    nextRequestId() {
+      return 1;
+    },
+    onNotification() {
+      return () => {};
+    },
+    drainApprovalRequests() {
+      return Promise.resolve();
+    }
+  };
+  const selector = createDashboardAppServerClientSelector({
+    defaultAppServer,
+    appServerFactory,
+    cwd: "/repo",
+    defaultModel: "gpt-5.3-codex"
+  });
+
+  const once = connectDashboardAppServerBridgeOnce({
+    endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
+    token: "secret-token",
+    appServer: defaultAppServer,
+    selectAppServerForRequest: selector,
+    WebSocketImpl: MockWebSocket,
+    turnTimeoutMs: 1000,
+    liveProgressInitialDelayMs: 1000
+  });
+  const socket = sockets[0];
+  socket.emit("message", {
+    data: JSON.stringify({
+      type: "app_server_turn_requested",
+      threadId: "dashboard-main",
+      text: "もしもし。",
+      usageProfile: {
+        profile: "conversation",
+        reasoningEffort: "low",
+        model: "gpt-5.3-codex",
+        reason: "ordinary_conversation"
+      }
+    })
+  });
+
+  await waitFor(() => socket.sent.map((payload) => JSON.parse(payload)).some((payload) => payload.type === "app_server_turn_failed"));
+  const parsed = socket.sent.map((payload) => JSON.parse(payload));
+  const fallbackStatuses = parsed.filter((payload) => payload.status === "unsupported_model_fallback");
+  const failures = parsed.filter((payload) => payload.type === "app_server_turn_failed");
+  assert.equal(fallbackStatuses.length, 1);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].text, /model-less fallback still failed/);
+  assert.equal(created.length, 2);
+  assert.deepEqual(created.map((client) => client.args), [
+    ["app-server", "--listen", "stdio://", "-c", 'model="gpt-5.3-codex"', "-c", 'model_reasoning_effort="low"'],
+    ["app-server", "--listen", "stdio://", "-c", 'model_reasoning_effort="low"']
+  ]);
+  socket.emit("close");
+  await once;
+});
+
 test("dashboard app-server bridge args require a dashboard thread id for runtime connection", () => {
   const parsed = parseBridgeArgs([], {
     VTDD_RUNTIME_URL: "https://runtime.example",
@@ -2989,6 +3415,35 @@ test("dashboard app-server bridge selector creates model-less fallback client", 
     'model_reasoning_effort="low"'
   ]);
   assert.deepEqual(created[1].args, ["app-server", "--listen", "stdio://", "-c", 'model_reasoning_effort="low"']);
+  assert.equal(fallback.costBoundary.modelConfigured, false);
+  assert.equal(fallback.costBoundary.unsupportedModelFallback, true);
+  assert.equal(fallback.costBoundary.rejectedModel, "gpt-5.3-codex");
+});
+
+test("dashboard app-server bridge selector creates model-less fallback client without usage profile", async () => {
+  const defaultAppServer = { id: "default" };
+  const created = [];
+  const selector = createDashboardAppServerClientSelector({
+    defaultAppServer,
+    defaultModel: "gpt-5.3-codex",
+    appServerFactory(options) {
+      const client = {
+        id: `client-${created.length + 1}`,
+        async initialize() {}
+      };
+      created.push({ ...options, client });
+      return client;
+    },
+    cwd: "/repo"
+  });
+
+  const selected = await selector({});
+  const fallback = await selector.withoutModel({}, { rejectedModel: selected.costBoundary.model });
+
+  assert.equal(selected.appServer, defaultAppServer);
+  assert.notEqual(fallback.appServer, defaultAppServer);
+  assert.equal(created.length, 1);
+  assert.deepEqual(created[0].args, ["app-server", "--listen", "stdio://", "-c", 'model_reasoning_effort="low"']);
   assert.equal(fallback.costBoundary.modelConfigured, false);
   assert.equal(fallback.costBoundary.unsupportedModelFallback, true);
   assert.equal(fallback.costBoundary.rejectedModel, "gpt-5.3-codex");
