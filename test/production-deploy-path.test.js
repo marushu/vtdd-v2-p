@@ -229,7 +229,8 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("          NODE\n              rm -f \"$response_file\""), true);
   assert.equal(workflow.includes("deploy remains successful, but dashboard may be stale until the next event"), true);
   assert.equal(workflow.includes("authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}"), true);
-  assert.equal(workflow.includes('approvalGrantId'), false);
+  assert.equal(workflow.includes('APPROVAL_GRANT_ID: ${{ github.event.inputs.approval_grant_id }}'), true);
+  assert.equal(workflow.includes('approvalGrantId: process.env.APPROVAL_GRANT_ID || null'), true);
   assert.equal(workflow.includes("if: always()"), true);
   assert.equal(
     workflow.includes("DEPLOY_NOTIFICATION_ISSUE_NUMBER: ${{ vars.VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER }}"),

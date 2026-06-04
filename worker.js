@@ -58381,6 +58381,9 @@ var DashboardChatRoom = class {
       origin: normalizeText33(origin) || normalizeText33(this.env?.VTDD_RUNTIME_URL || this.env?.VTDD_PASSKEY_ORIGIN) || "https://dashboard-butler.local",
       env: this.env
     });
+    if (!shouldDashboardVpsMaintenanceFlowStayInWorker(flow)) {
+      return null;
+    }
     return [
       normalizeDashboardChatMessage(
         {
@@ -62248,7 +62251,8 @@ async function handleGitHubActionsEventRequest(request, env) {
     event: baseEvent,
     threadId,
     env,
-    origin: new URL(request.url).origin
+    origin: new URL(request.url).origin,
+    approvalGrantId: normalizeText33(payload?.approvalGrantId || payload?.approval_grant_id)
   });
   const chatMessages = [chatMessage, deployBridgeFollowup.message].filter(Boolean);
   const chatStore = resolveDashboardChatStore(env);
@@ -62318,7 +62322,7 @@ function isSuccessfulDeployWorkflowEvent(event) {
   const record2 = normalizeDashboardEventRecord(event);
   return record2.kind === "github_actions_workflow_run" && normalize7(record2.workflowName).includes("deploy") && normalizeDashboardEventText(record2.status).toLowerCase() === "completed" && normalizeDashboardEventText(record2.conclusion).toLowerCase() === "success";
 }
-async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, origin } = {}) {
+async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, origin, approvalGrantId } = {}) {
   const record2 = normalizeDashboardEventRecord(event);
   const repository = normalizeCanonicalRepositoryInput(record2.repository);
   const relatedIssue = normalizePositiveInteger10(record2.issueNumber) || normalizePositiveInteger10(env?.VTDD_DASHBOARD_DEPLOY_BRIDGE_FOLLOWUP_ISSUE) || 741;
@@ -62354,14 +62358,175 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
       )
     };
   }
+  const deployApproval = await resolveApprovalGrant({
+    payload: {},
+    policyInput: { approvalGrantId },
+    env
+  });
+  const approvalValidation = validateDeployApprovalGrant({
+    approvalGrant: deployApproval.approvalGrant,
+    repositoryInput: repository
+  });
+  if (!approvalValidation.ok) {
+    return {
+      status: "blocked",
+      proposalCreated: false,
+      queueCreated: false,
+      error: "deploy_bridge_followup_approval_required",
+      issues: approvalValidation.issues || [deployApproval.warning || "deploy approval grant required"],
+      message: normalizeDashboardChatMessage(
+        {
+          threadId,
+          messageId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: "blocked",
+          text: buildDeployBridgeFollowupBlockedMessage({
+            record: record2,
+            repository,
+            relatedIssue,
+            issues: approvalValidation.issues || [deployApproval.warning || "deploy approval grant required"]
+          }),
+          createdAt: record2.updatedAt || record2.createdAt
+        },
+        { threadId }
+      )
+    };
+  }
   const executionId = `deploy-bridge-followup-${safeIdentifier(record2.runId) || createDashboardRequestId("deploy")}`;
-  const allowedArg = "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main";
-  const proposal = await createVpsPrivilegedMaintenanceProposal({
+  const helperRequest = buildDeployBridgeFollowupHelperRequest({
+    record: record2,
+    repository,
+    relatedIssue,
+    host,
+    workingDirectory,
+    threadId,
+    deployApproval: deployApproval.approvalGrant
+  });
+  const manifest = buildDashboardVpsMaintenanceManifest({
+    helperRequest,
+    now: record2.updatedAt || record2.createdAt
+  });
+  const execution = createVpsPrivilegedMaintenanceHelperExecution({
     payload: {
-      host,
+      manifest,
+      helperRequest,
+      now: record2.updatedAt || record2.createdAt
+    }
+  });
+  if (!execution.ok) {
+    return {
+      status: "blocked",
+      proposalCreated: false,
+      queueCreated: false,
+      error: execution.error,
+      issues: execution.issues || [],
+      message: normalizeDashboardChatMessage(
+        {
+          threadId,
+          messageId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: "blocked",
+          text: buildDeployBridgeFollowupBlockedMessage({
+            record: record2,
+            repository,
+            relatedIssue,
+            issues: execution.issues || [execution.error || "execution_handoff_failed"]
+          }),
+          createdAt: record2.updatedAt || record2.createdAt
+        },
+        { threadId }
+      )
+    };
+  }
+  const queue = await createVpsPrivilegedMaintenanceHelperExecutionQueue({
+    payload: {
       repository,
-      relatedIssue,
-      operation: "enable",
+      issueNumber: relatedIssue,
+      executionId,
+      dashboardThreadId: threadId,
+      approvalActor: "Dashboard deploy approval",
+      executionEnvelope: execution.body.executionEnvelope
+    },
+    env
+  });
+  if (!queue.ok) {
+    return {
+      status: "blocked",
+      proposalCreated: false,
+      queueCreated: false,
+      error: queue.error,
+      reason: queue.reason,
+      issues: queue.issues || [],
+      message: normalizeDashboardChatMessage(
+        {
+          threadId,
+          messageId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: "blocked",
+          text: buildDeployBridgeFollowupBlockedMessage({
+            record: record2,
+            repository,
+            relatedIssue,
+            issues: queue.issues || [queue.reason || queue.error || "queue_handoff_failed"]
+          }),
+          createdAt: record2.updatedAt || record2.createdAt
+        },
+        { threadId }
+      )
+    };
+  }
+  return {
+    status: "queued_for_vps_helper_execution",
+    proposalCreated: false,
+    queueCreated: true,
+    execution: queue.body.execution,
+    runtimeTruth: {
+      ...queue.body.runtimeTruth || {},
+      deployApprovalValidated: true,
+      deployStandardPostStep: "dashboard_bridge_unresolved_deploy_sync_restart",
+      helperQueueReached: true,
+      rootExecutionStarted: false,
+      helperExecutionStarted: false
+    },
+    message: normalizeDashboardChatMessage(
+      {
+        threadId,
+        messageId,
+        role: "system",
+        repository,
+        relatedIssue,
+        status: "sent",
+        text: buildDeployBridgeFollowupQueuedMessage({
+          record: record2,
+          repository,
+          relatedIssue,
+          queue: queue.body
+        }),
+        createdAt: record2.updatedAt || record2.createdAt
+      },
+      { threadId }
+    )
+  };
+}
+function buildDeployBridgeFollowupHelperRequest({ record: record2, repository, relatedIssue, host, workingDirectory, threadId, deployApproval } = {}) {
+  const allowedArg = "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main";
+  return {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: createDashboardRequestId("deploy-bridge-helper-request"),
+    vpsProposalId: `deploy-standard-post-step:${safeIdentifier(record2.runId) || createDashboardRequestId("deploy")}`,
+    approvalGrantId: "deploy-approval-verified-redacted",
+    host,
+    repository,
+    relatedIssue,
+    operation: "enable",
+    capability: {
       id: "dashboard.bridge.unresolved.deploy.sync.restart",
       title: "Deploy\u5F8C repo-less Dashboard bridge sync/restart",
       commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
@@ -62375,78 +62540,48 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
         "vtdd-dashboard-app-server-bridge-unresolved.service"
       ],
       redactionRules: ["no secrets", "summarize stdout/stderr", "redact tokens and credentials"],
-      rollbackPlan: "stop auto follow-up proposal and restart the previous bridge service state manually if needed",
+      rollbackPlan: "stop deploy standard post-step queueing and restart the previous bridge service state manually if needed",
       expectedRuntimeTruth: [
         "before git HEAD",
+        "target ref",
+        "target ref SHA",
+        "sync verified after git HEAD matches origin/main",
         "after git HEAD",
         "before service active state",
         "after service active state",
         "after service main PID",
+        "pending owner messages replay source",
         "exit code"
-      ],
-      reason: `Issue #741 deploy run ${record2.runId} success at ${record2.headSha || "unknown sha"} requires VPS checkout sync and repo-less bridge restart follow-up`,
-      impactScope: `${workingDirectory}, vtdd-dashboard-app-server-bridge-unresolved.service`,
-      dashboardThreadId: threadId,
-      executionId
+      ]
     },
-    provider,
-    origin: origin || "https://example.com"
-  });
-  if (!proposal.ok) {
-    return {
-      status: "blocked",
-      proposalCreated: false,
-      error: proposal.error,
-      issues: proposal.issues || [],
-      message: normalizeDashboardChatMessage(
-        {
-          threadId,
-          messageId,
-          role: "system",
-          repository,
-          relatedIssue,
-          status: "blocked",
-          text: buildDeployBridgeFollowupBlockedMessage({
-            record: record2,
-            repository,
-            relatedIssue,
-            issues: proposal.issues || [proposal.error || "proposal_failed"]
-          }),
-          createdAt: record2.updatedAt || record2.createdAt
-        },
-        { threadId }
-      )
-    };
-  }
-  return {
-    status: "approval_required",
-    proposalCreated: true,
-    vpsProposalId: proposal.body.vpsProposalId,
-    approvalScope: proposal.body.approvalScope,
-    approvalOperatorUrl: proposal.body.approvalOperatorUrl,
-    message: normalizeDashboardChatMessage(
-      {
-        threadId,
-        messageId,
-        role: "system",
-        repository,
-        relatedIssue,
-        status: "blocked",
-        text: buildDeployBridgeFollowupApprovalRequiredMessage({
-          record: record2,
-          repository,
-          relatedIssue,
-          proposal: proposal.body
-        }),
-        createdAt: record2.updatedAt || record2.createdAt
-      },
-      { threadId }
-    )
+    approvalScope: {
+      actionType: "deploy_production",
+      highRiskKind: "deploy_production",
+      repositoryInput: repository,
+      phase: "deploy_standard_post_step",
+      display: {
+        operation: "deploy_production",
+        postStep: "dashboard_bridge_unresolved_deploy_sync_restart",
+        deployApprovalId: deployApproval?.approvalId ? "redacted" : ""
+      }
+    },
+    handoff: {
+      dashboardThreadId: threadId,
+      restartStrategy: {
+        pendingOwnerMessagesPersistedBy: "DashboardChatRoom pending_app_server_owner_messages",
+        bridgeReconnectPath: "app-server bridge reconnect resumes dashboard thread mapping and drains pending owner messages",
+        activeTurnHandling: "restart is queued after deploy completion; Worker does not drop stored dashboard owner messages; live app-server stream resume remains VPS runner truth"
+      }
+    },
+    rootExecutionStarted: false,
+    helperExecutionStarted: false,
+    redacted: true
   };
 }
-function buildDeployBridgeFollowupApprovalRequiredMessage({ record: record2, repository, relatedIssue, proposal } = {}) {
+function buildDeployBridgeFollowupQueuedMessage({ record: record2, repository, relatedIssue, queue } = {}) {
+  const execution = queue?.execution || {};
   return [
-    "deploy \u5F8C bridge sync/restart \u306E\u627F\u8A8D\u304C\u5FC5\u8981\u3067\u3059\u3002",
+    "deploy \u5F8C bridge sync/restart \u3092 VPS helper queue \u3078\u6E21\u3057\u307E\u3057\u305F\u3002",
     "",
     `- repo: ${repository || "\u672A\u78BA\u8A8D"}`,
     `- related Issue: #${relatedIssue || 741}`,
@@ -62454,12 +62589,13 @@ function buildDeployBridgeFollowupApprovalRequiredMessage({ record: record2, rep
     `- deploy sha: ${record2.headSha ? record2.headSha.slice(0, 12) : "\u672A\u78BA\u8A8D"}`,
     "- \u5BFE\u8C61: repo-less Dashboard app-server bridge",
     "- service: vtdd-dashboard-app-server-bridge-unresolved.service",
-    `- vpsProposalId: ${proposal?.vpsProposalId || "\u672A\u4F5C\u6210"}`,
-    "- authority: deploy approval \u3068\u306F\u5225\u306E scoped passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002",
-    "- runtime truth: status=approval_required, rootExecutionStarted=false, helperExecutionStarted=false",
-    proposal?.approvalOperatorUrl ? `- approval URL: ${proposal.approvalOperatorUrl}` : "- approval URL: \u672A\u751F\u6210",
+    `- executionId: ${execution.executionId || "\u672A\u751F\u6210"}`,
+    `- queueCommentUrl: ${execution.queueCommentUrl || "\u672A\u53D6\u5F97"}`,
+    "- authority: deploy approval \u306B\u542B\u307E\u308C\u308B\u6A19\u6E96\u5F8C\u51E6\u7406\u3067\u3059\u3002\u8FFD\u52A0 passkey \u306F\u4E0D\u8981\u3067\u3059\u3002",
+    "- restart guard: Dashboard \u306E pending owner messages \u306F\u4FDD\u5B58\u6E08\u307F queue \u304B\u3089 bridge reconnect \u5F8C\u306B\u518D\u9001\u3057\u307E\u3059\u3002",
+    "- runtime truth: status=queued_for_vps_helper_execution, rootExecutionStarted=false, helperExecutionStarted=false",
     "",
-    "\u627F\u8A8D\u5F8C\u306F Dashboard chat \u304C VPS helper queue \u3078 fixed sync/restart command \u3092\u6E21\u3057\u307E\u3059\u3002VPS runner \u306E before/after truth \u304C\u623B\u308B\u307E\u3067 live restart \u5B8C\u4E86\u3068\u306F\u6271\u3044\u307E\u305B\u3093\u3002"
+    "VPS runner pickup \u306E before/after truth \u304C\u623B\u308B\u307E\u3067\u3001live restart \u5B8C\u4E86\u3068\u306F\u6271\u3044\u307E\u305B\u3093\u3002"
   ].join("\n");
 }
 function buildDeployBridgeFollowupBlockedMessage({ record: record2, repository, relatedIssue, issues } = {}) {
@@ -68292,7 +68428,8 @@ async function buildDashboardChatTurn(payload, options = {}) {
     origin: options.origin,
     env: options.env
   }) : null;
-  const butlerMessage = hasVpsPrivilegedMaintenanceIntent ? normalizeDashboardChatMessage(
+  const keepVpsMaintenanceInWorker = shouldDashboardVpsMaintenanceFlowStayInWorker(vpsMaintenanceFlow);
+  const butlerMessage = keepVpsMaintenanceInWorker ? normalizeDashboardChatMessage(
     {
       threadId,
       role: "butler",
@@ -68310,8 +68447,12 @@ async function buildDashboardChatTurn(payload, options = {}) {
     relatedIssue,
     threadId,
     messages: [ownerMessage, butlerMessage].filter(Boolean),
-    execution: vpsMaintenanceFlow?.execution || null
+    execution: keepVpsMaintenanceInWorker ? vpsMaintenanceFlow?.execution || null : null
   };
+}
+function shouldDashboardVpsMaintenanceFlowStayInWorker(flow = null) {
+  const status = normalizeText33(flow?.execution?.status || flow?.messageStatus);
+  return ["approval_required", "queued_for_vps_helper_execution", "sent"].includes(status);
 }
 async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
   payload,
@@ -69998,7 +70139,7 @@ function buildGitHubActionsDashboardChatMessageText(event) {
   }
   lines.push("", "\u6B21:");
   if (isDeploy && conclusion === "success") {
-    lines.push("- deploy \u5F8C bridge sync/restart approval URL \u3092\u540C\u3058 chat \u306B\u51FA\u3057\u307E\u3059\u3002");
+    lines.push("- deploy \u5F8C bridge sync/restart helper queue handoff \u3092\u540C\u3058 chat \u306B\u51FA\u3057\u307E\u3059\u3002");
     lines.push("- production E2E / runtime truth \u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002");
   } else if (conclusion === "failure" || conclusion === "cancelled" || conclusion === "timed_out") {
     lines.push("- deploy / Actions \u306E\u5931\u6557\u539F\u56E0\u3092\u78BA\u8A8D\u3057\u3001blocker \u3068\u6B21 action \u3092\u51FA\u3057\u307E\u3059\u3002");
