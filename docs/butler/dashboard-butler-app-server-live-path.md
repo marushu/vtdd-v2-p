@@ -8,6 +8,14 @@ Dashboard Butler is a separate live chat path. It is not a thin UI over the
 Custom GPT Action path, and it is not a WebSocket wrapper around one-shot
 `codex exec` jobs.
 
+Dashboard Butler is also not a lightweight AI replacement inside the Worker.
+The Worker / Durable Object layer is a relay, storage, auth, recovery, and
+authority-boundary surface. For ordinary owner chat, including cost questions,
+PR / Issue status questions, and repo-less main chat, the message must reach the
+VPS Dashboard Bridge / `codex app-server` path when the bridge is connected.
+Worker-side deterministic replies must not pretend to answer as Butler or stop
+the turn only to save Codex usage.
+
 The Dashboard Butler implementation target is:
 
 ```text
