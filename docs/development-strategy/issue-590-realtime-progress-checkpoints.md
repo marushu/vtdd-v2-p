@@ -12,6 +12,8 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 2026-06-04 の PR #780 deploy 後、composer 下の transient status は戻ったが、chat-visible live progress は相変わらず出ないことを owner が確認した。bridge が `planning` / `command` / `file_change` のような具体 event を受けられない turn でも、30秒以内に owner-facing fallback checkpoint を生成しなければ、#590 の無言待ち解消にはならない。
 
+2026-06-04 の添付 evidence で、入力欄下の `進行中` には「その通りです。今の時点で #590 は終わっていません...」のような readable progress が既に出ていることを確認した。これは `app_server_reply_delta` の `progressText` として届いているため、chat-visible checkpoint に昇格できる。raw delta を durable message 化するのではなく、transient snapshot の latest assistant delta checkpoint として表示し、final summary には最新1件だけ残す。
+
 2026-06-04 の追加調査で、bridge は `command` / `file_change` / `tool_call` など低情報 event を `ownerFacingProgressSeen=true` と扱って fallback timer を止めていた。一方 Worker は「コマンドを実行しています」「ファイル変更を確認しています」系を progress summary から除外する。結果として、低情報 event が fallback を潰し、chat-visible checkpoint が出ない。次 slice は、fallback 停止条件を summary に残る owner-facing stage のみに狭める。
 
 ## VTDD 全体で進める部分
@@ -43,6 +45,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 - Dashboard HTML に chat 内 checkpoint card の描画経路があり、snapshot restore / WebSocket transient update / final reply clear で動く。
 - live progress checkpoint と thread refresh は、更新前に最下部付近だった場合だけ自動追従する。owner が途中を読んでいる場合は scroll position を壊さない。
 - app-server bridge は、具体 progress event が届かない turn でも 30秒以内に owner-facing fallback checkpoint を送る。
+- app-server reply delta の readable `progressText` は、入力欄下だけでなく chat-visible checkpoint としても出す。ただし raw delta を通常 chat history に永続化しない。
 - worker bundle を再生成し、generated worker 差分を一致させる。
 
 ## 改修見積もり
@@ -52,6 +55,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
   - Dashboard client script: `transientProgressSnapshot.progressSummary` から最新 checkpoint を chat log 内に ephemeral card として描画し、clear 時に消す。
   - Dashboard client script: `isNearLatest()` / conditional scroll helper を追加し、progress update / thread refresh の無条件 scroll を止める。
   - Dashboard CSS: checkpoint card と progress summary の dark mode 対応を最小限整える。
+  - `app_server_reply_delta` の snapshot 化では、latest delta entry を差し替えることで final `進行ログ` の重複増殖を防ぐ。
 - `scripts/run-dashboard-app-server-bridge.mjs`
   - turn 開始後、owner-facing progress event が一定時間届かない場合に `long_turn_checkpoint` を送る。
   - `command` / `file_change` / `tool_call` のような低情報 event では fallback を止めず、`planning` / `implementation` / `test` / `pr_create` など owner-facing stage でのみ fallback を止める。
@@ -108,6 +112,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 ## merge 後に通す E2E
 
 - production PWA から #637 相当の低リスク read/status を投げ、30秒以内に chat-visible owner-facing checkpoint が見えること。
+- 入力欄下に readable progress が出た場合、同じ内容または要約された最新内容が chat 欄の checkpoint にも見えること。
 - `command` / `file_change` の低情報 event が先に来ても、fallback checkpoint が潰れないこと。
 - app 切替またはリロード後、最新 checkpoint が chat log 内に復帰すること。
 - owner が途中を読んでいる状態で checkpoint が更新されても、画面が下に引っ張られないこと。

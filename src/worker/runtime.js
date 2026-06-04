@@ -714,7 +714,7 @@ export class DashboardChatRoom {
       status,
       text,
       source,
-      progressSummary: buildDashboardProgressSummarySnapshot(previous, { text }),
+      progressSummary: buildDashboardProgressSummarySnapshot(previous, { text, source }),
       updatedAt: new Date().toISOString()
     });
     if (!key || !normalized || typeof this.ctx?.storage?.put !== "function") {
@@ -9871,6 +9871,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     // Streaming deltas are transient progress, not durable chat messages.
     transientStatus = "thinking";
     transientText = progressText || text;
+    snapshotTransientStatus = true;
+    snapshotSource = "app_server_reply_delta";
   } else if (eventType === "app_server_reply") {
     if (text) {
       messages.push(
@@ -9982,9 +9984,10 @@ function normalizeDashboardProgressSummary(value) {
     if (!text) continue;
     const entry = {
       text,
-      at: normalizeIsoTimestamp(rawEntry?.at || rawEntry?.createdAt || rawEntry?.created_at) || ""
+      at: normalizeIsoTimestamp(rawEntry?.at || rawEntry?.createdAt || rawEntry?.created_at) || "",
+      source: sanitizeDashboardChatText(rawEntry?.source || "")
     };
-    const entryLength = entry.text.length + entry.at.length;
+    const entryLength = entry.text.length + entry.at.length + entry.source.length;
     if (totalLength + entryLength > 3200) break;
     entries.push(entry);
     totalLength += entryLength;
@@ -9995,16 +9998,21 @@ function normalizeDashboardProgressSummary(value) {
   };
 }
 
-function buildDashboardProgressSummarySnapshot(previous, { text = "" } = {}) {
+function buildDashboardProgressSummarySnapshot(previous, { text = "", source = "" } = {}) {
   const previousSummary = normalizeDashboardProgressSummary(previous?.progressSummary);
-  const entries = [...previousSummary.entries];
+  const normalizedSource = sanitizeDashboardChatText(source);
+  const entries =
+    normalizedSource === "app_server_reply_delta"
+      ? previousSummary.entries.filter((entry) => entry.source !== "app_server_reply_delta")
+      : [...previousSummary.entries];
   const normalizedText = sanitizeDashboardChatText(text);
   if (normalizedText && shouldIncludeDashboardProgressSummaryEntry(normalizedText)) {
     const latest = entries.at(-1);
     if (!latest || latest.text !== normalizedText) {
       entries.push({
         text: normalizedText,
-        at: new Date().toISOString()
+        at: new Date().toISOString(),
+        source: normalizedSource
       });
     }
   }
@@ -10024,7 +10032,7 @@ function shouldIncludeDashboardProgressSummaryEntry(text) {
 
 function dashboardProgressSummaryEntriesKey(progressSummary) {
   const normalized = normalizeDashboardProgressSummary(progressSummary);
-  return JSON.stringify(normalized.entries.map((entry) => entry.text));
+  return JSON.stringify(normalized.entries.map((entry) => [entry.text, entry.source]));
 }
 
 function attachDashboardProgressSummaryToFinalMessages(messages = [], snapshot = null) {
