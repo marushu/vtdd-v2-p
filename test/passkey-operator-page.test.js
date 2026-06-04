@@ -163,6 +163,7 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes("function shouldReturnToButlerAfterDeployDispatch(body)"), true);
   assert.equal(html.includes('body?.deploy?.status === "dispatched"'), true);
   assert.equal(html.includes("function returnToButlerAfterDeployDispatch(body)"), true);
+  assert.equal(html.includes('const returnToButlerLink = document.getElementById("return-to-butler-link");'), true);
   assert.equal(html.includes("window.location.assign(returnToButlerLink.href)"), true);
   assert.equal(html.includes("returnToButlerAfterDeployDispatch(deployBody);"), true);
   assert.equal(html.includes("deploy-debug-output"), true);
@@ -762,6 +763,99 @@ test("passkey operator page rejects unsafe or missing deploy run links", () => {
   assert.equal(deployRunLink.hidden, true);
 });
 
+test("passkey operator deploy return is optional for mac Codex-origin approval", () => {
+  const helpers = loadOperatorPageHelpers(
+    {
+      document: {
+        getElementById(id) {
+          if (id === "return-to-butler-link") {
+            return {
+              href: "",
+              hidden: true,
+              addEventListener() {}
+            };
+          }
+          return {
+            value: "",
+            textContent: "",
+            addEventListener() {}
+          };
+        }
+      },
+      window: {
+        setTimeout(callback) {
+          callback();
+        },
+        location: {
+          assign() {
+            assert.fail("mac Codex-origin deploy approval without returnUrl must not redirect");
+          }
+        }
+      }
+    },
+    {
+      operatorMode: "deploy",
+      repositoryInput: "marushu/vtdd-v2-p"
+    }
+  );
+
+  assert.doesNotThrow(() => {
+    helpers.returnToButlerAfterDeployDispatch({
+      deploy: {
+        status: "dispatched"
+      }
+    });
+  });
+});
+
+test("passkey operator deploy returns to Butler only when return link is present", () => {
+  let assignedUrl = "";
+  const helpers = loadOperatorPageHelpers(
+    {
+      document: {
+        getElementById(id) {
+          if (id === "return-to-butler-link") {
+            return {
+              href: "https://chatgpt.com/g/example-butler",
+              hidden: false,
+              addEventListener() {}
+            };
+          }
+          return {
+            value: "",
+            textContent: "",
+            addEventListener() {}
+          };
+        }
+      },
+      window: {
+        setTimeout(callback, delay) {
+          assert.equal(delay, 900);
+          callback();
+        },
+        location: {
+          assign(url) {
+            assignedUrl = url;
+          }
+        }
+      }
+    },
+    {
+      operatorMode: "deploy",
+      repositoryInput: "marushu/vtdd-v2-p",
+      returnUrl: "https://chatgpt.com/g/example-butler"
+    }
+  );
+
+  helpers.returnToButlerAfterDeployDispatch({
+    deploy: {
+      status: "dispatched"
+    }
+  });
+
+  assert.equal(assignedUrl, "https://chatgpt.com/g/example-butler");
+});
+
 test("passkey operator page exposes safe PR link from merge response", () => {
   const mergePrLink = {
     href: "#",
@@ -850,8 +944,8 @@ test("passkey operator page exposes safe issue link from issue close response", 
   assert.equal(issueCloseLink.hidden, true);
 });
 
-function loadOperatorPageHelpers(overrides = {}) {
-  const html = renderPasskeyOperatorPage();
+function loadOperatorPageHelpers(overrides = {}, pageInput = {}) {
+  const html = renderPasskeyOperatorPage(pageInput);
   const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
   assert.ok(script);
 

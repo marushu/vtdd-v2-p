@@ -28,6 +28,8 @@ Cloudflare passkey operator page は approvalGrant を作るだけでは足り�
 
 deploy operator page は認証と dispatch の場であって、追跡UIではない。dispatch 後は `returnUrl` で Dashboard Butler の chat surface に戻す。GitHub Actions deploy success event を Worker が受けたら、同じ chat thread に deploy 完了 truth と VPS checkout sync + repo-less bridge restart の approval_required proposal を出す。operator page に owner を残して GitHub Actions run link を眺めさせる設計にはしない。
 
+2026-06-04 の live operator では `ReferenceError: Can't find variable: returnToButlerLink` が出た。これは deploy operator page が `returnUrl` を持つ Butler 起点だけを暗黙前提にし、mac Codex から passkey operator URL を開く break-glass / bootstrap 経路を壊した回帰である。正しい境界は、Butler から開いた時は承認後に chat へ戻る、mac Codex から開いた時は `returnUrl` が無くても deploy dispatch と結果表示が成立する、である。`returnToButlerLink` は必須 runtime authority ではなく任意の復帰リンクとして扱う。
+
 今回の実装単位は、deploy success event から VPS privileged maintenance proposal を作り、same-origin VPS passkey operator URL を chat に出し、承認後の Dashboard chat auto-continue が既存 helper queue に固定 command envelope を渡すところまでを一塊で接続すること。実運用で動いている unresolved bridge が deploy 後 follow-up から抜けていると、Butler が「人間は認証だけ」という運用を満たせない。
 
 deploy operator URL は既に `selfParity.deployOperatorMarkdownLink` と passkey operator page に存在するため、今回はそれを GitHub Actions URL と混同しない guidance / tests を補強する。URL 自動提示は `vtddRetrieveSelfParity` を優先し、fallback でも same-origin `/v2/approval/passkey/operator?...actionType=deploy_production&highRiskKind=deploy_production` を返す。
@@ -46,6 +48,8 @@ deploy operator URL は既に `selfParity.deployOperatorMarkdownLink` と passke
 - Unit: deploy operator guidance が GitHub Actions workflow URL ではなく same-origin passkey operator URL を要求する。
 - Unit: deploy operator page は passkey 承認後に `/v2/action/deploy` へ自動 dispatch する導線を維持する。
 - Unit: deploy operator page は dispatch 後に `returnUrl` で Dashboard Butler chat へ戻る導線を持つ。
+- Unit: deploy operator page は `returnUrl` が無い mac Codex 起点でも `returnToButlerLink` ReferenceError を起こさず、dispatch 結果をページ内に表示できる。
+- Unit: deploy operator page は `returnUrl` がある Butler 起点だけ、dispatch 後にその復帰先へ遷移する。
 - Unit: VPS operator page は `dashboardThreadId` がある時に `/v2/dashboard/chat/messages` へ承認イベントを戻す導線を維持する。
 - Unit: GitHub Actions deploy success event は同じ Dashboard chat に bridge sync/restart approval URL を追記する。
 - Unit: 同じ deploy event の重複受信は proposal / chat message / Web Push を二重化しない。
@@ -61,7 +65,7 @@ deploy operator URL は既に `selfParity.deployOperatorMarkdownLink` と passke
 - `src/core/vps-privileged-maintenance.js`: deploy follow-up 用 fixed helper command registry entry を追加する。risk は arbitrary command 化することなので argv / allowedArgs は固定する。
 - `src/worker/runtime.js`: GitHub Actions deploy success event から unresolved bridge sync/restart approval proposal を作り、承認後の既存 helper queue へつなぐ。risk は deploy approval と VPS maintenance approval を混ぜること。
 - `scripts/sync-dashboard-app-server-bridge-after-deploy.mjs`: VPS checkout fast-forward と unresolved bridge restart を固定処理にする。risk は dirty checkout / service 名誤り / stdout に秘密を出すこと。
-- `src/core/passkey-operator-page.js`: 今回は既存 auto-dispatch 導線の回帰確認を基本とし、必要時だけ文言を補強する。risk は owner に approvalGrantId copy を要求する flow へ戻ること。
+- `src/core/passkey-operator-page.js`: deploy auto-dispatch 後の任意 return link を DOM 参照として明示し、mac Codex 起点では未指定でも落ちないようにする。risk は Butler 起点の chat 復帰を失うこと、または mac Codex 起点で不要な redirect を起こすこと。
 - `test/vps-privileged-maintenance.test.js`: registry coverage を追加する。
 - `test/worker.test.js` / `test/passkey-operator-page.test.js`: unresolved bridge natural-language proposal、deploy operator URL guidance、passkey 承認後 auto-dispatch / auto-continue の回帰を追加する。
 - `worker.js`: generated worker。Worker source を変更した場合のみ更新する。
@@ -72,6 +76,7 @@ deploy operator URL は既に `selfParity.deployOperatorMarkdownLink` と passke
 - deploy mode の operator page は passkey 承認後に `/v2/action/deploy` を自動 dispatch し、`returnUrl` があれば Dashboard Butler chat へ戻れる。
 - `/v2/action/deploy` は real passkey approval grant から `deploy-production.yml` を dispatch できる。
 - `evaluateButlerSelfParity()` は `deployOperatorUrl` / `deployOperatorMarkdownLink` / `deployRecovery` を返せる。
+- deploy operator page は `returnUrl` を任意の復帰リンクとして描画できる。Butler 起点では chat 復帰に使い、mac Codex 起点ではリンク非表示で動作する必要がある。
 - `ensureDashboardBridgeRepoSynced()` は bridge startup 前に clean behind-only checkout を `origin/main` へ fast-forward できる。
 - Issue #637 の VPS operator page は `dashboardThreadId` がある時、承認後に Dashboard chat API へ戻って helper queue へ自動継続できる。
 - Issue #637 の VPS helper queue は approvalGrant を受けて helper execution envelope を作れる。
@@ -88,6 +93,7 @@ bridge restart の頻度による副作用は未測定。予測されるリス�
 
 - GitHub Actions workflow URL を deploy URL として返すと、owner は認証だけで済まない。
 - deploy approval scope に bridge restart までは含めない。今回の slice は deploy 後 follow-up approval URL を作るが、勝手に destructive / maintenance execution を始めない。
+- deploy operator page の `returnUrl` を必須扱いにすると、mac Codex から passkey approval を開く bootstrap / break-glass 経路が ReferenceError で止まる。
 - unresolved bridge を残骸扱いで stop/disable すると repo-less main chat を壊す。
 - broad `bridge restart` intent で全 bridge を同時 restart すると進行中 turn を落とす可能性がある。
 - health check なしの周期 restart は、長時間開発 turn と衝突して owner-facing UX を悪化させる可能性がある。

@@ -27669,6 +27669,7 @@ function renderPasskeyOperatorPage(input = {}) {
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
       const deployDebugOutput = document.getElementById("deploy-debug-output");
+      const returnToButlerLink = document.getElementById("return-to-butler-link");
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
