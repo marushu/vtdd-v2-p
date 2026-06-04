@@ -24,6 +24,8 @@ Issue #741 の deploy 後 checkout sync + bridge restart 標準運用と、Issue
 
 Cloudflare passkey operator page は approvalGrant を作るだけでは足りない。deploy mode では承認成功後に same-origin `/v2/action/deploy` へ approvalGrantId を POST し、Worker が deploy dispatch を検知できる必要がある。VPS maintenance mode でも同じく、承認成功後に `/v2/dashboard/chat/messages` へ approvalGrantId / vpsProposalId を戻し、Dashboard Butler が helper queue へ自動継続できる必要がある。owner に approvalGrantId をコピーさせる flow は fallback であり、通常導線ではない。
 
+2026-06-04 live deploy 後、VPS operator の passkey 承認自体は成功したが、auto-continue POST が `Cloudflare Access authenticated owner identity is required for dashboard surface /dashboard/chat/messages` で止まった。Dashboard chat write 全体を緩めてはいけないが、stored VPS proposal と matching passkey approval grant が検証できる continuation request は、same-origin passkey operator の通常導線として Dashboard chat auth とは別に許可する必要がある。
+
 deploy operator page は認証と dispatch の場であって、追跡UIではない。dispatch 後は `returnUrl` で Dashboard Butler の chat surface に戻す。GitHub Actions deploy success event を Worker が受けたら、同じ chat thread に deploy 完了 truth と VPS checkout sync + repo-less bridge restart の approval_required proposal を出す。operator page に owner を残して GitHub Actions run link を眺めさせる設計にはしない。
 
 今回の実装単位は、deploy success event から VPS privileged maintenance proposal を作り、same-origin VPS passkey operator URL を chat に出し、承認後の Dashboard chat auto-continue が既存 helper queue に固定 command envelope を渡すところまでを一塊で接続すること。実運用で動いている unresolved bridge が deploy 後 follow-up から抜けていると、Butler が「人間は認証だけ」という運用を満たせない。
@@ -48,6 +50,8 @@ deploy operator URL は既に `selfParity.deployOperatorMarkdownLink` と passke
 - Unit: GitHub Actions deploy success event は同じ Dashboard chat に bridge sync/restart approval URL を追記する。
 - Unit: 同じ deploy event の重複受信は proposal / chat message / Web Push を二重化しない。
 - Unit: bridge follow-up approval grant が戻ると既存 helper queue に fixed script command envelope を渡す。
+- Unit: Cloudflare Access session を持たない passkey operator からの VPS approval continuation は、stored proposal / matching grant がある場合だけ helper queue に到達する。
+- Unit: approvalGrantId / vpsProposalId がない ordinary chat write は引き続き Cloudflare Access / dashboard passkey session なしでは拒否される。
 - Unit: fixed helper script は tracked dirty checkout を restart 前に止め、before/after SHA と service truth を JSON で返す。
 - Local: `node --test test/sync-dashboard-app-server-bridge-after-deploy.test.js test/vps-privileged-maintenance.test.js test/worker.test.js --test-name-pattern "deploy|VPS privileged maintenance|app-server bridge|sync"`
 - Worker source を触る場合は `npm run build:worker` と `npm run verify:worker` を実行する。

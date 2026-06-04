@@ -2993,6 +2993,107 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.equal(queueCommentBody.includes('"handoff"'), true);
 });
 
+test("worker allows VPS passkey operator continuation without Cloudflare Access dashboard session", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const proposalResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 741,
+        operation: "enable",
+        id: "dashboard.bridge.unresolved.deploy.sync.restart",
+        title: "Deploy後 repo-less Dashboard bridge sync/restart",
+        commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+        riskLevel: "medium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: [
+          "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main"
+        ],
+        affectedPaths: [
+          "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+          "vtdd-dashboard-app-server-bridge-unresolved.service"
+        ],
+        redactionRules: ["no secrets"],
+        rollbackPlan: "stop auto follow-up proposal",
+        expectedRuntimeTruth: ["before git HEAD", "after git HEAD", "after service active state"],
+        reason: "Issue #741 deploy follow-up",
+        impactScope: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p, vtdd-dashboard-app-server-bridge-unresolved.service",
+        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p",
+        executionId: "deploy-bridge-followup-auth-regression"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+  assert.equal(proposalResponse.status, 200);
+  const proposalBody = await proposalResponse.json();
+  await provider.store({
+    id: "approval:vps-operator-auto-continue",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:vps-operator-auto-continue",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-06-04T07:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: proposalBody.approvalScope
+    },
+    metadata: { source: "vps-operator-auto-continue-test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-06-04T07:00:00.000Z"
+  });
+
+  const githubCalls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 741,
+        text: "passkey 承認済みです。Dashboard Butler から VPS helper queue へ進めて。",
+        vpsProposalId: proposalBody.vpsProposalId,
+        approvalGrantId: "approval:vps-operator-auto-continue",
+        executionId: "deploy-bridge-followup-auth-regression"
+      })
+    }),
+    {
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 74102,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/741#issuecomment-74102"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.status, "queued_for_vps_helper_execution");
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(body.execution.runtimeTruth.helperExecutionStarted, false);
+  assert.equal(githubCalls.length, 1);
+  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
+  assert.equal(queueCommentBody.includes("dashboard_bridge_unresolved_deploy_sync_restart"), true);
+});
+
 test("worker keeps ordinary Dashboard Butler planning chat out of VPS helper queue", async () => {
   const store = createInMemoryDashboardChatStore();
   const response = await worker.fetch(
