@@ -69,6 +69,7 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(start.method, "thread/start");
   assert.equal(start.params.cwd, "/repo");
   assert.equal(start.params.approvalPolicy, "on-request");
+  assert.equal(start.params.threadSource, "user");
   assert.equal(start.params.sandbox, undefined);
   assert.equal(start.params.experimentalRawEvents, false);
   assert.equal(start.params.persistExtendedHistory, false);
