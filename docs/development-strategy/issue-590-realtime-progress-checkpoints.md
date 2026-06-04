@@ -8,6 +8,8 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 2026-06-04 の PR #778 production E2E では、composer 下の `進行中` を主表示から外した結果、低情報の `codex app-server が応答を生成しています。` が chat 本文側に出続け、さらに checkpoint 更新で scroll が下へ戻る体験が発生した。これは #590 の意図に反するため、次 slice では PR #778 の UI 改変を rollback し、低情報 status を元の composer 下表示へ戻す。owner-facing checkpoint 生成不足は別 slice として bridge/app-server event 分類を調査する。
 
+2026-06-04 の追加 production 観測で、開発中に画面が下へチラチラ引っ張られる挙動が出た。原因候補は live progress checkpoint / thread refresh のたびに `scrollToLatest()` が無条件実行されること。owner が途中の進行を読んでいる場合は、最新 checkpoint が来ても scroll position を保持し、最下部付近にいる場合だけ追従する必要がある。
+
 ## VTDD 全体で進める部分
 
 この slice は #590 の realtime progress checkpoint stream の最小実装に限定する。#637 の production E2E で確認した「低リスク read/status が passkey なしで helper queue に渡る」経路を、#590 の進行表示 E2E の観測対象として使えるようにする。
@@ -35,6 +37,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 - owner-facing progress は `progressSummary.entries` に入り、final reply の `進行ログ` に集約される。
 - reply delta は従来通り snapshot / durable chat message にしない。
 - Dashboard HTML に chat 内 checkpoint card の描画経路があり、snapshot restore / WebSocket transient update / final reply clear で動く。
+- live progress checkpoint と thread refresh は、更新前に最下部付近だった場合だけ自動追従する。owner が途中を読んでいる場合は scroll position を壊さない。
 - worker bundle を再生成し、generated worker 差分を一致させる。
 
 ## 改修見積もり
@@ -42,6 +45,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 - `src/worker/runtime.js`
   - `buildDashboardProgressSummarySnapshot`: 低情報 progress を summary から除外する。既存 snapshot write は維持する。
   - Dashboard client script: `transientProgressSnapshot.progressSummary` から最新 checkpoint を chat log 内に ephemeral card として描画し、clear 時に消す。
+  - Dashboard client script: `isNearLatest()` / conditional scroll helper を追加し、progress update / thread refresh の無条件 scroll を止める。
   - Dashboard CSS: checkpoint card と progress summary の dark mode 対応を最小限整える。
 - `test/worker.test.js`
   - 低情報 progress が summary に入らないこと。
@@ -70,6 +74,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 - chat 内 checkpoint card を通常 message と同じ DOM に入れると、copy/reply/scroll の既存挙動を壊す可能性がある。
 - completion 後の clear が漏れると、古い checkpoint が final reply の下に残る。
 - dark mode の progress summary 背景が light 固定だと #744 の見えづらさを悪化させる。
+- scroll guard を広げすぎると、新規返信を受け取ったのに owner が気づきにくくなる。今回は live progress / refresh の追従だけを条件付きにし、通常 append の挙動は維持する。
 
 ## PR 前に確認すること
 
@@ -94,6 +99,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 - production PWA から #637 相当の低リスク read/status を投げ、30秒以内に composer 下の transient と chat 内 checkpoint のどちらかが見えること。
 - app 切替またはリロード後、最新 checkpoint が chat log 内に復帰すること。
+- owner が途中を読んでいる状態で checkpoint が更新されても、画面が下に引っ張られないこと。
 - completion 後、checkpoint card が消え、最終 Butler 返信に `進行ログ` が残ること。
 - low-risk read/status は passkey なし、deploy / bridge restart は従来通り passkey 境界を維持すること。
 

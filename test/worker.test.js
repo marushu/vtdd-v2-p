@@ -1275,10 +1275,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes(".progress-summary"), true);
   assert.equal(body.includes("background: var(--panel-strong); color: var(--muted);"), true);
   assert.equal(body.includes("data-thread-progress-checkpoint"), true);
-  assert.equal(body.includes("function renderThreadProgressCheckpoint(snapshot)"), true);
+  assert.equal(body.includes("function renderThreadProgressCheckpoint(snapshot, options = {})"), true);
   assert.equal(body.includes("function clearThreadProgressCheckpoint()"), true);
   assert.equal(body.includes("latestProgressCheckpointText(transientProgressSnapshotState)"), true);
   assert.equal(body.includes("snapshot: body.transientProgressSnapshot || null"), true);
+  assert.equal(body.includes("function isNearLatest()"), true);
+  assert.equal(body.includes("function scrollToLatestIfFollowing(shouldFollow)"), true);
+  assert.equal(body.includes("renderThreadProgressCheckpoint(snapshotForCheckpoint, { follow: shouldFollow })"), true);
   const renderTransientProgressSource = body.match(/function renderTransientProgress\(\) \{[\s\S]*?\n      \}/)?.[0] || "";
   assert.equal(renderTransientProgressSource.includes("scrollToLatest()"), false);
   assert.equal(renderTransientProgressSource.includes("updateComposerReserve()"), true);
@@ -1455,6 +1458,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("form.requestSubmit();"), true);
   assert.equal(body.includes('form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))'), true);
   assert.equal(body.includes("function scrollToLatest()"), true);
+  assert.equal(body.includes("function isNearLatest()"), true);
   assert.equal(body.includes("function showThinking()"), false);
   assert.equal(body.includes("function removeThinking("), false);
   assert.equal(body.includes('id="butler-interrupt-panel"'), false);
