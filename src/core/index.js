@@ -42,6 +42,16 @@ export {
   verifyPasskeyRegistration
 } from "./passkey-approval.js";
 export { renderPasskeyOperatorPage } from "./passkey-operator-page.js";
+export {
+  COST_CHECKER_MODE_DISABLED,
+  COST_CHECKER_MODE_ENABLED,
+  COST_CHECKER_MODE_MANUAL,
+  buildCodexAnalyticsUsageDelta,
+  buildCostCheckerRuntimeTruth,
+  normalizeCostCheckerConfig,
+  parseCodexAnalyticsUsageText,
+  sanitizeCodexAnalyticsUsageSnapshot
+} from "./codex-analytics-usage.js";
 export { buildVtddCloudflarePageDirectory, renderVtddHelpGuidePage } from "./help-guide-page.js";
 export { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
 export { validateDeployApprovalGrant } from "./deploy-approval-grant.js";
