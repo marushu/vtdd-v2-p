@@ -920,6 +920,51 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(completed.status, "replied");
   assert.equal(completed.text, "最終返答");
 
+  const contextExceededFailure = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "turn/completed",
+      params: {
+        threadId: "codex-thread-1",
+        status: "failed",
+        message:
+          "Codex ran out of room in the model's context window. Start a new thread or clear earlier history before retrying."
+      }
+    },
+    {
+      dashboardThreadId: "dashboard-main",
+      codexThreadId: "codex-thread-1",
+      ownerText: "もしもし。",
+      ownerMessageId: "dashboard_owner_message:context-reset-1",
+      resumedExistingThread: true
+    }
+  );
+  assert.equal(contextExceededFailure.type, "app_server_turn_failed");
+  assert.equal(contextExceededFailure.recovery.status, "context_window_exceeded");
+  assert.equal(contextExceededFailure.recovery.resetBackendThread, true);
+  assert.equal(contextExceededFailure.recovery.autoRetry, true);
+  assert.equal(contextExceededFailure.recovery.originalText, "もしもし。");
+  assert.equal(contextExceededFailure.recovery.originalMessageId, "dashboard_owner_message:context-reset-1");
+
+  const freshContextExceededFailure = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "turn/completed",
+      params: {
+        threadId: "codex-thread-2",
+        status: "failed",
+        message:
+          "Codex ran out of room in the model's context window. Start a new thread or clear earlier history before retrying."
+      }
+    },
+    {
+      dashboardThreadId: "dashboard-main",
+      codexThreadId: "codex-thread-2",
+      ownerText: "もしもし。",
+      ownerMessageId: "dashboard_owner_message:context-reset-2",
+      resumedExistingThread: false
+    }
+  );
+  assert.equal(freshContextExceededFailure.recovery, null);
+
   const started = mapAppServerNotificationToDashboardEvent(
     { method: "turn/started", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
