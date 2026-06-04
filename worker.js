@@ -68635,6 +68635,15 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
         }
       };
     }
+    if (isDashboardVpsMaintenanceLowRiskReadProposal(proposal.body)) {
+      return await queueDashboardVpsMaintenanceLowRiskRead({
+        payload,
+        repository,
+        relatedIssue,
+        proposalBody: proposal.body,
+        env
+      });
+    }
     return {
       messageStatus: "blocked",
       reply: buildDashboardVpsPrivilegedMaintenanceApprovalRequiredReply({
@@ -68753,6 +68762,137 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
         ...queue.body?.runtimeTruth || {},
         dashboardNaturalLanguagePathReached: true,
         helperQueueReached: queue.ok === true,
+        rootExecutionStarted: false,
+        helperExecutionStarted: false
+      }
+    }
+  };
+}
+function isDashboardVpsMaintenanceLowRiskReadProposal(proposalBody = {}) {
+  const proposal = proposalBody?.proposal || {};
+  const capability = proposal?.capability || {};
+  const operation = normalizeText33(proposalBody?.approvalScope?.vpsOperation || proposal?.operation);
+  if (operation !== "review") return false;
+  if (normalizeText33(capability.riskLevel) !== "low") return false;
+  const registryEntry = listVpsPrivilegedMaintenanceCommandRegistry().find(
+    (entry) => entry.commandClass === capability.commandClass
+  );
+  return Boolean(registryEntry && registryEntry.requiredRiskLevel === "low" && registryEntry.requiresRoot === false);
+}
+async function queueDashboardVpsMaintenanceLowRiskRead({
+  payload,
+  repository,
+  relatedIssue,
+  proposalBody,
+  env
+} = {}) {
+  const proposal = proposalBody?.proposal || {};
+  const capability = proposal.capability || {};
+  const approvalScope = normalizeScopeSnapshot(proposalBody?.approvalScope || {});
+  const helperRequest = {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: createDashboardRequestId("vps-maintenance-helper-request"),
+    vpsProposalId: proposalBody?.vpsProposalId,
+    approvalGrantId: `low-risk-read:${safeIdentifier(proposalBody?.vpsProposalId || capability.id || Date.now())}`,
+    host: proposal.host,
+    repository: proposal.repository,
+    relatedIssue,
+    operation: "review",
+    capability: {
+      id: capability.id,
+      title: capability.title,
+      commandClass: capability.commandClass,
+      riskLevel: capability.riskLevel,
+      workingDirectories: capability.workingDirectories ?? [],
+      allowedArgs: capability.allowedArgs ?? [],
+      affectedPaths: capability.affectedPaths ?? [],
+      redactionRules: capability.redactionRules ?? [],
+      rollbackPlan: capability.rollbackPlan,
+      expectedRuntimeTruth: capability.expectedRuntimeTruth ?? []
+    },
+    approvalScope: {
+      ...approvalScope,
+      approvalBypassReason: "low_risk_read"
+    },
+    approvalBypassReason: "low_risk_read",
+    rootExecutionStarted: false,
+    helperExecutionStarted: false,
+    redacted: true
+  };
+  const manifest = buildDashboardVpsMaintenanceManifest({
+    helperRequest,
+    now: payload?.now
+  });
+  const execution = createVpsPrivilegedMaintenanceHelperExecution({
+    payload: {
+      manifest,
+      helperRequest,
+      now: payload?.now
+    }
+  });
+  if (!execution.ok) {
+    return {
+      messageStatus: "blocked",
+      reply: buildDashboardVpsPrivilegedMaintenanceBlockedReply({
+        repository,
+        relatedIssue,
+        error: execution.error,
+        issues: execution.issues
+      }),
+      execution: {
+        kind: "dashboard_vps_privileged_maintenance_natural_language",
+        status: "blocked",
+        vpsProposalId: proposalBody?.vpsProposalId,
+        runtimeTruth: execution.body?.runtimeTruth || {
+          kind: "vps_privileged_maintenance_dashboard_natural_language",
+          status: "execution_handoff_blocked",
+          rootExecutionStarted: false,
+          helperExecutionStarted: false
+        }
+      }
+    };
+  }
+  const queue = await createVpsPrivilegedMaintenanceHelperExecutionQueue({
+    payload: {
+      repository,
+      issueNumber: relatedIssue,
+      executionId: normalizeText33(payload?.executionId || payload?.execution_id) || `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helperRequest.requestId)}`,
+      dashboardThreadId: normalizeText33(payload?.threadId || payload?.thread_id),
+      approvalActor: "Dashboard Butler low-risk read",
+      executionEnvelope: execution.body.executionEnvelope
+    },
+    env
+  });
+  const reply = queue.ok ? buildDashboardVpsPrivilegedMaintenanceQueuedReply({
+    repository,
+    relatedIssue,
+    queue,
+    lowRiskRead: true
+  }) : buildDashboardVpsPrivilegedMaintenanceBlockedReply({
+    repository,
+    relatedIssue,
+    error: queue.error,
+    reason: queue.reason,
+    issues: queue.issues
+  });
+  return {
+    messageStatus: queue.ok ? "sent" : "blocked",
+    reply,
+    execution: {
+      kind: "dashboard_vps_privileged_maintenance_natural_language",
+      status: queue.ok ? "queued_for_vps_helper_execution" : "blocked",
+      vpsProposalId: proposalBody?.vpsProposalId,
+      approvalScope: proposalBody?.approvalScope,
+      helperRequest,
+      executionEnvelope: execution.body.executionEnvelope,
+      queue: queue.body?.execution || null,
+      runtimeTruth: {
+        ...queue.body?.runtimeTruth || {},
+        dashboardNaturalLanguagePathReached: true,
+        helperQueueReached: queue.ok === true,
+        approvalRequired: false,
+        approvalBypassReason: "low_risk_read",
         rootExecutionStarted: false,
         helperExecutionStarted: false
       }
@@ -68969,8 +69109,8 @@ function buildDashboardVpsPrivilegedMaintenanceApprovalRequiredReply({ repositor
     "\u627F\u8A8D\u5F8C\u306F VPS runner \u3078\u5FA9\u65E7\u4F9D\u983C\u3092\u6E21\u3057\u307E\u3059\u3002VPS runner \u306E\u5B8C\u4E86 truth \u304C\u623B\u308B\u307E\u3067\u3001live \u5B9F\u884C\u5B8C\u4E86\u3068\u306F\u6271\u3044\u307E\u305B\u3093\u3002"
   ].join("\n");
 }
-function buildDashboardVpsPrivilegedMaintenanceQueuedReply({ repository, relatedIssue, queue } = {}) {
-  const execution = queue?.execution || {};
+function buildDashboardVpsPrivilegedMaintenanceQueuedReply({ repository, relatedIssue, queue, lowRiskRead = false } = {}) {
+  const execution = (queue?.body?.execution || queue?.execution) ?? {};
   return [
     "VPS runner \u3078\u5FA9\u65E7\u4F9D\u983C\u3092\u6E21\u3057\u307E\u3057\u305F\u3002",
     "",
@@ -68978,7 +69118,7 @@ function buildDashboardVpsPrivilegedMaintenanceQueuedReply({ repository, related
     `- \u95A2\u9023 Issue: ${relatedIssue ? `#${relatedIssue}` : execution.issueNumber ? `#${execution.issueNumber}` : "\u672A\u6307\u5B9A"}`,
     `- executionId: ${execution.executionId || "\u672A\u751F\u6210"}`,
     `- queueCommentUrl: ${execution.queueCommentUrl || "\u672A\u53D6\u5F97"}`,
-    "- authority: passkey approval \u6E08\u307F\u306E bounded handoff \u3060\u3051\u3092 queue \u5316\u3057\u307E\u3057\u305F\u3002",
+    lowRiskRead ? "- authority: low-risk read \u306E\u305F\u3081 passkey approval \u306A\u3057\u3067 bounded handoff \u3057\u307E\u3057\u305F\u3002restart / mutation / root-required capability \u306F\u5BFE\u8C61\u5916\u3067\u3059\u3002" : "- authority: passkey approval \u6E08\u307F\u306E bounded handoff \u3060\u3051\u3092 queue \u5316\u3057\u307E\u3057\u305F\u3002",
     "- runtime truth: status=queued_for_vps_helper_execution, rootExecutionStarted=false, helperExecutionStarted=false",
     "",
     "VPS runner pickup \u306E\u5B8C\u4E86 truth \u304C\u623B\u308B\u307E\u3067\u3001live root \u5B9F\u884C\u5B8C\u4E86\u3068\u306F\u6271\u3044\u307E\u305B\u3093\u3002"
