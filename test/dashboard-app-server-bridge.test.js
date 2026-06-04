@@ -368,6 +368,31 @@ test("dashboard app-server bridge wraps repository traffic-control context into 
   assert.match(text, /Owner message:\nDashboard Butler が交通整理できるようにして/);
 });
 
+test("dashboard app-server bridge keeps ordinary usage metadata out of turn prompt", () => {
+  const text = buildDashboardTurnInputText({
+    text: "もしもし",
+    authority: {
+      ordinaryConversationAllowed: true,
+      highRiskActionsRequire: ["GO", "passkey_approval"]
+    },
+    usageProfile: {
+      profile: "conversation",
+      reasoningEffort: "low",
+      reason: "ordinary_conversation"
+    },
+    costBoundary: {
+      contentAwareProfile: true,
+      profile: "conversation",
+      reasoningEffort: "low"
+    }
+  });
+
+  assert.equal(text, "もしもし");
+  assert.equal(text.includes("Dashboard Butler turn context"), false);
+  assert.equal(text.includes("usageProfile"), false);
+  assert.equal(text.includes("costBoundary"), false);
+});
+
 test("dashboard app-server bridge wraps VPS maintenance pass-through context into turn input", () => {
   const text = buildDashboardTurnInputText({
     text: "app-server bridge を再起動したい。",
