@@ -233,6 +233,22 @@ export function isDashboardAppServerUnsupportedChatGptAccountModelError(errorLik
   );
 }
 
+export function extractDashboardAppServerUnsupportedModel(errorLike = null) {
+  const messages = collectDashboardAppServerErrorMessages(errorLike);
+  for (const message of messages) {
+    const normalized = normalizeBridgeText(message);
+    const quoted = normalized.match(/['"`]([a-z0-9][a-z0-9._-]*codex[a-z0-9._-]*)['"`]\s+model\s+is\s+not\s+supported/i);
+    if (quoted?.[1]) {
+      return quoted[1];
+    }
+    const generic = normalized.match(/\b([a-z0-9][a-z0-9._-]*codex[a-z0-9._-]*)\b.*\bnot supported\b/i);
+    if (generic?.[1]) {
+      return generic[1];
+    }
+  }
+  return "";
+}
+
 export function stripDashboardAppServerModelFromUsageProfile(usageProfile = null) {
   const normalized = normalizeDashboardAppServerUsageProfile(usageProfile || "conversation");
   const { model: _model, ...withoutModel } = normalized;
@@ -940,6 +956,19 @@ export function buildDashboardAppServerFailureRecovery({
   resumedExistingThread = false
 } = {}) {
   const detail = sanitizeOptionalBridgeError(text);
+  if (
+    normalizeBridgeText(status).toLowerCase() !== "interrupted" &&
+    isDashboardAppServerUnsupportedChatGptAccountModelError(detail)
+  ) {
+    return {
+      status: "unsupported_model",
+      retryable: true,
+      resetBackendThread: true,
+      autoRetry: true,
+      originalText: normalizeBridgeText(ownerText),
+      originalMessageId: normalizeBridgeText(ownerMessageId)
+    };
+  }
   if (
     normalizeBridgeText(status).toLowerCase() !== "interrupted" &&
     resumedExistingThread === true &&
@@ -2085,7 +2114,7 @@ export function createDashboardAppServerClientSelector({
       defaultReasoningEffort,
       ignoreDefaultModel
     });
-    if (ignoreDefaultModel && normalizeBridgeText(rejectedModel)) {
+    if (normalizeBridgeText(rejectedModel)) {
       config.costBoundary = {
         ...config.costBoundary,
         unsupportedModelFallback: true,
@@ -2118,6 +2147,22 @@ export function createDashboardAppServerClientSelector({
       ...options,
       ignoreDefaultModel: true
     });
+  selector.fallbackForUnsupportedModel = (request = {}, options = {}) => {
+    const rejectedModel = normalizeBridgeText(options?.rejectedModel);
+    const ignoreDefaultModel =
+      Boolean(rejectedModel) && Boolean(normalizeBridgeText(defaultModel)) && rejectedModel === normalizeBridgeText(defaultModel);
+    return selectAppServerForRequestWithOptions(
+      {
+        ...request,
+        codexThreadId: null,
+        usageProfile: stripDashboardAppServerModelFromUsageProfile(request.usageProfile || defaultProfile || "conversation")
+      },
+      {
+        ...options,
+        ignoreDefaultModel
+      }
+    );
+  };
   return selector;
 }
 
@@ -2519,12 +2564,12 @@ export async function connectDashboardAppServerBridgeOnce({
             typeof selectAppServerForRequest === "function"
               ? await selectAppServerForRequest(payload)
               : { appServer, usageProfile: payload.usageProfile || null, costBoundary: payload.costBoundary || null };
-          const runSelectedTurn = (turnSelection) =>
+          const runSelectedTurn = (turnSelection, turnPayload = payload) =>
             handleDashboardTurnRequest({
-              request: payload,
+              request: turnPayload,
               appServer: turnSelection.appServer || appServer,
-              usageProfile: turnSelection.usageProfile || payload.usageProfile || null,
-              costBoundary: turnSelection.costBoundary || payload.costBoundary || null,
+              usageProfile: turnSelection.usageProfile || turnPayload.usageProfile || null,
+              costBoundary: turnSelection.costBoundary || turnPayload.costBoundary || null,
               sendDashboardEvent: async (dashboardEvent) => safeSend(dashboardEvent),
               cwd,
               sandboxMode,
@@ -2542,24 +2587,43 @@ export async function connectDashboardAppServerBridgeOnce({
               !isAppServerFailureAlreadySent(error) &&
               isDashboardAppServerUnsupportedChatGptAccountModelError(error) &&
               selected?.costBoundary?.modelConfigured === true &&
-              typeof selectAppServerForRequest?.withoutModel === "function"
+              (typeof selectAppServerForRequest?.fallbackForUnsupportedModel === "function" ||
+                typeof selectAppServerForRequest?.withoutModel === "function")
             ) {
-              const fallbackSelected = await selectAppServerForRequest.withoutModel(payload, {
-                rejectedModel: selected.usageProfile?.model || selected.costBoundary?.model || payload.usageProfile?.model || ""
+              const fallbackPayload = {
+                ...payload,
+                codexThreadId: null,
+                appServer: {
+                  ...(payload.appServer && typeof payload.appServer === "object" ? payload.appServer : {}),
+                  startThreadMethod: "thread/start"
+                }
+              };
+              const fallbackSelector =
+                typeof selectAppServerForRequest.fallbackForUnsupportedModel === "function"
+                  ? selectAppServerForRequest.fallbackForUnsupportedModel
+                  : selectAppServerForRequest.withoutModel;
+              const rejectedModel =
+                extractDashboardAppServerUnsupportedModel(error) ||
+                selected.usageProfile?.model ||
+                selected.costBoundary?.model ||
+                payload.usageProfile?.model ||
+                "";
+              const fallbackSelected = await fallbackSelector(fallbackPayload, {
+                rejectedModel
               });
               safeSend({
                 type: "app_server_status",
                 schema: DEFAULT_SCHEMA,
                 threadId: payload.threadId,
-                codexThreadId: payload.codexThreadId || null,
+                codexThreadId: null,
                 status: "unsupported_model_fallback",
                 stage: "runtime_recovery",
-                text: "指定 model が ChatGPT account で非対応のため、model override なしで app-server に再送しています。",
+                text: "指定 model または古い backend thread が ChatGPT account で非対応のため、新しい app-server thread で再送しています。",
                 persistProgress: true,
                 usageProfile: fallbackSelected.usageProfile || null,
                 costBoundary: fallbackSelected.costBoundary || null
               });
-              return await runSelectedTurn(fallbackSelected);
+              return await runSelectedTurn(fallbackSelected, fallbackPayload);
             }
             throw error;
           }

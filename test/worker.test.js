@@ -5035,6 +5035,69 @@ test("DashboardChatRoom resets overfull app-server backend thread and retries on
   assert.match(transient.text, /backend thread を切り替えて/);
 });
 
+test("DashboardChatRoom resets unsupported-model app-server backend thread and retries once", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  storage.values.set("app_server_thread:dashboard-main-unresolved", {
+    codexThreadId: "codex-thread-stale-5-3",
+    updatedAt: "2026-06-05T00:00:00.000Z"
+  });
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_turn_failed",
+      status: "failed",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-stale-5-3",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 455,
+      text:
+        "codex app-server が応答生成中に失敗しました。詳細: The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.",
+      recovery: {
+        status: "unsupported_model",
+        retryable: true,
+        resetBackendThread: true,
+        autoRetry: true,
+        originalText: "君は誰？",
+        originalMessageId: "dashboard_owner_message:unsupported-model-1"
+      }
+    })
+  );
+
+  assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved"), undefined);
+  assert.ok(storage.deleteCalls.some((call) => call.key === "app_server_thread:dashboard-main-unresolved"));
+  assert.ok(storage.values.get("app_server_context_retry:dashboard-main-unresolved:dashboard_owner_message:unsupported-model-1"));
+
+  const turnRequest = bridgeSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "app_server_turn_requested");
+  assert.ok(turnRequest);
+  assert.equal(turnRequest.threadId, "dashboard-main-unresolved");
+  assert.equal(turnRequest.codexThreadId, null);
+  assert.equal(turnRequest.appServer.startThreadMethod, "thread/start");
+  assert.equal(turnRequest.text, "君は誰？");
+  assert.equal(turnRequest.messageId, "dashboard_owner_message:unsupported-model-1");
+  assert.equal(turnRequest.repository, "marushu/vtdd-v2-p");
+  assert.equal(turnRequest.relatedIssue, 455);
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 0);
+  const transient = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "transient_status");
+  assert.ok(transient);
+  assert.equal(transient.status, "thinking");
+  assert.match(transient.text, /backend thread を切り替えて/);
+});
+
 test("DashboardChatRoom does not loop over app-server context reset retries", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
