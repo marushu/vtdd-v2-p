@@ -66804,7 +66804,7 @@ function normalizeDashboardAppServerRecovery(value) {
   const originalText = sanitizeDashboardChatText(input.originalText || input.original_text);
   const originalMessageId = normalizeDashboardEventText(input.originalMessageId || input.original_message_id);
   const resetBackendThread = input.resetBackendThread === true || input.reset_backend_thread === true;
-  const retryable = input.retryable === true || status === "context_window_exceeded";
+  const retryable = input.retryable === true || status === "context_window_exceeded" || status === "unsupported_model";
   const autoRetry = input.autoRetry === true || input.auto_retry === true;
   if (!status && !originalText && !originalMessageId && !resetBackendThread && !retryable && !autoRetry) {
     return null;
@@ -66820,7 +66820,8 @@ function normalizeDashboardAppServerRecovery(value) {
 }
 function shouldResetDashboardAppServerBackendThread(recovery) {
   const normalized = normalizeDashboardAppServerRecovery(recovery);
-  return normalized?.status === "context_window_exceeded" && normalized.retryable === true && normalized.resetBackendThread === true;
+  const resettableStatus = normalized?.status === "context_window_exceeded" || normalized?.status === "unsupported_model";
+  return resettableStatus && normalized.retryable === true && normalized.resetBackendThread === true;
 }
 function normalizeDashboardTransientProgressSnapshot(value) {
   const input = normalizeObject12(value);
