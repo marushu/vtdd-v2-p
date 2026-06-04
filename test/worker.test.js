@@ -3058,6 +3058,7 @@ test("worker maps repo-less Dashboard bridge restart intent to unresolved bridge
     body.execution.approvalScope.vpsImpactScope.includes("vtdd-dashboard-app-server-bridge-unresolved.service"),
     true
   );
+  assert.equal(body.execution.approvalScope.vpsImpactScope.includes("systemctl --user restart"), false);
   assert.match(body.messages[1].text, /Restart repo-less Dashboard app-server bridge/);
   assert.match(body.messages[1].text, /approval_required/);
   assert.match(body.messages[1].text, /rootExecutionStarted=false, helperExecutionStarted=false/);

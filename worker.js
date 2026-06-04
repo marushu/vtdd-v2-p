@@ -27845,12 +27845,19 @@ function renderPasskeyOperatorPage(input = {}) {
           return "deploy \u3092\u958B\u59CB\u3057\u307E\u3057\u305F\u3002Dashboard Butler \u306E\u30C1\u30E3\u30C3\u30C8\u306B\u623B\u3063\u3066\u8FFD\u8DE1\u3057\u307E\u3059\u3002";
         }
         if (deploy.status === "dispatch_accepted_unverified") {
-          return "deploy request \u306F\u53D7\u7406\u3055\u308C\u307E\u3057\u305F\u3002GitHub Actions \u306E run \u78BA\u8A8D\u306F\u672A\u78BA\u5B9A\u3067\u3059\u3002Dashboard Butler \u306E\u30C1\u30E3\u30C3\u30C8\u306B\u623B\u3063\u3066\u8FFD\u8DE1\u3057\u307E\u3059\u3002";
+          return "deploy request \u306F\u53D7\u7406\u3055\u308C\u307E\u3057\u305F\u3002GitHub Actions \u306E run \u78BA\u8A8D\u306F\u672A\u78BA\u5B9A\u3067\u3059\u3002\u3053\u306E\u753B\u9762\u3067\u8A73\u7D30\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
         }
-        return "deploy request \u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F\u3002Dashboard Butler \u306E\u30C1\u30E3\u30C3\u30C8\u306B\u623B\u3063\u3066\u8FFD\u8DE1\u3057\u307E\u3059\u3002";
+        return "deploy request \u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F\u3002\u3053\u306E\u753B\u9762\u3067\u8A73\u7D30\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
       }
 
-      function returnToButlerAfterDeployDispatch() {
+      function shouldReturnToButlerAfterDeployDispatch(body) {
+        return body?.deploy?.status === "dispatched";
+      }
+
+      function returnToButlerAfterDeployDispatch(body) {
+        if (!shouldReturnToButlerAfterDeployDispatch(body)) {
+          return;
+        }
         if (operatorMode !== "deploy" || !returnToButlerLink || !returnToButlerLink.href) {
           return;
         }
@@ -28057,7 +28064,7 @@ function renderPasskeyOperatorPage(input = {}) {
         if (deployDebugOutput) {
           deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
         }
-        returnToButlerAfterDeployDispatch();
+        returnToButlerAfterDeployDispatch(deployBody);
       }
 
       async function continueVpsMaintenanceFromApproval() {
@@ -67600,6 +67607,7 @@ function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingD
   if (!commandClass) return null;
   const registryEntry = listVpsPrivilegedMaintenanceCommandRegistry().find((entry) => entry.commandClass === commandClass);
   if (!registryEntry) return null;
+  const affectedSystemdUnits = (registryEntry.argv || []).filter((arg) => /\.(service|timer)$/.test(String(arg || "")));
   return {
     id: commandClass.replaceAll("_", "."),
     title: registryEntry.title,
@@ -67610,7 +67618,7 @@ function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingD
       workingDirectory,
       "/home/vtdd-runner/.config/systemd/user",
       "/run/user",
-      ...registryEntry.allowedArgs
+      ...affectedSystemdUnits
     ].filter(Boolean),
     operation: wantsRestart ? "enable" : "review"
   };

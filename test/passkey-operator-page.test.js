@@ -156,9 +156,15 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('id="deploy-button" hidden>Dispatch production deploy</button>'), true);
   assert.equal(html.includes("Dashboard 通知センターと保存済み Web Push 購読へ届きます"), true);
   assert.equal(html.includes("deploy を開始しました。Dashboard Butler のチャットに戻って追跡します。"), true);
-  assert.equal(html.includes("function returnToButlerAfterDeployDispatch()"), true);
+  assert.equal(
+    html.includes("deploy request は受理されました。GitHub Actions の run 確認は未確定です。この画面で詳細を確認してください。"),
+    true
+  );
+  assert.equal(html.includes("function shouldReturnToButlerAfterDeployDispatch(body)"), true);
+  assert.equal(html.includes('body?.deploy?.status === "dispatched"'), true);
+  assert.equal(html.includes("function returnToButlerAfterDeployDispatch(body)"), true);
   assert.equal(html.includes("window.location.assign(returnToButlerLink.href)"), true);
-  assert.equal(html.includes("returnToButlerAfterDeployDispatch();"), true);
+  assert.equal(html.includes("returnToButlerAfterDeployDispatch(deployBody);"), true);
   assert.equal(html.includes("deploy-debug-output"), true);
   assert.equal(html.includes("<summary>詳細</summary>"), true);
   assert.equal(html.includes("Return to Butler"), true);

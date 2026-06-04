@@ -623,12 +623,19 @@ export function renderPasskeyOperatorPage(input = {}) {
           return "deploy を開始しました。Dashboard Butler のチャットに戻って追跡します。";
         }
         if (deploy.status === "dispatch_accepted_unverified") {
-          return "deploy request は受理されました。GitHub Actions の run 確認は未確定です。Dashboard Butler のチャットに戻って追跡します。";
+          return "deploy request は受理されました。GitHub Actions の run 確認は未確定です。この画面で詳細を確認してください。";
         }
-        return "deploy request を受け付けました。Dashboard Butler のチャットに戻って追跡します。";
+        return "deploy request を受け付けました。この画面で詳細を確認してください。";
       }
 
-      function returnToButlerAfterDeployDispatch() {
+      function shouldReturnToButlerAfterDeployDispatch(body) {
+        return body?.deploy?.status === "dispatched";
+      }
+
+      function returnToButlerAfterDeployDispatch(body) {
+        if (!shouldReturnToButlerAfterDeployDispatch(body)) {
+          return;
+        }
         if (operatorMode !== "deploy" || !returnToButlerLink || !returnToButlerLink.href) {
           return;
         }
@@ -835,7 +842,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         if (deployDebugOutput) {
           deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
         }
-        returnToButlerAfterDeployDispatch();
+        returnToButlerAfterDeployDispatch(deployBody);
       }
 
       async function continueVpsMaintenanceFromApproval() {

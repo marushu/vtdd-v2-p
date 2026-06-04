@@ -11486,6 +11486,7 @@ function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingD
 
   const registryEntry = listVpsPrivilegedMaintenanceCommandRegistry().find((entry) => entry.commandClass === commandClass);
   if (!registryEntry) return null;
+  const affectedSystemdUnits = (registryEntry.argv || []).filter((arg) => /\.(service|timer)$/.test(String(arg || "")));
   return {
     id: commandClass.replaceAll("_", "."),
     title: registryEntry.title,
@@ -11496,7 +11497,7 @@ function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingD
       workingDirectory,
       "/home/vtdd-runner/.config/systemd/user",
       "/run/user",
-      ...registryEntry.allowedArgs
+      ...affectedSystemdUnits
     ].filter(Boolean),
     operation: wantsRestart ? "enable" : "review"
   };
