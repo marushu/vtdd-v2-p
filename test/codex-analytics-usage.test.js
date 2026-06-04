@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { buildCapturePayload } from "../scripts/capture-codex-analytics-usage.mjs";
 import {
   COST_CHECKER_MODE_DISABLED,
   COST_CHECKER_MODE_ENABLED,
@@ -256,4 +257,35 @@ test("codex analytics runtime truth reports snapshot and delta availability with
   assert.equal(truth.costChecker.lastSnapshotAvailable, true);
   assert.equal(truth.costChecker.lastDeltaAvailable, true);
   assert.equal(truth.costChecker.billingTruth, false);
+});
+
+test("codex analytics capture runner dry-run keeps checker disabled by default", async () => {
+  const capture = await buildCapturePayload(["--dry-run"], { now: new Date(NOW) });
+
+  assert.equal(capture.config.mode, COST_CHECKER_MODE_DISABLED);
+  assert.equal(capture.ok, false);
+  assert.equal(capture.runtimeTruth.costChecker.captureAllowed, false);
+});
+
+test("codex analytics capture runner builds manual payload without raw page text", async () => {
+  const capture = await buildCapturePayload(
+    [
+      "--mode",
+      "manual",
+      "--repository",
+      "marushu/vtdd-v2-p",
+      "--thread-id",
+      "dashboard-main-marushu-vtdd-v2-p",
+      "--input-text",
+      ["5時間の使用制限", "93% 残り", "リセット: 15:16", "token=secret"].join("\n")
+    ],
+    { now: new Date(NOW) }
+  );
+
+  assert.equal(capture.ok, true);
+  assert.equal(capture.payload.mode, COST_CHECKER_MODE_MANUAL);
+  assert.equal(capture.payload.repository, "marushu/vtdd-v2-p");
+  assert.equal(capture.payload.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(capture.payload.snapshot.limits[0].remainingPercent, 93);
+  assert.equal(JSON.stringify(capture).includes("token=secret"), false);
 });

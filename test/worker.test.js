@@ -14929,6 +14929,133 @@ test("worker returns compact operational memory through retrieve route", async (
   assert.equal(body.retrievalSignals.dumpedAllMemory, false);
 });
 
+test("codex analytics usage ingest requires gateway bearer auth", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/codex-analytics/usage/snapshots", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "manual", text: "5時間の使用制限\n93% 残り" })
+    }),
+    { ...gatewayAuthEnv }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "unauthorized");
+});
+
+test("codex analytics usage ingest stores snapshot and appends Dashboard evidence", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const threadId = "dashboard-main-marushu-vtdd-v2-p";
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/codex-analytics/usage/snapshots", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        mode: "manual",
+        repository: "marushu/vtdd-v2-p",
+        threadId,
+        captureId: "usage-1",
+        text: ["5時間の使用制限", "93% 残り", "リセット: 15:16", "token=secret"].join("\n")
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      DASHBOARD_CHAT_STORE: store
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.snapshot.limits[0].remainingPercent, 93);
+  assert.equal(body.delta, null);
+  assert.equal(body.runtimeTruth.costChecker.lastSnapshotAvailable, true);
+  assert.equal(body.persisted.snapshotRecordId, "codex_analytics_usage_snapshot_usage-1");
+  assert.equal(JSON.stringify(body).includes("token=secret"), false);
+
+  const records = await provider.retrieve({
+    type: MemoryRecordType.WORKING_MEMORY,
+    tags: ["codex_analytics_usage_snapshot"],
+    limit: 10
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].content.codexAnalyticsUsage.limits[0].label, "5時間の使用制限");
+  assert.equal(records[0].content.rawText, undefined);
+
+  const messages = await store.listThread(threadId, { limit: 10 });
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].messageId, "codex-analytics-usage-usage-1");
+  assert.equal(messages[0].text.includes("Codex Analytics usage snapshot captured."), true);
+  assert.equal(messages[0].text.includes("token=secret"), false);
+});
+
+test("codex analytics usage retrieve returns latest snapshot, delta, and runtime truth", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const env = {
+    ...gatewayAuthEnv,
+    MEMORY_PROVIDER: provider,
+    DASHBOARD_CHAT_STORE: store
+  };
+  const threadId = "dashboard-main-marushu-vtdd-v2-p";
+
+  for (const [captureId, percent] of [
+    ["usage-before", 93],
+    ["usage-after", 90]
+  ]) {
+    const response = await worker.fetch(
+      new Request("https://example.com/v2/codex-analytics/usage/snapshots", {
+        method: "POST",
+        headers: gatewayAuthHeaders,
+        body: JSON.stringify({
+          mode: "manual",
+          repository: "marushu/vtdd-v2-p",
+          threadId,
+          captureId,
+          snapshot: {
+            captureMode: "manual",
+            capturedAt:
+              captureId === "usage-before" ? "2026-06-04T07:30:00.000Z" : "2026-06-04T07:45:00.000Z",
+            limits: [{ label: "5時間の使用制限", remainingPercent: percent }]
+          }
+        })
+      }),
+      env
+    );
+    assert.equal(response.status, 200);
+  }
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/codex-analytics-usage?repository=marushu/vtdd-v2-p&threadId=dashboard-main-marushu-vtdd-v2-p",
+      {
+        method: "GET",
+        headers: gatewayAuthHeaders
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.snapshot.capturedAt, "2026-06-04T07:45:00.000Z");
+  assert.equal(body.delta.precision, "display_percent_delta_not_billing_truth");
+  assert.equal(body.delta.limits[0].consumedDisplayPercent, 3);
+  assert.equal(body.runtimeTruth.costChecker.lastSnapshotAvailable, true);
+  assert.equal(body.runtimeTruth.costChecker.lastDeltaAvailable, true);
+  assert.equal(body.costBoundary.includes("not billing truth"), true);
+
+  const messages = await store.listThread(threadId, { limit: 10 });
+  assert.equal(messages.length, 2);
+  assert.equal(messages[1].text.includes("displayDelta"), true);
+});
+
 test("worker returns not_found for unknown route", async () => {
   const response = await worker.fetch(new Request("https://example.com/unknown"));
   assert.equal(response.status, 404);

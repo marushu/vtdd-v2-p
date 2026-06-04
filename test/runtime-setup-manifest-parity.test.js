@@ -18,7 +18,11 @@ test("runtime setup manifest parity passes for canonical Action Schema", () => {
 
   assert.equal(result.ok, true);
   assert.equal(result.canonical.routes.includes("/v2/retrieve/operational-memory"), true);
+  assert.equal(result.canonical.routes.includes("/v2/codex-analytics/usage/snapshots"), true);
+  assert.equal(result.canonical.routes.includes("/v2/retrieve/codex-analytics-usage"), true);
   assert.equal(result.canonical.operationIds.includes("vtddRetrieveOperationalMemory"), true);
+  assert.equal(result.canonical.operationIds.includes("vtddIngestCodexAnalyticsUsageSnapshot"), true);
+  assert.equal(result.canonical.operationIds.includes("vtddRetrieveCodexAnalyticsUsage"), true);
   assert.deepEqual(result.runtimeMissing.routes, []);
   assert.deepEqual(result.runtimeMissing.operationIds, []);
 });
