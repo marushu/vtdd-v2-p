@@ -62565,19 +62565,23 @@ async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
   });
 }
 async function handleDashboardChatMessageRequest(request, env) {
+  const payload = await readJson(request);
   const dashboardAuth = await authorizeDashboardRequest({
     request,
     env,
     apiSuffix: "/dashboard/chat/messages"
   });
   if (!dashboardAuth.ok) {
-    return json(dashboardAuth.status, {
-      ok: false,
-      error: "dashboard_auth_required",
-      reason: dashboardAuth.reason
-    });
+    const continuationAuth = await authorizeDashboardVpsApprovalContinuation({ payload, env });
+    if (!continuationAuth.ok) {
+      return json(dashboardAuth.status, {
+        ok: false,
+        error: "dashboard_auth_required",
+        reason: dashboardAuth.reason,
+        continuationReason: continuationAuth.reason || void 0
+      });
+    }
   }
-  const payload = await readJson(request);
   const repositoryResolution = await resolveDashboardChatRepository({ payload, env });
   const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
   const prepared = await buildDashboardChatTurn(
@@ -62610,6 +62614,40 @@ async function handleDashboardChatMessageRequest(request, env) {
     messages,
     execution: prepared.execution || null
   });
+}
+async function authorizeDashboardVpsApprovalContinuation({ payload, env } = {}) {
+  const input = normalizeObject12(payload);
+  const vpsProposalId = normalizeText32(input.vpsProposalId || input.vps_proposal_id);
+  const approvalGrantId = normalizeText32(input.approvalGrantId || input.approval_grant_id);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id);
+  if (!vpsProposalId || !approvalGrantId || !threadId) {
+    return {
+      ok: false,
+      reason: "vps approval continuation requires vpsProposalId, approvalGrantId, and threadId"
+    };
+  }
+  const provider = resolveMemoryProvider(env);
+  const memoryValidation = validateMemoryProvider(provider);
+  if (!memoryValidation.ok) {
+    return {
+      ok: false,
+      reason: "valid memory provider is required for VPS approval continuation"
+    };
+  }
+  const helper = await createVpsPrivilegedMaintenanceHelperRequest({
+    payload: { vpsProposalId, approvalGrantId },
+    provider
+  });
+  if (!helper.ok) {
+    return {
+      ok: false,
+      reason: helper.reason || helper.error || "VPS approval continuation scope did not validate"
+    };
+  }
+  return {
+    ok: true,
+    authType: "vps_approval_continuation"
+  };
 }
 async function handleMediaUploadRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
