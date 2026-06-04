@@ -6,7 +6,9 @@ import {
   MemoryRecordType,
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
+  buildCodexAnalyticsUsageDelta,
   buildVpsCapabilityProposal,
+  buildCostCheckerRuntimeTruth,
   buildVpsPrivilegedMaintenanceInstallInventory,
   buildVpsMaintenanceApprovalScope,
   listVpsPrivilegedMaintenanceCommandRegistry,
@@ -31,8 +33,10 @@ import {
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
   isExpiredPasskeyEphemeralRecord,
+  normalizeCostCheckerConfig,
   normalizeScopeSnapshot,
   normalizeAutonomyMode,
+  parseCodexAnalyticsUsageText,
   retrieveRemoteCodexExecutionProgress,
   retrieveVpsRunnerHealthStatus,
   retrieveCrossIssueMemoryIndex,
@@ -46,6 +50,7 @@ import {
   renderCustomGptRecoveryPage,
   buildVtddCloudflarePageDirectory,
   renderVtddHelpGuidePage,
+  sanitizeCodexAnalyticsUsageSnapshot,
   sanitizeGitHubActionsVariableSyncErrorMessage,
   sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
@@ -1289,6 +1294,23 @@ export default {
       return handleMemoryWriteRequest(request, env);
     }
 
+    if (request.method === "POST" && isApiPath(url.pathname, "/codex-analytics/usage/snapshots")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/codex-analytics/usage/snapshots"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleCodexAnalyticsUsageSnapshotIngestRequest(request, env);
+    }
+
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-authority")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -1814,6 +1836,22 @@ export default {
       return handleRetrieveOperationalMemoryRequest(url, env);
     }
 
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/codex-analytics-usage")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/codex-analytics-usage"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveCodexAnalyticsUsageRequest(url, env);
+    }
+
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/startup-preflight")) {
       const auth = authorizeGatewayRequest({
         request,
@@ -2092,6 +2130,383 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
     referencesByLayer: retrieved.referencesByLayer,
     retrievalSignals: retrieved.retrievalSignals
   });
+}
+
+async function handleCodexAnalyticsUsageSnapshotIngestRequest(request, env) {
+  const payload = await readJson(request);
+  const now = new Date();
+  const config = normalizeCostCheckerConfig(
+    {
+      mode: payload.mode || payload.captureMode || "manual",
+      ttlMs: payload.ttlMs,
+      ttlSeconds: payload.ttlSeconds,
+      expiresAt: payload.expiresAt,
+      sessionId: payload.sessionId
+    },
+    { now }
+  );
+  if (!config.valid || !config.captureAllowed) {
+    return json(422, {
+      ok: false,
+      error: "cost_checker_capture_not_allowed",
+      reason: config.reason,
+      issues: config.issues ?? [],
+      runtimeTruth: buildCostCheckerRuntimeTruth(config, { now })
+    });
+  }
+
+  const provider = resolveMemoryProvider(env);
+  const providerValidation = validateMemoryProvider(provider);
+  if (!providerValidation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for Codex analytics usage snapshots"
+    });
+  }
+
+  const repository = normalizeText(payload.repository);
+  const threadId = normalizeText(payload.threadId);
+  const relatedIssue = normalizeIssue(payload.relatedIssue || payload.issueNumber) || 455;
+  const snapshot = buildCodexAnalyticsUsageSnapshotFromPayload(payload, config, now);
+  const previous = await retrieveLatestCodexAnalyticsUsageSnapshot(provider, { repository, threadId });
+  const delta =
+    previous?.snapshot && payload.compareWithPrevious !== false
+      ? buildCodexAnalyticsUsageDelta(previous.snapshot, snapshot)
+      : null;
+
+  const captureId = normalizeCodexAnalyticsCaptureId(payload.captureId) || now.toISOString();
+  const snapshotRecord = createCodexAnalyticsUsageMemoryRecord({
+    id: `codex_analytics_usage_snapshot_${normalizeTag(captureId)}`,
+    kind: "snapshot",
+    content: {
+      contextSourceQuality: "external_evidence",
+      captureBoundary: "Manual Codex analytics usage page capture; raw page text is not persisted.",
+      codexAnalyticsUsage: snapshot
+    },
+    repository,
+    threadId,
+    relatedIssue,
+    createdAt: snapshot.capturedAt,
+    priority: 62
+  });
+  if (!snapshotRecord.ok) {
+    return json(422, {
+      ok: false,
+      error: "codex_analytics_usage_record_invalid",
+      reason: "snapshot memory record is invalid",
+      issues: snapshotRecord.issues ?? []
+    });
+  }
+  const storedSnapshot = await provider.store(snapshotRecord.record);
+  if (!storedSnapshot?.ok) {
+    return json(503, {
+      ok: false,
+      error: "codex_analytics_usage_snapshot_store_failed",
+      reason: "failed to persist Codex analytics usage snapshot",
+      issues: storedSnapshot?.issues ?? []
+    });
+  }
+
+  let storedDelta = null;
+  if (delta) {
+    const deltaRecord = createCodexAnalyticsUsageMemoryRecord({
+      id: `codex_analytics_usage_delta_${normalizeTag(captureId)}`,
+      kind: "delta",
+      content: {
+        contextSourceQuality: "external_evidence",
+        captureBoundary: "Manual Codex analytics usage before/after comparison; values are display percentages.",
+        codexAnalyticsUsageDelta: delta,
+        beforeRecordId: previous.recordId,
+        afterRecordId: storedSnapshot.record.id
+      },
+      repository,
+      threadId,
+      relatedIssue,
+      createdAt: snapshot.capturedAt,
+      priority: 61
+    });
+    if (!deltaRecord.ok) {
+      return json(422, {
+        ok: false,
+        error: "codex_analytics_usage_delta_record_invalid",
+        reason: "delta memory record is invalid",
+        issues: deltaRecord.issues ?? []
+      });
+    }
+    storedDelta = await provider.store(deltaRecord.record);
+    if (!storedDelta?.ok) {
+      return json(503, {
+        ok: false,
+        error: "codex_analytics_usage_delta_store_failed",
+        reason: "failed to persist Codex analytics usage delta",
+        issues: storedDelta?.issues ?? []
+      });
+    }
+  }
+
+  const chatMessage = await appendCodexAnalyticsUsageDashboardMessage({
+    env,
+    snapshot,
+    delta,
+    repository,
+    threadId,
+    relatedIssue,
+    captureId,
+    createdAt: snapshot.capturedAt
+  });
+  const runtimeTruth = buildCostCheckerRuntimeTruth(config, {
+    now,
+    observerAvailable: true,
+    lastSnapshot: snapshot,
+    lastDelta: delta
+  });
+
+  return json(200, {
+    ok: true,
+    costChecker: config,
+    snapshot,
+    delta,
+    runtimeTruth,
+    persisted: {
+      snapshotRecordId: storedSnapshot.record.id,
+      deltaRecordId: storedDelta?.record?.id ?? null,
+      dashboardMessageId: chatMessage?.messageId ?? null
+    }
+  });
+}
+
+async function handleRetrieveCodexAnalyticsUsageRequest(url, env) {
+  const provider = resolveMemoryProvider(env);
+  const repository = normalizeText(url.searchParams.get("repository"));
+  const threadId = normalizeText(url.searchParams.get("threadId"));
+  const limit = normalizeLimit(url.searchParams.get("limit"), 10);
+  const providerValidation = validateMemoryProvider(provider);
+  if (!providerValidation.ok) {
+    const runtimeTruth = buildCostCheckerRuntimeTruth(
+      { mode: "disabled" },
+      { observerAvailable: false, now: new Date() }
+    );
+    return json(200, {
+      ok: true,
+      repository,
+      threadId,
+      snapshot: null,
+      delta: null,
+      records: [],
+      runtimeTruth,
+      warning: "memory_provider_unavailable"
+    });
+  }
+
+  const snapshotRecords = await retrieveCodexAnalyticsUsageRecords(provider, {
+    kind: "snapshot",
+    repository,
+    threadId,
+    limit
+  });
+  const deltaRecords = await retrieveCodexAnalyticsUsageRecords(provider, {
+    kind: "delta",
+    repository,
+    threadId,
+    limit
+  });
+  const latestSnapshot = snapshotRecords[0] ?? null;
+  const latestDelta = deltaRecords[0] ?? null;
+  const runtimeTruth = buildCostCheckerRuntimeTruth(
+    {
+      mode: latestSnapshot ? latestSnapshot.snapshot.captureMode : "disabled"
+    },
+    {
+      observerAvailable: Boolean(latestSnapshot),
+      lastSnapshot: latestSnapshot?.snapshot ?? null,
+      lastDelta: latestDelta?.delta ?? null,
+      now: new Date()
+    }
+  );
+
+  return json(200, {
+    ok: true,
+    repository,
+    threadId,
+    snapshot: latestSnapshot?.snapshot ?? null,
+    delta: latestDelta?.delta ?? null,
+    records: {
+      snapshots: snapshotRecords.map(({ recordId, createdAt, snapshot }) => ({
+        recordId,
+        createdAt,
+        capturedAt: snapshot.capturedAt,
+        limits: snapshot.limits.length
+      })),
+      deltas: deltaRecords.map(({ recordId, createdAt, delta }) => ({
+        recordId,
+        createdAt,
+        afterCapturedAt: delta.afterCapturedAt,
+        comparedLimits: delta.limits.length
+      }))
+    },
+    runtimeTruth,
+    costBoundary:
+      "Codex analytics usage values are display percentages from the authenticated Codex analytics page, not billing truth."
+  });
+}
+
+function buildCodexAnalyticsUsageSnapshotFromPayload(payload, config, now) {
+  if (normalizeText(payload.text || payload.pageText || payload.ocrText)) {
+    return parseCodexAnalyticsUsageText(payload.text || payload.pageText || payload.ocrText, {
+      captureMode: config.mode,
+      now
+    });
+  }
+  return sanitizeCodexAnalyticsUsageSnapshot(
+    {
+      ...(payload.snapshot || {}),
+      captureMode: payload.snapshot?.captureMode || config.mode,
+      capturedAt: payload.snapshot?.capturedAt || payload.capturedAt || now
+    },
+    { captureMode: config.mode, now }
+  );
+}
+
+async function retrieveLatestCodexAnalyticsUsageSnapshot(provider, { repository, threadId }) {
+  const records = await retrieveCodexAnalyticsUsageRecords(provider, {
+    kind: "snapshot",
+    repository,
+    threadId,
+    limit: 1
+  });
+  return records[0] ?? null;
+}
+
+async function retrieveCodexAnalyticsUsageRecords(provider, { kind, repository, threadId, limit }) {
+  const tag = kind === "delta" ? "codex_analytics_usage_delta" : "codex_analytics_usage_snapshot";
+  const records = await provider.retrieve({
+    type: MemoryRecordType.WORKING_MEMORY,
+    tags: [tag],
+    limit: normalizeLimit(limit, 20)
+  });
+  return (Array.isArray(records) ? records : [])
+    .map((record) => mapCodexAnalyticsUsageMemoryRecord(record, kind))
+    .filter(Boolean)
+    .filter((record) => !repository || record.repository === repository)
+    .filter((record) => !threadId || record.threadId === threadId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function mapCodexAnalyticsUsageMemoryRecord(record, kind) {
+  const content = record?.content || {};
+  const snapshot = content.codexAnalyticsUsage || null;
+  const delta = content.codexAnalyticsUsageDelta || null;
+  if (kind === "snapshot" && !snapshot) {
+    return null;
+  }
+  if (kind === "delta" && !delta) {
+    return null;
+  }
+  return {
+    recordId: record.id,
+    createdAt: record.createdAt,
+    repository: normalizeText(record.metadata?.repository),
+    threadId: normalizeText(record.metadata?.threadId),
+    relatedIssue: normalizeIssue(record.metadata?.relatedIssue),
+    ...(snapshot ? { snapshot } : {}),
+    ...(delta ? { delta } : {})
+  };
+}
+
+function createCodexAnalyticsUsageMemoryRecord({
+  id,
+  kind,
+  content,
+  repository,
+  threadId,
+  relatedIssue,
+  createdAt,
+  priority
+}) {
+  const tags = [
+    "codex_analytics_usage",
+    kind === "delta" ? "codex_analytics_usage_delta" : "codex_analytics_usage_snapshot",
+    relatedIssue ? `issue:${relatedIssue}` : "issue:455",
+    repository ? `repo:${normalizeTag(repository.replace("/", "_"))}` : null,
+    threadId ? `thread:${normalizeTag(threadId)}` : null
+  ].filter(Boolean);
+  return createMemoryRecord({
+    id,
+    type: MemoryRecordType.WORKING_MEMORY,
+    content,
+    metadata: {
+      repository: repository || null,
+      threadId: threadId || null,
+      relatedIssue: relatedIssue || 455,
+      source: "codex_analytics_usage_manual_capture",
+      rawTextPersisted: false,
+      billingTruth: false
+    },
+    priority,
+    tags: [...new Set(tags)],
+    createdAt
+  });
+}
+
+async function appendCodexAnalyticsUsageDashboardMessage({
+  env,
+  snapshot,
+  delta,
+  repository,
+  threadId,
+  relatedIssue,
+  captureId,
+  createdAt
+}) {
+  if (!threadId) {
+    return null;
+  }
+  const store = resolveDashboardChatStore(env);
+  if (!store) {
+    return null;
+  }
+  const message = {
+    messageId: `codex-analytics-usage-${normalizeTag(captureId)}`,
+    role: "system",
+    repository: repository || null,
+    relatedIssue,
+    status: "sent",
+    createdAt,
+    text: formatCodexAnalyticsUsageDashboardMessage(snapshot, delta)
+  };
+  const appended = await store.appendMany(threadId, [message]);
+  return Array.isArray(appended) ? appended[0] ?? null : null;
+}
+
+function formatCodexAnalyticsUsageDashboardMessage(snapshot, delta) {
+  const lines = [
+    "Codex Analytics usage snapshot captured.",
+    `captureMode: ${snapshot.captureMode}`,
+    `capturedAt: ${snapshot.capturedAt}`,
+    `billingTruth: false`,
+    `limits: ${snapshot.limits.map((limit) => `${limit.label} ${limit.remainingPercent}%`).join(" / ") || "none"}`
+  ];
+  if (delta) {
+    lines.push(
+      `displayDelta: ${
+        delta.limits
+          .map((limit) =>
+            limit.status === "compared"
+              ? `${limit.label} ${limit.consumedDisplayPercent}% consumed`
+              : `${limit.label} ${limit.status}`
+          )
+          .join(" / ") || "none"
+      }`
+    );
+  }
+  return lines.join("\n");
+}
+
+function normalizeCodexAnalyticsCaptureId(value) {
+  return normalizeText(value)
+    .replace(/[^A-Za-z0-9:._-]+/g, "_")
+    .slice(0, 96);
 }
 
 async function handleRetrieveStartupPreflightRequest(url, env) {

@@ -358,6 +358,8 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "Gemini が指摘している修正を Codex に進めさせます。よければ GO と言ってください。",
     "RAG checkpoint",
     "vtddRetrieveOperationalMemory",
+    "vtddIngestCodexAnalyticsUsageSnapshot",
+    "vtddRetrieveCodexAnalyticsUsage",
     "vtddStartupPreflight",
     "Status intent (Issue/PR/close readiness/status/残タスク): first reply short",
     "avoid first-step vtddStartupPreflight",
@@ -493,6 +495,11 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/action/github"], "object");
   assert.equal(typeof doc.paths["/v2/action/memory-write"], "object");
   assert.equal(doc.paths["/v2/action/memory-write"].post.operationId, "vtddWriteOperationalMemory");
+  assert.equal(typeof doc.paths["/v2/codex-analytics/usage/snapshots"], "object");
+  assert.equal(
+    doc.paths["/v2/codex-analytics/usage/snapshots"].post.operationId,
+    "vtddIngestCodexAnalyticsUsageSnapshot"
+  );
   assert.equal(
     doc.paths["/v2/action/github"].post.requestBody.content["application/json"].schema.properties.operation.enum.includes(
       "issue_create"
@@ -587,6 +594,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/retrieve/proposals"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/cross"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/operational-memory"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/codex-analytics-usage"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/startup-preflight"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/vps-maintenance-install-inventory"], "object");
   assert.equal(doc.paths["/v2/retrieve/constitution"].get.operationId, "vtddRetrieveConstitution");
@@ -596,6 +604,10 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(
     doc.paths["/v2/retrieve/startup-preflight"].get.operationId,
     "vtddStartupPreflight"
+  );
+  assert.equal(
+    doc.paths["/v2/retrieve/codex-analytics-usage"].get.operationId,
+    "vtddRetrieveCodexAnalyticsUsage"
   );
   assert.equal(
     doc.paths["/v2/retrieve/vps-maintenance-install-inventory"].get.operationId,
@@ -679,6 +691,7 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
   const routes = [
     ["/v2/action/github", "post"],
     ["/v2/action/memory-write", "post"],
+    ["/v2/codex-analytics/usage/snapshots", "post"],
     ["/v2/action/repository-nickname", "post"],
     ["/v2/action/repository-nickname/delete", "post"],
     ["/v2/retrieve/constitution", "get"],
@@ -686,6 +699,7 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
     ["/v2/retrieve/proposals", "get"],
     ["/v2/retrieve/cross", "get"],
     ["/v2/retrieve/operational-memory", "get"],
+    ["/v2/retrieve/codex-analytics-usage", "get"],
     ["/v2/retrieve/startup-preflight", "get"],
     ["/v2/retrieve/vps-maintenance-install-inventory", "get"],
     ["/v2/retrieve/github", "get"],
@@ -714,6 +728,7 @@ test("custom gpt retrieve actions expose action-visible response mode for test-s
     "/v2/retrieve/proposals",
     "/v2/retrieve/cross",
     "/v2/retrieve/operational-memory",
+    "/v2/retrieve/codex-analytics-usage",
     "/v2/retrieve/startup-preflight",
     "/v2/retrieve/vps-maintenance-install-inventory",
     "/v2/retrieve/github",

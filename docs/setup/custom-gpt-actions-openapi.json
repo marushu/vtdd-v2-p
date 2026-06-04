@@ -4111,6 +4111,196 @@
           }
         }
       }
+    },
+    "/v2/codex-analytics/usage/snapshots": {
+      "post": {
+        "operationId": "vtddIngestCodexAnalyticsUsageSnapshot",
+        "summary": "Ingest a manual Codex analytics usage snapshot so Butler can compare usage before and after work.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "enabled"
+                    ]
+                  },
+                  "repository": {
+                    "type": "string"
+                  },
+                  "threadId": {
+                    "type": "string"
+                  },
+                  "relatedIssue": {
+                    "type": "integer"
+                  },
+                  "captureId": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "Redacted visible text copied from the authenticated Codex analytics page. Raw cookies, tokens, and session material must not be supplied."
+                  },
+                  "snapshot": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "compareWithPrevious": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Snapshot accepted and stored as redacted runtime truth.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Snapshot capture request blocked or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Snapshot storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/retrieve/codex-analytics-usage": {
+      "get": {
+        "operationId": "vtddRetrieveCodexAnalyticsUsage",
+        "summary": "Retrieve the latest Codex analytics usage snapshot, display-percent delta, and cost-checker runtime truth.",
+        "parameters": [
+          {
+            "name": "repository",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threadId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest Codex analytics usage observer state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Codex analytics usage retrieval unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
