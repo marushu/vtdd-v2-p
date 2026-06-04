@@ -11460,11 +11460,23 @@ function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingD
     lower.includes("app server") ||
     lower.includes("bridge") ||
     text.includes("ブリッジ");
+  const mentionsRepoLessBridge =
+    mentionsBridge &&
+    (lower.includes("unresolved") ||
+      lower.includes("repo-less") ||
+      lower.includes("repoless") ||
+      text.includes("repo 未設定") ||
+      text.includes("リポジトリ未設定") ||
+      text.includes("未設定 main chat") ||
+      text.includes("メインチャット"));
   const mentionsRunner = lower.includes("runner") || text.includes("ランナー") || text.includes("実行器");
   if (!mentionsBridge && !mentionsRunner) return null;
 
   let commandClass = "";
-  if (mentionsBridge && wantsLogs) commandClass = "systemd_user_app_server_bridge_logs";
+  if (mentionsRepoLessBridge && wantsLogs) commandClass = "systemd_user_app_server_bridge_unresolved_logs";
+  else if (mentionsRepoLessBridge && wantsRestart) commandClass = "systemd_user_app_server_bridge_unresolved_restart";
+  else if (mentionsRepoLessBridge && wantsStatus) commandClass = "systemd_user_app_server_bridge_unresolved_status";
+  else if (mentionsBridge && wantsLogs) commandClass = "systemd_user_app_server_bridge_logs";
   else if (mentionsBridge && wantsRestart) commandClass = "systemd_user_app_server_bridge_restart";
   else if (mentionsBridge && wantsStatus) commandClass = "systemd_user_app_server_bridge_status";
   else if (mentionsRunner && wantsLogs) commandClass = "systemd_user_runner_logs";
@@ -11480,7 +11492,12 @@ function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingD
     commandClass: registryEntry.commandClass,
     riskLevel: registryEntry.requiredRiskLevel,
     allowedArgs: registryEntry.allowedArgs,
-    affectedPaths: [workingDirectory, "/home/vtdd-runner/.config/systemd/user", "/run/user"].filter(Boolean),
+    affectedPaths: [
+      workingDirectory,
+      "/home/vtdd-runner/.config/systemd/user",
+      "/run/user",
+      ...registryEntry.allowedArgs
+    ].filter(Boolean),
     operation: wantsRestart ? "enable" : "review"
   };
 }

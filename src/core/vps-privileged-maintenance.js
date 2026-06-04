@@ -117,6 +117,43 @@ const HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
     initialPreset: true
   },
   {
+    commandClass: "systemd_user_app_server_bridge_unresolved_status",
+    title: "Check repo-less Dashboard app-server bridge status",
+    allowedArgs: ["systemctl --user is-active vtdd-dashboard-app-server-bridge-unresolved.service"],
+    argv: ["systemctl", "--user", "is-active", "vtdd-dashboard-app-server-bridge-unresolved.service"],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_app_server_bridge_unresolved_restart",
+    title: "Restart repo-less Dashboard app-server bridge",
+    allowedArgs: ["systemctl --user restart vtdd-dashboard-app-server-bridge-unresolved.service"],
+    argv: ["systemctl", "--user", "restart", "vtdd-dashboard-app-server-bridge-unresolved.service"],
+    requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_app_server_bridge_unresolved_logs",
+    title: "Read redacted repo-less Dashboard app-server bridge journal summary",
+    allowedArgs: [
+      "journalctl --user -u vtdd-dashboard-app-server-bridge-unresolved.service --no-pager -n 200"
+    ],
+    argv: [
+      "journalctl",
+      "--user",
+      "-u",
+      "vtdd-dashboard-app-server-bridge-unresolved.service",
+      "--no-pager",
+      "-n",
+      "200"
+    ],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
     commandClass: "vps_runner_status_dry_run",
     title: "Check VPS runner queue status without executing work",
     allowedArgs: ["node scripts/run-vps-runner.mjs --dry-run"],

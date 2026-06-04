@@ -27310,7 +27310,7 @@ function renderPasskeyOperatorPage(input = {}) {
   const approvalSectionAttributes = deployOneTapMode ? ' data-owner-flow="one-tap-deploy"' : "";
   const approveButtonLabel = deployOneTapMode ? "\u30D1\u30B9\u30AD\u30FC" : dashboardMode ? "\u30D1\u30B9\u30AD\u30FC\u3067\u958B\u304F" : "Approve high-risk action";
   const heroTitle = dashboardMode ? "Dashboard Passkey" : "VTDD Passkey Operator";
-  const heroDescription = dashboardMode ? "\u3053\u306E\u30DA\u30FC\u30B8\u306F Dashboard Butler \u3092\u958B\u304F\u305F\u3081\u306E\u8AAD\u307F\u53D6\u308A\u5C02\u7528\u30D1\u30B9\u30AD\u30FC\u78BA\u8A8D\u3067\u3059\u3002Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u3060\u3051\u3001\u540C\u4E00 origin \u306E passkey \u3067 dashboard session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002" : deployOneTapMode ? "\u3053\u306E\u30DA\u30FC\u30B8\u306F production deploy \u3092\u627F\u8A8D\u3057\u3066\u3001\u305D\u306E\u307E\u307E\u53CD\u6620\u3092\u958B\u59CB\u3059\u308B\u305F\u3081\u306E\u30D1\u30B9\u30AD\u30FC\u78BA\u8A8D\u3067\u3059\u3002\u5185\u90E8\u306E\u627F\u8A8DID\u3084 workflow \u5165\u529B\u306F\u901A\u5E38\u64CD\u4F5C\u3067\u306F\u6271\u3044\u307E\u305B\u3093\u3002" : "\u3053\u306E\u30DA\u30FC\u30B8\u306F real WebAuthn/passkey approval \u7528\u306E operator helper \u3067\u3059\u3002\u767B\u9332\u3068 high-risk approval \u306E\u4E21\u65B9\u3092 same-origin \u3067\u5B9F\u884C\u3057\u3001\u6700\u7D42\u7684\u306B <code>approvalGrantId</code> \u3092\u53D6\u5F97\u3067\u304D\u307E\u3059\u3002";
+  const heroDescription = dashboardMode ? "\u3053\u306E\u30DA\u30FC\u30B8\u306F Dashboard Butler \u3092\u958B\u304F\u305F\u3081\u306E\u8AAD\u307F\u53D6\u308A\u5C02\u7528\u30D1\u30B9\u30AD\u30FC\u78BA\u8A8D\u3067\u3059\u3002Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u3060\u3051\u3001\u540C\u4E00 origin \u306E passkey \u3067 dashboard session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002" : deployOneTapMode ? "\u3053\u306E\u30DA\u30FC\u30B8\u306F production deploy \u3092\u627F\u8A8D\u3057\u3066\u3001\u305D\u306E\u307E\u307E\u53CD\u6620\u3092\u958B\u59CB\u3059\u308B\u305F\u3081\u306E\u30D1\u30B9\u30AD\u30FC\u78BA\u8A8D\u3067\u3059\u3002\u53CD\u6620\u958B\u59CB\u5F8C\u306F Dashboard Butler \u306E\u30C1\u30E3\u30C3\u30C8\u3078\u623B\u308A\u3001\u5185\u90E8\u306E\u627F\u8A8DID\u3084 workflow \u5165\u529B\u306F\u901A\u5E38\u64CD\u4F5C\u3067\u306F\u6271\u3044\u307E\u305B\u3093\u3002" : "\u3053\u306E\u30DA\u30FC\u30B8\u306F real WebAuthn/passkey approval \u7528\u306E operator helper \u3067\u3059\u3002\u767B\u9332\u3068 high-risk approval \u306E\u4E21\u65B9\u3092 same-origin \u3067\u5B9F\u884C\u3057\u3001\u6700\u7D42\u7684\u306B <code>approvalGrantId</code> \u3092\u53D6\u5F97\u3067\u304D\u307E\u3059\u3002";
   const approvalHeading = deployOneTapMode ? "\u672C\u756A\u53CD\u6620\u306E\u627F\u8A8D" : dashboardMode ? "Dashboard \u3092\u958B\u304F" : "2. High-risk Approval";
   const deployScopeSummary = renderDeployScopeSummary({
     repositoryInput: repoDefault,
@@ -27842,12 +27842,21 @@ function renderPasskeyOperatorPage(input = {}) {
       function buildDeployResultText(body) {
         const deploy = body?.deploy || {};
         if (deploy.status === "dispatched") {
-          return "deploy \u3092\u958B\u59CB\u3057\u307E\u3057\u305F\u3002\u5B8C\u4E86\u901A\u77E5\u3092\u5F85\u3063\u3066\u304F\u3060\u3055\u3044\u3002";
+          return "deploy \u3092\u958B\u59CB\u3057\u307E\u3057\u305F\u3002Dashboard Butler \u306E\u30C1\u30E3\u30C3\u30C8\u306B\u623B\u3063\u3066\u8FFD\u8DE1\u3057\u307E\u3059\u3002";
         }
         if (deploy.status === "dispatch_accepted_unverified") {
-          return "deploy request \u306F\u53D7\u7406\u3055\u308C\u307E\u3057\u305F\u3002GitHub Actions \u306E run \u78BA\u8A8D\u306F\u672A\u78BA\u5B9A\u3067\u3059\u3002";
+          return "deploy request \u306F\u53D7\u7406\u3055\u308C\u307E\u3057\u305F\u3002GitHub Actions \u306E run \u78BA\u8A8D\u306F\u672A\u78BA\u5B9A\u3067\u3059\u3002Dashboard Butler \u306E\u30C1\u30E3\u30C3\u30C8\u306B\u623B\u3063\u3066\u8FFD\u8DE1\u3057\u307E\u3059\u3002";
         }
-        return "deploy request \u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F\u3002";
+        return "deploy request \u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F\u3002Dashboard Butler \u306E\u30C1\u30E3\u30C3\u30C8\u306B\u623B\u3063\u3066\u8FFD\u8DE1\u3057\u307E\u3059\u3002";
+      }
+
+      function returnToButlerAfterDeployDispatch() {
+        if (operatorMode !== "deploy" || !returnToButlerLink || !returnToButlerLink.href) {
+          return;
+        }
+        window.setTimeout(() => {
+          window.location.assign(returnToButlerLink.href);
+        }, 900);
       }
 
       function extractMergePullRequestUrl(body) {
@@ -28048,6 +28057,7 @@ function renderPasskeyOperatorPage(input = {}) {
         if (deployDebugOutput) {
           deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
         }
+        returnToButlerAfterDeployDispatch();
       }
 
       async function continueVpsMaintenanceFromApproval() {
@@ -37832,6 +37842,43 @@ var HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
       "--user",
       "-u",
       "vtdd-dashboard-app-server-bridge.service",
+      "--no-pager",
+      "-n",
+      "200"
+    ],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_app_server_bridge_unresolved_status",
+    title: "Check repo-less Dashboard app-server bridge status",
+    allowedArgs: ["systemctl --user is-active vtdd-dashboard-app-server-bridge-unresolved.service"],
+    argv: ["systemctl", "--user", "is-active", "vtdd-dashboard-app-server-bridge-unresolved.service"],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_app_server_bridge_unresolved_restart",
+    title: "Restart repo-less Dashboard app-server bridge",
+    allowedArgs: ["systemctl --user restart vtdd-dashboard-app-server-bridge-unresolved.service"],
+    argv: ["systemctl", "--user", "restart", "vtdd-dashboard-app-server-bridge-unresolved.service"],
+    requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_app_server_bridge_unresolved_logs",
+    title: "Read redacted repo-less Dashboard app-server bridge journal summary",
+    allowedArgs: [
+      "journalctl --user -u vtdd-dashboard-app-server-bridge-unresolved.service --no-pager -n 200"
+    ],
+    argv: [
+      "journalctl",
+      "--user",
+      "-u",
+      "vtdd-dashboard-app-server-bridge-unresolved.service",
       "--no-pager",
       "-n",
       "200"
@@ -67537,10 +67584,14 @@ function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingD
   const wantsRestart = lower.includes("restart") || lower.includes("\u518D\u8D77\u52D5") || text.includes("\u518D\u8D77\u52D5");
   const wantsStatus = lower.includes("status") || lower.includes("health") || lower.includes("state") || text.includes("\u72B6\u614B") || text.includes("\u78BA\u8A8D") || text.includes("\u751F\u5B58") || text.includes("\u7A3C\u50CD");
   const mentionsBridge = lower.includes("app-server") || lower.includes("app server") || lower.includes("bridge") || text.includes("\u30D6\u30EA\u30C3\u30B8");
+  const mentionsRepoLessBridge = mentionsBridge && (lower.includes("unresolved") || lower.includes("repo-less") || lower.includes("repoless") || text.includes("repo \u672A\u8A2D\u5B9A") || text.includes("\u30EA\u30DD\u30B8\u30C8\u30EA\u672A\u8A2D\u5B9A") || text.includes("\u672A\u8A2D\u5B9A main chat") || text.includes("\u30E1\u30A4\u30F3\u30C1\u30E3\u30C3\u30C8"));
   const mentionsRunner = lower.includes("runner") || text.includes("\u30E9\u30F3\u30CA\u30FC") || text.includes("\u5B9F\u884C\u5668");
   if (!mentionsBridge && !mentionsRunner) return null;
   let commandClass = "";
-  if (mentionsBridge && wantsLogs) commandClass = "systemd_user_app_server_bridge_logs";
+  if (mentionsRepoLessBridge && wantsLogs) commandClass = "systemd_user_app_server_bridge_unresolved_logs";
+  else if (mentionsRepoLessBridge && wantsRestart) commandClass = "systemd_user_app_server_bridge_unresolved_restart";
+  else if (mentionsRepoLessBridge && wantsStatus) commandClass = "systemd_user_app_server_bridge_unresolved_status";
+  else if (mentionsBridge && wantsLogs) commandClass = "systemd_user_app_server_bridge_logs";
   else if (mentionsBridge && wantsRestart) commandClass = "systemd_user_app_server_bridge_restart";
   else if (mentionsBridge && wantsStatus) commandClass = "systemd_user_app_server_bridge_status";
   else if (mentionsRunner && wantsLogs) commandClass = "systemd_user_runner_logs";
@@ -67555,7 +67606,12 @@ function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingD
     commandClass: registryEntry.commandClass,
     riskLevel: registryEntry.requiredRiskLevel,
     allowedArgs: registryEntry.allowedArgs,
-    affectedPaths: [workingDirectory, "/home/vtdd-runner/.config/systemd/user", "/run/user"].filter(Boolean),
+    affectedPaths: [
+      workingDirectory,
+      "/home/vtdd-runner/.config/systemd/user",
+      "/run/user",
+      ...registryEntry.allowedArgs
+    ].filter(Boolean),
     operation: wantsRestart ? "enable" : "review"
   };
 }

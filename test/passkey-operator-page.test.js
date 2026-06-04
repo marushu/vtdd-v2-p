@@ -142,6 +142,7 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
     ),
     true
   );
+  assert.equal(html.includes("反映開始後は Dashboard Butler のチャットへ戻り"), true);
   assert.equal(html.includes("内部の承認IDや workflow 入力は通常操作では扱いません。"), true);
   assert.equal(html.includes("最終的に <code>approvalGrantId</code> を取得できます。"), false);
   assert.equal(html.includes('id="approve-button">パスキー</button>'), true);
@@ -154,7 +155,10 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes("Auto-copy approvalGrantId after approval"), false);
   assert.equal(html.includes('id="deploy-button" hidden>Dispatch production deploy</button>'), true);
   assert.equal(html.includes("Dashboard 通知センターと保存済み Web Push 購読へ届きます"), true);
-  assert.equal(html.includes("deploy を開始しました。完了通知を待ってください。"), true);
+  assert.equal(html.includes("deploy を開始しました。Dashboard Butler のチャットに戻って追跡します。"), true);
+  assert.equal(html.includes("function returnToButlerAfterDeployDispatch()"), true);
+  assert.equal(html.includes("window.location.assign(returnToButlerLink.href)"), true);
+  assert.equal(html.includes("returnToButlerAfterDeployDispatch();"), true);
   assert.equal(html.includes("deploy-debug-output"), true);
   assert.equal(html.includes("<summary>詳細</summary>"), true);
   assert.equal(html.includes("Return to Butler"), true);

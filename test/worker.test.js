@@ -3025,6 +3025,48 @@ test("worker keeps ordinary Dashboard Butler planning chat out of VPS helper que
   assert.doesNotMatch(JSON.stringify(body.messages), /途中で止まりました/);
 });
 
+test("worker maps repo-less Dashboard bridge restart intent to unresolved bridge capability", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 741,
+        text: "repo 未設定 main chat の app-server bridge を再起動して。deploy 後の反映確認です。"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.status, "approval_required");
+  assert.equal(body.execution.approvalScope.vpsCapabilityId, "systemd.user.app.server.bridge.unresolved.restart");
+  assert.equal(body.execution.approvalScope.vpsOperation, "enable");
+  assert.equal(
+    body.execution.approvalScope.vpsImpactScope.includes("vtdd-dashboard-app-server-bridge-unresolved.service"),
+    true
+  );
+  assert.match(body.messages[1].text, /Restart repo-less Dashboard app-server bridge/);
+  assert.match(body.messages[1].text, /approval_required/);
+  assert.match(body.messages[1].text, /rootExecutionStarted=false, helperExecutionStarted=false/);
+  const approvalUrl = new URL(body.execution.approvalOperatorUrl);
+  assert.equal(approvalUrl.searchParams.get("mode"), "vps");
+  assert.equal(approvalUrl.searchParams.get("dashboardThreadId"), "dashboard-main-unresolved");
+  assert.equal(approvalUrl.searchParams.get("vpsProposalId"), body.execution.vpsProposalId);
+});
+
 test("worker maps Dashboard Butler VPS runner status text to the low-risk preset", async () => {
   const store = createInMemoryDashboardChatStore();
   const provider = createInMemoryMemoryProvider();
