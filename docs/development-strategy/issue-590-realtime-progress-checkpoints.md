@@ -10,6 +10,8 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 2026-06-04 の追加 production 観測で、開発中に画面が下へチラチラ引っ張られる挙動が出た。原因候補は live progress checkpoint / thread refresh のたびに `scrollToLatest()` が無条件実行されること。owner が途中の進行を読んでいる場合は、最新 checkpoint が来ても scroll position を保持し、最下部付近にいる場合だけ追従する必要がある。
 
+2026-06-04 の PR #780 deploy 後、composer 下の transient status は戻ったが、chat-visible live progress は相変わらず出ないことを owner が確認した。bridge が `planning` / `command` / `file_change` のような具体 event を受けられない turn でも、30秒以内に owner-facing fallback checkpoint を生成しなければ、#590 の無言待ち解消にはならない。
+
 ## VTDD 全体で進める部分
 
 この slice は #590 の realtime progress checkpoint stream の最小実装に限定する。#637 の production E2E で確認した「低リスク read/status が passkey なしで helper queue に渡る」経路を、#590 の進行表示 E2E の観測対象として使えるようにする。
@@ -38,6 +40,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 - reply delta は従来通り snapshot / durable chat message にしない。
 - Dashboard HTML に chat 内 checkpoint card の描画経路があり、snapshot restore / WebSocket transient update / final reply clear で動く。
 - live progress checkpoint と thread refresh は、更新前に最下部付近だった場合だけ自動追従する。owner が途中を読んでいる場合は scroll position を壊さない。
+- app-server bridge は、具体 progress event が届かない turn でも 30秒以内に owner-facing fallback checkpoint を送る。
 - worker bundle を再生成し、generated worker 差分を一致させる。
 
 ## 改修見積もり
@@ -47,6 +50,9 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
   - Dashboard client script: `transientProgressSnapshot.progressSummary` から最新 checkpoint を chat log 内に ephemeral card として描画し、clear 時に消す。
   - Dashboard client script: `isNearLatest()` / conditional scroll helper を追加し、progress update / thread refresh の無条件 scroll を止める。
   - Dashboard CSS: checkpoint card と progress summary の dark mode 対応を最小限整える。
+- `scripts/run-dashboard-app-server-bridge.mjs`
+  - turn 開始後、owner-facing progress event が一定時間届かない場合に `long_turn_checkpoint` を送る。
+  - checkpoint は raw delta ではなく、turn lifecycle 由来の低頻度 owner-facing 文に限定する。
 - `test/worker.test.js`
   - 低情報 progress が summary に入らないこと。
   - owner-facing progress が summary と final reply に残ること。
@@ -64,7 +70,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 ## 未確認の境界
 
-- app-server bridge が 30秒以内に必ず owner-facing stage を送るかは、この slice だけでは保証しない。
+- app-server bridge が 30秒以内に owner-facing stage を送ることは、この slice で fallback として保証する。ただし WebSocket が iPad バックグラウンドで停止している間の即時表示は保証しない。
 - WebSocket が iPad PWA のバックグラウンドで停止する挙動自体は、この slice では直さない。復帰時に snapshot から見えることを優先する。
 - raw assistant delta をそのまま checkpoint にするかは未採用。思考や未整理文を流すリスクがあるため、この slice では stage-based checkpoint に限定する。
 
@@ -87,7 +93,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 ## 実装候補と捨てた案
 
-採用候補は、既存 DO snapshot 1件を chat log 内の ephemeral checkpoint card として表示する案。
+採用候補は、既存 DO snapshot 1件を chat log 内の ephemeral checkpoint card として表示し、bridge が具体 event を送れない turn では `long_turn_checkpoint` を低頻度に送る案。
 
 捨てた案:
 
@@ -97,7 +103,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 ## merge 後に通す E2E
 
-- production PWA から #637 相当の低リスク read/status を投げ、30秒以内に composer 下の transient と chat 内 checkpoint のどちらかが見えること。
+- production PWA から #637 相当の低リスク read/status を投げ、30秒以内に chat-visible owner-facing checkpoint が見えること。
 - app 切替またはリロード後、最新 checkpoint が chat log 内に復帰すること。
 - owner が途中を読んでいる状態で checkpoint が更新されても、画面が下に引っ張られないこと。
 - completion 後、checkpoint card が消え、最終 Butler 返信に `進行ログ` が残ること。

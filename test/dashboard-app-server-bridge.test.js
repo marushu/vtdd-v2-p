@@ -20,6 +20,7 @@ import {
   buildAppServerThreadStartRequest,
   buildAppServerTurnStartRequest,
   buildDashboardBridgeConnectedEvent,
+  buildDashboardBridgeLiveProgressFallbackEvent,
   buildDashboardBridgeResumeStatusEvent,
   buildDashboardBridgeTurnStartedStatusEvent,
   buildDashboardTurnInputText,
@@ -153,6 +154,24 @@ test("dashboard app-server bridge formats lifecycle resume status events", () =>
   assert.equal(turnStarted.bridgeLifecycle.turnId, "turn-741");
   assert.equal(turnStarted.bridgeLifecycle.resumedExistingThread, true);
   assert.match(turnStarted.text, /復帰した Codex thread/);
+});
+
+test("dashboard app-server bridge formats live progress fallback checkpoints", () => {
+  const event = buildDashboardBridgeLiveProgressFallbackEvent({
+    dashboardThreadId: "dashboard-main",
+    codexThreadId: "codex-thread-590",
+    turnId: "turn-590",
+    messageId: "message-590",
+    checkpointNumber: 2,
+    now: "2026-06-04T00:00:00.000Z"
+  });
+
+  assert.equal(event.type, "app_server_status");
+  assert.equal(event.threadId, "dashboard-main");
+  assert.equal(event.stage, "long_turn_checkpoint");
+  assert.equal(event.persistProgress, true);
+  assert.match(event.text, /作業を継続しています/);
+  assert.equal(event.bridgeLifecycle.checkpointNumber, 2);
 });
 
 test("dashboard app-server bridge builds optional app-server usage tuning args", () => {
@@ -1709,6 +1728,59 @@ test("dashboard app-server bridge runs Issue #590 debug slow turn without starti
   assert.equal(reply.relatedIssue, 590);
   assert.match(reply.text, /low turn E2E が完了/);
   assert.match(reply.text, /root \/ sudo \/ deploy \/ credential \/ repository mutation は実行していません/);
+});
+
+test("dashboard app-server bridge emits fallback live progress before a quiet long turn completes", async () => {
+  const events = [];
+  let notificationHandler = () => {};
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      notificationHandler = handler;
+      return () => {};
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-590" } };
+      }
+      if (message.method === "turn/start") {
+        setTimeout(() => {
+          notificationHandler({
+            method: "turn/completed",
+            params: {
+              threadId: "codex-thread-590",
+              turnId: "turn-590",
+              status: "completed"
+            }
+          });
+        }, 5);
+        return { turn: { id: "turn-590" } };
+      }
+      return {};
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      text: "Issue #590 の production progress fallback を確認して"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    liveProgressInitialDelayMs: 0,
+    liveProgressIntervalMs: 1000
+  });
+
+  const fallback = events.find((event) => event.type === "app_server_status" && event.stage === "long_turn_checkpoint");
+  assert.ok(fallback);
+  assert.equal(fallback.persistProgress, true);
+  assert.match(fallback.text, /作業を継続しています/);
+  assert.ok(events.find((event) => event.type === "app_server_reply"));
 });
 
 test("dashboard app-server bridge rejects out-of-range Issue #590 debug slow turn duration", async () => {
