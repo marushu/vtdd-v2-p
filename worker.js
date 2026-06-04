@@ -58339,6 +58339,12 @@ var DashboardChatRoom = class {
       relatedIssue,
       text
     });
+    const vpsMaintenancePassThrough = buildDashboardVpsMaintenancePassThroughContext({
+      text,
+      repository,
+      relatedIssue,
+      env: this.env
+    });
     const mapping = await this.readAppServerThreadMapping(threadId);
     const turnRequest = {
       type: "app_server_turn_requested",
@@ -58359,7 +58365,8 @@ var DashboardChatRoom = class {
       authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }),
       usageProfile,
       costBoundary,
-      trafficControl
+      trafficControl,
+      vpsMaintenancePassThrough
     };
     return this.sendSocket(bridgeSocket, turnRequest);
   }
@@ -68724,6 +68731,41 @@ function buildDashboardVpsMaintenanceProposalPreflight({ proposalPayload, reposi
     missingContext,
     missingConfiguration,
     nextAction
+  };
+}
+function buildDashboardVpsMaintenancePassThroughContext({ text, repository, relatedIssue, env } = {}) {
+  if (!detectDashboardVpsPrivilegedMaintenanceIntent({ text })) {
+    return null;
+  }
+  const proposalPayload = buildDashboardVpsMaintenanceProposalPayload({
+    payload: { text },
+    repository,
+    relatedIssue,
+    env
+  });
+  const preflight = buildDashboardVpsMaintenanceProposalPreflight({
+    proposalPayload,
+    repository,
+    relatedIssue
+  });
+  if (preflight.ok) {
+    return null;
+  }
+  return {
+    kind: "dashboard_vps_maintenance_pass_through",
+    status: "passed_to_app_server_bridge",
+    reason: preflight.reason,
+    missingContext: preflight.missingContext || [],
+    missingConfiguration: preflight.missingConfiguration || [],
+    rootExecutionStarted: false,
+    helperExecutionStarted: false,
+    workerProposalCreated: false,
+    guidance: [
+      "Dashboard Butler \u306F\u3053\u306E VPS maintenance intent \u3092 Worker blocker \u3067\u6B62\u3081\u305A app-server bridge \u3078\u6E21\u3057\u307E\u3057\u305F\u3002",
+      "VPS / root / helper / restart / deploy recovery \u306E\u5B9F\u884C\u3092\u958B\u59CB\u3057\u306A\u3044\u3067\u304F\u3060\u3055\u3044\u3002",
+      "\u4E0D\u8DB3\u3057\u3066\u3044\u308B repository\u3001related Issue\u3001\u307E\u305F\u306F runtime config \u3092\u65E5\u672C\u8A9E\u3067\u77ED\u304F\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+      "owner \u304C deploy \u5F8C bridge sync/restart \u3092\u6C42\u3081\u3066\u3044\u308B\u5834\u5408\u306F\u3001deploy standard post-step / helper queue truth \u3092\u78BA\u8A8D\u3057\u3066\u304B\u3089\u6848\u5185\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+    ]
   };
 }
 function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {

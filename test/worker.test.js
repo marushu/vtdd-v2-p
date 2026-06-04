@@ -3367,6 +3367,14 @@ test("DashboardChatRoom passes VPS maintenance intent to app-server bridge when 
   const turnRequest = JSON.parse(bridgeSocket.sent[0]);
   assert.equal(turnRequest.type, "app_server_turn_requested");
   assert.equal(turnRequest.text, "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。");
+  assert.equal(turnRequest.vpsMaintenancePassThrough.status, "passed_to_app_server_bridge");
+  assert.deepEqual(turnRequest.vpsMaintenancePassThrough.missingContext, ["repository", "relatedIssue"]);
+  assert.deepEqual(turnRequest.vpsMaintenancePassThrough.missingConfiguration, ["host", "workingDirectories"]);
+  assert.equal(turnRequest.vpsMaintenancePassThrough.rootExecutionStarted, false);
+  assert.equal(turnRequest.vpsMaintenancePassThrough.helperExecutionStarted, false);
+  assert.equal(turnRequest.vpsMaintenancePassThrough.workerProposalCreated, false);
+  assert.match(turnRequest.vpsMaintenancePassThrough.guidance.join("\n"), /実行を開始しない/);
+  assert.match(turnRequest.vpsMaintenancePassThrough.guidance.join("\n"), /不足している repository/);
   const finalBroadcast = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "thread");
   assert.equal(finalBroadcast.type, "thread");
   assert.equal(finalBroadcast.messages.length, 1);

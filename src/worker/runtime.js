@@ -467,6 +467,12 @@ export class DashboardChatRoom {
       relatedIssue,
       text
     });
+    const vpsMaintenancePassThrough = buildDashboardVpsMaintenancePassThroughContext({
+      text,
+      repository,
+      relatedIssue,
+      env: this.env
+    });
     const mapping = await this.readAppServerThreadMapping(threadId);
     const turnRequest = {
       type: "app_server_turn_requested",
@@ -487,7 +493,8 @@ export class DashboardChatRoom {
       authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }),
       usageProfile,
       costBoundary,
-      trafficControl
+      trafficControl,
+      vpsMaintenancePassThrough
     };
     return this.sendSocket(bridgeSocket, turnRequest);
   }
@@ -12181,6 +12188,42 @@ function buildDashboardVpsMaintenanceProposalPreflight({ proposalPayload, reposi
     missingContext,
     missingConfiguration,
     nextAction
+  };
+}
+
+function buildDashboardVpsMaintenancePassThroughContext({ text, repository, relatedIssue, env } = {}) {
+  if (!detectDashboardVpsPrivilegedMaintenanceIntent({ text })) {
+    return null;
+  }
+  const proposalPayload = buildDashboardVpsMaintenanceProposalPayload({
+    payload: { text },
+    repository,
+    relatedIssue,
+    env
+  });
+  const preflight = buildDashboardVpsMaintenanceProposalPreflight({
+    proposalPayload,
+    repository,
+    relatedIssue
+  });
+  if (preflight.ok) {
+    return null;
+  }
+  return {
+    kind: "dashboard_vps_maintenance_pass_through",
+    status: "passed_to_app_server_bridge",
+    reason: preflight.reason,
+    missingContext: preflight.missingContext || [],
+    missingConfiguration: preflight.missingConfiguration || [],
+    rootExecutionStarted: false,
+    helperExecutionStarted: false,
+    workerProposalCreated: false,
+    guidance: [
+      "Dashboard Butler はこの VPS maintenance intent を Worker blocker で止めず app-server bridge へ渡しました。",
+      "VPS / root / helper / restart / deploy recovery の実行を開始しないでください。",
+      "不足している repository、related Issue、または runtime config を日本語で短く確認してください。",
+      "owner が deploy 後 bridge sync/restart を求めている場合は、deploy standard post-step / helper queue truth を確認してから案内してください。"
+    ]
   };
 }
 
