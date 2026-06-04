@@ -3304,6 +3304,75 @@ test("worker detects app-server bridge recovery intent without internal VPS help
   ]);
 });
 
+test("DashboardChatRoom queues repo-less low-risk VPS runner status when repository is named in owner text", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const githubCalls = [];
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_RUNTIME_URL: "https://example.com",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 63705,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/637#issuecomment-63705"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: [
+        "Issue #637 E2E: VPS runner の status を確認して。",
+        "repository は marushu/vtdd-v2-p。",
+        "低リスク read/status として、passkey なしで helper queue に渡るか確認して。"
+      ].join("\n")
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 0);
+  assert.equal(githubCalls.length, 1);
+  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
+  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:"), true);
+  assert.equal(queueCommentBody.includes('"repository": "marushu/vtdd-v2-p"'), true);
+  assert.equal(queueCommentBody.includes('"issueNumber": 637'), true);
+  assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
+  assert.equal(queueCommentBody.includes('"approvalBypassReason": "low_risk_read"'), true);
+
+  const finalBroadcast = dashboardSocket.sent.map((message) => JSON.parse(message)).findLast((message) => message.type === "thread");
+  assert.equal(finalBroadcast.type, "thread");
+  assert.equal(finalBroadcast.messages.length, 2);
+  assert.equal(finalBroadcast.messages[0].role, "owner");
+  assert.equal(finalBroadcast.messages[0].repository, "marushu/vtdd-v2-p");
+  assert.equal(finalBroadcast.messages[0].relatedIssue, 637);
+  assert.equal(finalBroadcast.messages[1].role, "butler");
+  assert.equal(finalBroadcast.messages[1].status, "sent");
+  assert.match(finalBroadcast.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
+  assert.match(finalBroadcast.messages[1].text, /low-risk read/);
+  assert.doesNotMatch(finalBroadcast.messages[1].text, /approval URL/);
+});
+
 test("worker reports Dashboard VPS maintenance config blockers before creating a proposal", async () => {
   const store = createInMemoryDashboardChatStore();
   const provider = createInMemoryMemoryProvider();
