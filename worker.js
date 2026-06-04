@@ -72699,6 +72699,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         });
       }
 
+      function isNearLatest() {
+        const distance = log.scrollHeight - log.scrollTop - log.clientHeight;
+        return distance < 96;
+      }
+
+      function scrollToLatestIfFollowing(shouldFollow) {
+        updateComposerReserve();
+        if (shouldFollow) {
+          scrollToLatest();
+        }
+      }
+
       function setStatus(text, options = {}) {
         status.replaceChildren(document.createTextNode(text));
         if (options.actionHref && options.actionLabel) {
@@ -72838,7 +72850,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return entry;
       }
 
-      function renderThreadProgressCheckpoint(snapshot) {
+      function renderThreadProgressCheckpoint(snapshot, options = {}) {
+        const shouldFollow = options.follow === true || (options.follow !== false && isNearLatest());
         if (snapshot && typeof snapshot === "object") {
           transientProgressSnapshotState = snapshot;
         }
@@ -72852,15 +72865,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (paragraph) {
           paragraph.textContent = text;
         }
-        scrollToLatest();
+        scrollToLatestIfFollowing(shouldFollow);
         return true;
       }
 
       function clearThreadProgressCheckpoint() {
+        const shouldFollow = isNearLatest();
         if (threadProgressCheckpointCard) {
           threadProgressCheckpointCard.remove();
           threadProgressCheckpointCard = null;
         }
+        scrollToLatestIfFollowing(shouldFollow);
       }
 
       function setComposerLocked(locked) {
@@ -73955,6 +73970,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function renderThread(messages, options = {}) {
         const replace = options.replace === true;
         const snapshotForCheckpoint = transientProgressSnapshotState;
+        const shouldFollow = isNearLatest();
         if (replace) {
           messagesById.clear();
         }
@@ -73963,8 +73979,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (replace || messagesById.size === 0) {
             log.innerHTML = initialMarkup;
           }
-          renderThreadProgressCheckpoint(snapshotForCheckpoint);
-          scrollToLatest();
+          renderThreadProgressCheckpoint(snapshotForCheckpoint, { follow: shouldFollow });
+          scrollToLatestIfFollowing(shouldFollow);
           return;
         }
         for (const message of messages) {
@@ -73975,8 +73991,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           appendMessage(message, fragment, { scroll: false });
         }
         log.replaceChildren(fragment);
-        renderThreadProgressCheckpoint(snapshotForCheckpoint);
-        scrollToLatest();
+        renderThreadProgressCheckpoint(snapshotForCheckpoint, { follow: shouldFollow });
+        scrollToLatestIfFollowing(shouldFollow);
       }
 
       async function refreshThread() {
