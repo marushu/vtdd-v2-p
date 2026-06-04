@@ -58494,12 +58494,14 @@ var DashboardChatRoom = class {
         source: snapshotSource
       });
     }
+    const transientProgressSnapshot = snapshot === true ? await this.readTransientProgressSnapshot(threadId) : null;
     const payload = JSON.stringify({
       type: "transient_status",
       ok: true,
       threadId,
       status,
-      text
+      text,
+      transientProgressSnapshot
     });
     for (const socket of this.connectedSockets()) {
       const attachment = this.getSocketAttachment(socket);
@@ -66765,7 +66767,7 @@ function buildDashboardProgressSummarySnapshot(previous, { text = "" } = {}) {
   const previousSummary = normalizeDashboardProgressSummary(previous?.progressSummary);
   const entries = [...previousSummary.entries];
   const normalizedText = sanitizeDashboardChatText(text);
-  if (normalizedText) {
+  if (normalizedText && shouldIncludeDashboardProgressSummaryEntry(normalizedText)) {
     const latest = entries.at(-1);
     if (!latest || latest.text !== normalizedText) {
       entries.push({
@@ -66778,6 +66780,13 @@ function buildDashboardProgressSummarySnapshot(previous, { text = "" } = {}) {
     entries,
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   });
+}
+function shouldIncludeDashboardProgressSummaryEntry(text) {
+  const normalizedText = sanitizeDashboardChatText(text);
+  if (!normalizedText) {
+    return false;
+  }
+  return !DASHBOARD_LOW_INFORMATION_PROGRESS_TEXT.has(normalizedText);
 }
 function dashboardProgressSummaryEntriesKey(progressSummary) {
   const normalized = normalizeDashboardProgressSummary(progressSummary);
@@ -66922,6 +66931,12 @@ var DASHBOARD_APP_SERVER_STAGE_TEXT = {
 var DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = /* @__PURE__ */ new Set([
   "waiting_approval",
   "waiting_user_input"
+]);
+var DASHBOARD_LOW_INFORMATION_PROGRESS_TEXT = /* @__PURE__ */ new Set([
+  "\u8003\u3048\u3066\u3044\u307E\u3059\u3002",
+  "\u30B3\u30DE\u30F3\u30C9\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
+  "\u5916\u90E8\u30C4\u30FC\u30EB\u306E\u7D50\u679C\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
+  "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u614B\u3092\u78BA\u8A8D\u4E2D\u3067\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"
 ]);
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
   if (transientStatus === "replied" || status === "replied") {
@@ -72194,10 +72209,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
-    .progress-summary { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: rgba(247, 248, 244, .8); color: var(--muted); }
+    .progress-summary { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel-strong); color: var(--muted); }
     .progress-summary summary { cursor: pointer; font-weight: 800; color: var(--text); }
     .progress-summary ol { margin: 10px 0 0; padding-left: 22px; }
     .progress-summary li { margin-top: 6px; overflow-wrap: anywhere; word-break: break-word; }
+    .progress-checkpoint-entry { opacity: .92; }
+    .progress-checkpoint-bubble { color: var(--muted); }
+    .progress-checkpoint-bubble .bubble-header strong { color: var(--muted); }
+    .progress-checkpoint-bubble .message-body p { color: var(--text); }
     .reply-context { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: min(100%, 680px); margin: 0 0 10px; padding: 8px 10px; border: 0; border-left: 3px solid var(--border); border-radius: 0 8px 8px 0; background: var(--soft); color: var(--muted); font: inherit; font-size: 12px; line-height: 1.45; text-align: left; cursor: pointer; }
     .reply-context:hover, .reply-context:focus-visible { color: var(--text); background: var(--panel-strong); outline: none; }
     .reply-context:focus-visible { box-shadow: 0 0 0 2px var(--link); }
@@ -72482,6 +72501,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const renderedMessagesById = new Map();
       let transientProgressCard = null;
       let transientProgressState = null;
+      let threadProgressCheckpointCard = null;
+      let transientProgressSnapshotState = null;
       let latestOwnerReplySource = null;
       let lastMediaLightboxTrigger = null;
       let pendingOwnerSend = null;
@@ -72757,13 +72778,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           title: options.title || "\u9032\u884C\u4E2D",
           text: normalized,
           status: String(options.status || ""),
-          thinking: options.thinking === true
+          thinking: options.thinking === true,
+          snapshot: options.snapshot || null
         };
         renderTransientProgress();
+        renderThreadProgressCheckpoint(options.snapshot || null);
       }
 
       function clearTransientProgress() {
         transientProgressState = null;
+        transientProgressSnapshotState = null;
         if (transientProgressCard) {
           if (transientProgressCard === progressPane) {
             transientProgressCard.hidden = true;
@@ -72774,6 +72798,68 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             transientProgressCard.remove();
           }
           transientProgressCard = null;
+        }
+        clearThreadProgressCheckpoint();
+      }
+
+      function latestProgressCheckpointText(snapshot) {
+        const entries = Array.isArray(snapshot && snapshot.progressSummary && snapshot.progressSummary.entries)
+          ? snapshot.progressSummary.entries
+          : [];
+        return [...entries]
+          .reverse()
+          .map((entry) => String(entry && entry.text || entry || "").trim())
+          .find(Boolean) || "";
+      }
+
+      function ensureThreadProgressCheckpointCard() {
+        if (threadProgressCheckpointCard && threadProgressCheckpointCard.isConnected) {
+          return threadProgressCheckpointCard;
+        }
+        const entry = document.createElement("div");
+        entry.className = "message-entry butler progress-checkpoint-entry";
+        entry.setAttribute("data-thread-progress-checkpoint", "true");
+        const article = document.createElement("article");
+        article.className = "bubble progress-checkpoint-bubble";
+        const header = document.createElement("div");
+        header.className = "bubble-header";
+        const strong = document.createElement("strong");
+        strong.textContent = "Butler";
+        header.appendChild(strong);
+        const body = document.createElement("div");
+        body.className = "message-body";
+        const paragraph = document.createElement("p");
+        body.appendChild(paragraph);
+        article.appendChild(header);
+        article.appendChild(body);
+        entry.appendChild(article);
+        threadProgressCheckpointCard = entry;
+        log.appendChild(entry);
+        return entry;
+      }
+
+      function renderThreadProgressCheckpoint(snapshot) {
+        if (snapshot && typeof snapshot === "object") {
+          transientProgressSnapshotState = snapshot;
+        }
+        const text = latestProgressCheckpointText(transientProgressSnapshotState);
+        if (!text) {
+          clearThreadProgressCheckpoint();
+          return false;
+        }
+        const card = ensureThreadProgressCheckpointCard();
+        const paragraph = card.querySelector(".message-body p");
+        if (paragraph) {
+          paragraph.textContent = text;
+        }
+        scrollToLatest();
+        return true;
+      }
+
+      function clearThreadProgressCheckpoint() {
+        if (threadProgressCheckpointCard) {
+          threadProgressCheckpointCard.remove();
+          threadProgressCheckpointCard = null;
         }
       }
 
@@ -73041,7 +73127,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateTransientProgress(text, {
           status: statusValue,
           thinking: statusValue === "thinking" || statusValue === "pending_app_server_bridge",
-          title: statusValue === "pending_app_server_bridge" ? "\u8FD4\u4FE1\u5F85\u3061" : "\u9032\u884C\u4E2D"
+          title: statusValue === "pending_app_server_bridge" ? "\u8FD4\u4FE1\u5F85\u3061" : "\u9032\u884C\u4E2D",
+          snapshot
         });
         setStatus(text, { thinking: true });
         return true;
@@ -73867,23 +73954,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function renderThread(messages, options = {}) {
         const replace = options.replace === true;
-        const hadTransientProgress = Boolean(transientProgressState);
-        const existingTransientProgressCard = hadTransientProgress && transientProgressCard
-          ? transientProgressCard
-          : null;
+        const snapshotForCheckpoint = transientProgressSnapshotState;
         if (replace) {
           messagesById.clear();
         }
         resetRenderedReplyContext();
         if (!Array.isArray(messages) || messages.length === 0) {
           if (replace || messagesById.size === 0) {
-            if (existingTransientProgressCard) {
-              log.replaceChildren(existingTransientProgressCard);
-              renderTransientProgress();
-            } else {
-              log.innerHTML = initialMarkup;
-            }
+            log.innerHTML = initialMarkup;
           }
+          renderThreadProgressCheckpoint(snapshotForCheckpoint);
           scrollToLatest();
           return;
         }
@@ -73894,13 +73974,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         for (const message of messagesById.values()) {
           appendMessage(message, fragment, { scroll: false });
         }
-        if (existingTransientProgressCard) {
-          fragment.appendChild(existingTransientProgressCard);
-        }
         log.replaceChildren(fragment);
-        if (hadTransientProgress) {
-          renderTransientProgress();
-        }
+        renderThreadProgressCheckpoint(snapshotForCheckpoint);
         scrollToLatest();
       }
 
@@ -74014,7 +74089,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
                   updateTransientProgress(transientText, {
                     status: body.status,
                     thinking: true,
-                    title: "\u9032\u884C\u4E2D"
+                    title: "\u9032\u884C\u4E2D",
+                    snapshot: body.transientProgressSnapshot || null
                   });
                 } else {
                   clearTransientProgress();

@@ -1273,6 +1273,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function renderProgressSummaryDetails(progressSummary)"), true);
   assert.equal(body.includes("進行ログ"), true);
   assert.equal(body.includes(".progress-summary"), true);
+  assert.equal(body.includes("background: var(--panel-strong); color: var(--muted);"), true);
+  assert.equal(body.includes("data-thread-progress-checkpoint"), true);
+  assert.equal(body.includes("function renderThreadProgressCheckpoint(snapshot)"), true);
+  assert.equal(body.includes("function clearThreadProgressCheckpoint()"), true);
+  assert.equal(body.includes("latestProgressCheckpointText(transientProgressSnapshotState)"), true);
+  assert.equal(body.includes("snapshot: body.transientProgressSnapshot || null"), true);
   const renderTransientProgressSource = body.match(/function renderTransientProgress\(\) \{[\s\S]*?\n      \}/)?.[0] || "";
   assert.equal(renderTransientProgressSource.includes("scrollToLatest()"), false);
   assert.equal(renderTransientProgressSource.includes("updateComposerReserve()"), true);
@@ -5078,7 +5084,62 @@ test("DashboardChatRoom dedupes unchanged transient progress snapshot writes", a
   const snapshotPuts = storage.putCalls.filter((call) => call.key === "transient_progress_snapshot:dashboard-main-unresolved");
   assert.equal(snapshotPuts.length, 1);
   assert.equal(snapshotPuts[0].value.text, "コマンドを実行しています。");
+  assert.equal(snapshotPuts[0].value.progressSummary, undefined);
   assert.equal(dashboardSocket.sent.map((message) => JSON.parse(message)).filter((message) => message.type === "transient_status").length, 2);
+});
+
+test("DashboardChatRoom separates low-information transient progress from owner-facing progress checkpoints", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "command",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-590",
+      text: "raw command detail"
+    })
+  );
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "implementation",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-590",
+      text: "raw implementation detail"
+    })
+  );
+
+  const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
+  assert.equal(snapshot.text, "実装に入っています。");
+  assert.deepEqual(
+    snapshot.progressSummary.entries.map((entry) => entry.text),
+    ["実装に入っています。"]
+  );
+  const transientPayloads = dashboardSocket.sent.map((message) => JSON.parse(message)).filter((message) => message.type === "transient_status");
+  assert.equal(transientPayloads.length, 2);
+  assert.equal(transientPayloads[0].transientProgressSnapshot.progressSummary, undefined);
+  assert.deepEqual(
+    transientPayloads[1].transientProgressSnapshot.progressSummary.entries.map((entry) => entry.text),
+    ["実装に入っています。"]
+  );
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 
 test("DashboardChatRoom clears transient progress snapshot after final reply", async () => {
