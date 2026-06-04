@@ -67003,6 +67003,16 @@ function extractRepositoryTokenFromDashboardChatText(value) {
   if (canonicalMatch) {
     return canonicalMatch[1];
   }
+  const labeledCanonicalMatch = text.match(
+    /(?:repository|repo|リポジトリ|対象\s*repo)\s*(?:は|:|：|=)?\s*([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/iu
+  );
+  if (labeledCanonicalMatch) {
+    return labeledCanonicalMatch[1];
+  }
+  const inlineCanonicalMatch = text.match(/(^|[^\w.-])([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?=$|[^\w.-])/u);
+  if (inlineCanonicalMatch) {
+    return inlineCanonicalMatch[2];
+  }
   const nicknameMatch = text.match(/^[\s　]*([^\s　#「『【\\/:]+?)(?:\s+|[　]*の|[　]*を|[　]*で|[　]*に)/u);
   return normalizeDashboardEventText(nicknameMatch?.[1]);
 }
