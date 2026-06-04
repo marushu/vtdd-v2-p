@@ -3795,7 +3795,7 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.match(status.text, /Codex usage を消費し得ます/);
 });
 
-test("DashboardChatRoom answers cost-aware lightweight owner turns without starting app-server Codex", async () => {
+test("DashboardChatRoom forwards cost-aware owner turns to app-server bridge", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
@@ -3819,7 +3819,12 @@ test("DashboardChatRoom answers cost-aware lightweight owner turns without start
     })
   );
 
-  assert.equal(bridgeSocket.sent.length, 0);
+  assert.equal(bridgeSocket.sent.length, 1);
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.type, "app_server_turn_requested");
+  assert.equal(turnRequest.threadId, "dashboard-main-unresolved");
+  assert.equal(turnRequest.repository, null);
+  assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
   assert.equal(dashboardSocket.sent.length, 3);
   const ownerBroadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(ownerBroadcast.messages.length, 1);
@@ -3827,22 +3832,13 @@ test("DashboardChatRoom answers cost-aware lightweight owner turns without start
   const ack = JSON.parse(dashboardSocket.sent[1]);
   assert.equal(ack.type, "owner_message_accepted");
   assert.equal(ack.ok, true);
-  const fastPathBroadcast = JSON.parse(dashboardSocket.sent[2]);
-  assert.equal(fastPathBroadcast.type, "thread");
-  assert.equal(fastPathBroadcast.messages.length, 2);
-  const reply = fastPathBroadcast.messages[1];
-  assert.equal(reply.role, "butler");
-  assert.equal(reply.status, "replied");
-  assert.match(reply.text, /削る場所を間違えると VTDD 自体が足りないものになります/);
-  assert.match(reply.text, /削ってはいけないのは、Issue \/ PR \/ reviewer \/ CI \/ E2E \/ merge \/ deploy の gate/);
-  assert.match(reply.text, /方針は「機能を薄くする」ではなく/);
-  assert.match(reply.text, /補足:/);
-  assert.match(reply.text, /cost_boundary: lightweight_worker_reply/);
-  assert.match(reply.text, /codexWillStart: false/);
-  assert.equal(reply.text.startsWith("この返答は Dashboard Worker"), false);
+  const status = JSON.parse(dashboardSocket.sent[2]);
+  assert.equal(status.type, "transient_status");
+  assert.equal(status.status, "thinking");
+  assert.match(status.text, /Codex app-server に渡しています/);
 });
 
-test("DashboardChatRoom answers PR status through GitHub read plane without starting app-server Codex", async () => {
+test("DashboardChatRoom forwards PR status owner turns to app-server bridge", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
@@ -3894,21 +3890,18 @@ test("DashboardChatRoom answers PR status through GitHub read plane without star
     })
   );
 
-  assert.equal(bridgeSocket.sent.length, 0);
-  assert.equal(fetchedUrls.length, 1);
-  assert.match(fetchedUrls[0], /\/repos\/marushu\/vtdd-v2-p\/pulls\/756/);
+  assert.equal(bridgeSocket.sent.length, 1);
+  assert.equal(fetchedUrls.some((url) => /\/repos\/marushu\/vtdd-v2-p\/pulls\/756/.test(url)), false);
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.type, "app_server_turn_requested");
+  assert.equal(turnRequest.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(turnRequest.repository, "marushu/vtdd-v2-p");
   const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
-  const reply = sentPayloads.at(-1).messages.at(-1);
-  assert.equal(reply.role, "butler");
-  assert.equal(reply.status, "replied");
-  assert.match(reply.text, /GitHub read plane の軽量 fast path で PR 状態を読みました/);
-  assert.match(reply.text, /cost_boundary: github_read_plane_lightweight/);
-  assert.match(reply.text, /codexWillStart: false/);
-  assert.match(reply.text, /merged: true/);
-  assert.match(reply.text, /source: https:\/\/github.com\/marushu\/vtdd-v2-p\/pull\/756/);
+  assert.equal(sentPayloads.at(-1).type, "transient_status");
+  assert.match(sentPayloads.at(-1).text, /Codex app-server に渡しています/);
 });
 
-test("DashboardChatRoom blocks repo-less PR status fast path without starting app-server Codex", async () => {
+test("DashboardChatRoom forwards repo-less PR status owner turns to app-server bridge", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
@@ -3932,14 +3925,14 @@ test("DashboardChatRoom blocks repo-less PR status fast path without starting ap
     })
   );
 
-  assert.equal(bridgeSocket.sent.length, 0);
+  assert.equal(bridgeSocket.sent.length, 1);
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.type, "app_server_turn_requested");
+  assert.equal(turnRequest.threadId, "dashboard-main-unresolved");
+  assert.equal(turnRequest.repository, null);
   const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
-  const reply = sentPayloads.at(-1).messages.at(-1);
-  assert.equal(reply.role, "butler");
-  assert.equal(reply.status, "replied");
-  assert.match(reply.text, /GitHub read plane の軽量 fast path で止めました/);
-  assert.match(reply.text, /reason: repository is required/);
-  assert.match(reply.text, /codexWillStart: false/);
+  assert.equal(sentPayloads.at(-1).type, "transient_status");
+  assert.match(sentPayloads.at(-1).text, /Codex app-server に渡しています/);
 });
 
 test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal before app-server bridge", async () => {
