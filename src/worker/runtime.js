@@ -461,12 +461,15 @@ export class DashboardChatRoom {
       mediaReferences
     });
     const costBoundary = buildDashboardAppServerUsageCostBoundary(usageProfile);
-    const trafficControl = await buildDashboardChatTrafficControlContext({
-      env: this.env,
-      repository,
-      relatedIssue,
-      text
-    });
+    const needsRepositoryContext = Boolean(repository || relatedIssue || shouldUseDashboardThreadRepositoryContext(text));
+    const trafficControl = repository
+      ? await buildDashboardChatTrafficControlContext({
+          env: this.env,
+          repository,
+          relatedIssue,
+          text
+        })
+      : null;
     const vpsMaintenancePassThrough = buildDashboardVpsMaintenancePassThroughContext({
       text,
       repository,
@@ -490,7 +493,9 @@ export class DashboardChatRoom {
         startThreadMethod: mapping.codexThreadId ? "thread/resume" : "thread/start",
         turnMethod: "turn/start"
       },
-      authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }),
+      authority: needsRepositoryContext || vpsMaintenancePassThrough
+        ? buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text })
+        : null,
       usageProfile,
       costBoundary,
       trafficControl,
@@ -9764,7 +9769,7 @@ function shouldUseDashboardThreadRepositoryContext(value) {
   if (/#\d+\b/.test(text)) {
     return true;
   }
-  return /(\bissue\b|\bissues\b|\bpr\b|\bpull request\b|\bactions?\b|\bci\b|\brag\b|\bvps\b|\bcodex\b|\brunner\b|Issue|PR|残り|タスク|進捗|状況|確認|見て|調べて|レビュー|指摘|マージ|merge|デプロイ|deploy|実装|修正|直して|壊れ|バグ|エラー|失敗|ブロッカー|close|クローズ|返信|保存|検索|thread|スレッド)/i.test(
+  return /(\bissue\b|\bissues\b|\bpr\b|\bpull request\b|\bactions?\b|\bci\b|\brag\b|\bvps\b|\brunner\b|Issue|PR|残り|タスク|進捗|状況|確認|見て|調べて|レビュー|指摘|マージ|merge|デプロイ|deploy|実装|修正|直して|壊れ|バグ|エラー|失敗|ブロッカー|close|クローズ|返信|保存|検索|thread|スレッド)/i.test(
     text
   );
 }
@@ -10036,21 +10041,7 @@ function dashboardProgressSummaryEntriesKey(progressSummary) {
 }
 
 function attachDashboardProgressSummaryToFinalMessages(messages = [], snapshot = null) {
-  const progressSummary = normalizeDashboardProgressSummary(snapshot?.progressSummary);
-  if (!progressSummary.entries.length) {
-    return messages;
-  }
-  return (Array.isArray(messages) ? messages : []).map((message) => {
-    const role = normalizeDashboardEventText(message?.role).toLowerCase();
-    const status = normalizeDashboardChatStatus(message?.status);
-    if (role !== "butler" || status !== "replied") {
-      return message;
-    }
-    return {
-      ...message,
-      progressSummary
-    };
-  });
+  return Array.isArray(messages) ? messages : [];
 }
 
 function isDashboardSnapshotTransientStatus(status) {

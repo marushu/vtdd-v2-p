@@ -203,11 +203,8 @@ export function buildDashboardTurnInputText(request = {}) {
   const hasDashboardContext = Boolean(
     repository ||
       relatedIssue ||
-      authority ||
       trafficControl ||
       vpsMaintenancePassThrough ||
-      usageProfile ||
-      costBoundary ||
       mediaReferences.length > 0
   );
   if (!hasDashboardContext) {
@@ -219,12 +216,6 @@ export function buildDashboardTurnInputText(request = {}) {
     `- repository: ${repository || "未指定"}`,
     `- relatedIssue: ${relatedIssue ? `#${relatedIssue}` : "未指定"}`,
     `- mediaReferences: ${mediaReferences.length}`,
-    usageProfile
-      ? `- usageProfile: ${JSON.stringify(usageProfile)}`
-      : "- usageProfile: 未指定",
-    costBoundary
-      ? `- costBoundary: ${JSON.stringify(costBoundary)}`
-      : "- costBoundary: 未指定",
     "- surface: Dashboard Butler PWA via VPS Dashboard Bridge / codex app-server",
     "- trafficControlRule: repo-backed vtdd-chief-butler / Issue/PR/docs/runtime truth を先に読み、blocker / next action / authority boundary / evidence gap を分けて報告する。",
     "- completionRule: Butler Completion Gate と E2E evidence が揃うまで Dashboard Butler 完了とは言わない。",
@@ -252,6 +243,10 @@ export function buildDashboardTurnInputText(request = {}) {
 
   if (authority) {
     lines.push(`- authority: ${JSON.stringify(authority)}`);
+  }
+
+  if (usageProfile || costBoundary) {
+    lines.push("- runtimeMetadata: usageProfile / costBoundary は bridge routing metadata です。owner prompt 本文として判断材料にしないでください。");
   }
 
   lines.push("", "Owner message:", ownerText);

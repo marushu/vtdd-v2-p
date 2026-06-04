@@ -4030,14 +4030,13 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(turnRequest.codexThreadId, null);
   assert.equal(turnRequest.appServer.startThreadMethod, "thread/start");
   assert.equal(turnRequest.appServer.turnMethod, "turn/start");
-  assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
+  assert.equal(turnRequest.authority, null);
   assert.equal(turnRequest.usageProfile.profile, "conversation");
   assert.equal(turnRequest.usageProfile.reasoningEffort, "low");
   assert.equal(turnRequest.costBoundary.profile, "conversation");
   assert.equal(turnRequest.costBoundary.contentAwareProfile, true);
-  assert.equal(turnRequest.trafficControl.status, "未確認");
-  assert.equal(turnRequest.trafficControl.currentSurface, "dashboard_butler");
-  assert.match(turnRequest.trafficControl.reason, /repository is required/);
+  assert.equal(turnRequest.trafficControl, null);
+  assert.equal(turnRequest.vpsMaintenancePassThrough, null);
 
   assert.equal(dashboardSocket.sent.length, 3);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
@@ -4085,10 +4084,12 @@ test("DashboardChatRoom forwards cost-aware owner turns to app-server bridge", a
   assert.equal(turnRequest.type, "app_server_turn_requested");
   assert.equal(turnRequest.threadId, "dashboard-main-unresolved");
   assert.equal(turnRequest.repository, null);
-  assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
+  assert.equal(turnRequest.authority, null);
   assert.equal(turnRequest.usageProfile.profile, "conversation");
   assert.equal(turnRequest.usageProfile.reasoningEffort, "low");
   assert.equal(turnRequest.costBoundary.profile, "conversation");
+  assert.equal(turnRequest.trafficControl, null);
+  assert.equal(turnRequest.vpsMaintenancePassThrough, null);
   assert.equal(dashboardSocket.sent.length, 3);
   const ownerBroadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(ownerBroadcast.messages.length, 1);
@@ -4795,10 +4796,7 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
   assert.equal(stored[0].role, "butler");
   assert.equal(stored[0].status, "replied");
   assert.equal(stored[0].text, "日本時間では、今日は 05月22日 20時09分です。");
-  assert.deepEqual(
-    stored[0].progressSummary.entries.map((entry) => [entry.text, entry.source]),
-    [["日本", "app_server_reply_delta"]]
-  );
+  assert.equal(stored[0].progressSummary, undefined);
 });
 
 test("DashboardChatRoom does not rewrite unchanged app-server thread mapping during transient bursts", async () => {
@@ -5359,14 +5357,8 @@ test("DashboardChatRoom clears transient progress snapshot after final reply", a
   assert.equal(threadPayloads.at(-1).transientProgressSnapshot, null);
   const finalMessage = (await store.listThread("dashboard-main-unresolved")).at(-1);
   assert.equal(finalMessage.text, "検証が終わりました。");
-  assert.deepEqual(
-    finalMessage.progressSummary.entries.map((entry) => entry.text),
-    ["方針を整理しています。", "テストを実行しています。"]
-  );
-  assert.deepEqual(
-    threadPayloads.at(-1).messages.at(-1).progressSummary.entries.map((entry) => entry.text),
-    ["方針を整理しています。", "テストを実行しています。"]
-  );
+  assert.equal(finalMessage.progressSummary, undefined);
+  assert.equal(threadPayloads.at(-1).messages.at(-1).progressSummary, undefined);
 });
 
 test("DashboardChatRoom keeps generic opt-in app-server progress transient-only", async () => {
@@ -5643,7 +5635,8 @@ test("DashboardChatRoom sends nickname requests to connected app-server bridge",
   assert.equal(turnRequest.type, "app_server_turn_requested");
   assert.equal(turnRequest.text, "登録済みのニックネーム出して");
   assert.equal(turnRequest.repository, null);
-  assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
+  assert.equal(turnRequest.authority, null);
+  assert.equal(turnRequest.trafficControl, null);
 
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(broadcast.messages.length, 1);
