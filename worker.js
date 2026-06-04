@@ -66883,7 +66883,7 @@ function isDuplicateLatestBridgeProgressMessage(message, latest) {
   }
   const messageStatus = normalizeDashboardChatStatus(message.status);
   const latestStatus = normalizeDashboardChatStatus(latest.status);
-  const duplicateCandidateStatus = messageStatus === "stalled" && latestStatus === "stalled" || messageStatus === "thinking" && latestStatus === "thinking";
+  const duplicateCandidateStatus = messageStatus === "failed" && latestStatus === "failed" || messageStatus === "stalled" && latestStatus === "stalled" || messageStatus === "thinking" && latestStatus === "thinking";
   return duplicateCandidateStatus && normalizeDashboardEventText(message.role).toLowerCase() === normalizeDashboardEventText(latest.role).toLowerCase() && sanitizeDashboardChatText(message.text) === sanitizeDashboardChatText(latest.text);
 }
 function shouldPersistDashboardAppServerProgress(input, { transientStatus = "" } = {}) {

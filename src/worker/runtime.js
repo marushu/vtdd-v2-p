@@ -10136,6 +10136,7 @@ function isDuplicateLatestBridgeProgressMessage(message, latest) {
   const messageStatus = normalizeDashboardChatStatus(message.status);
   const latestStatus = normalizeDashboardChatStatus(latest.status);
   const duplicateCandidateStatus =
+    (messageStatus === "failed" && latestStatus === "failed") ||
     (messageStatus === "stalled" && latestStatus === "stalled") ||
     (messageStatus === "thinking" && latestStatus === "thinking");
   return (
