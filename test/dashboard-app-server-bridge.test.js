@@ -5,6 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import {
   buildDashboardAppServerBridgeEndpoint,
+  buildDashboardAppServerCommandArgs,
+  buildDashboardAppServerCostBoundary,
   buildAppServerInitializeRequest,
   buildOwnerActionRequiredPayloadForAppServerApproval,
   buildAppServerRequestApprovalResponse,
@@ -95,6 +97,31 @@ test("dashboard app-server bridge formats lifecycle resume status events", () =>
   assert.equal(connected.stage, "bridge_connected");
   assert.match(connected.text, /保存済み文脈/);
   assert.equal(connected.bridgeLifecycle.cwd, "/repo");
+  assert.deepEqual(connected.bridgeLifecycle.costBoundary, {
+    profile: "default",
+    codexWillStart: true,
+    appServerBridgeRequired: true,
+    modelConfigured: false,
+    reasoningEffortConfigured: false
+  });
+  const connectedWithCostProfile = buildDashboardBridgeConnectedEvent({
+    endpoint: "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main-unresolved",
+    cwd: "/repo",
+    costBoundary: buildDashboardAppServerCostBoundary({
+      profile: "dashboard-light-chat",
+      model: "gpt-5.3-codex-spark",
+      reasoningEffort: "low"
+    })
+  });
+  assert.deepEqual(connectedWithCostProfile.bridgeLifecycle.costBoundary, {
+    profile: "dashboard-light-chat",
+    codexWillStart: true,
+    appServerBridgeRequired: true,
+    modelConfigured: true,
+    reasoningEffortConfigured: true,
+    model: "gpt-5.3-codex-spark",
+    reasoningEffort: "low"
+  });
 
   const resumed = buildDashboardBridgeResumeStatusEvent({
     dashboardThreadId: "dashboard-main-unresolved",
@@ -121,6 +148,41 @@ test("dashboard app-server bridge formats lifecycle resume status events", () =>
   assert.equal(turnStarted.bridgeLifecycle.turnId, "turn-741");
   assert.equal(turnStarted.bridgeLifecycle.resumedExistingThread, true);
   assert.match(turnStarted.text, /復帰した Codex thread/);
+});
+
+test("dashboard app-server bridge builds optional app-server usage tuning args", () => {
+  assert.deepEqual(buildDashboardAppServerCommandArgs(), ["app-server", "--listen", "stdio://"]);
+  assert.deepEqual(
+    buildDashboardAppServerCommandArgs({
+      model: "gpt-5.3-codex-spark",
+      reasoningEffort: "low"
+    }),
+    [
+      "app-server",
+      "--listen",
+      "stdio://",
+      "-c",
+      'model="gpt-5.3-codex-spark"',
+      "-c",
+      'model_reasoning_effort="low"'
+    ]
+  );
+  assert.deepEqual(
+    buildDashboardAppServerCostBoundary({
+      profile: "dashboard-light-chat",
+      model: "gpt-5.3-codex-spark",
+      reasoningEffort: "low"
+    }),
+    {
+      profile: "dashboard-light-chat",
+      codexWillStart: true,
+      appServerBridgeRequired: true,
+      modelConfigured: true,
+      reasoningEffortConfigured: true,
+      model: "gpt-5.3-codex-spark",
+      reasoningEffort: "low"
+    }
+  );
 });
 
 test("dashboard app-server bridge runner wakeup uses only fixed user systemd start command", async () => {
@@ -2210,6 +2272,91 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
   assert.equal(parsed.activityQuietMs, 700);
   assert.equal(parsed.reconnectDelayMs, 1000);
   assert.equal(parsed.heartbeatMs, 30000);
+});
+
+test("dashboard app-server bridge args read app-server usage tuning from env and cli", () => {
+  const parsedFromEnv = parseBridgeArgs([], {
+    VTDD_RUNTIME_URL: "https://runtime.example",
+    VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
+    VTDD_DASHBOARD_THREAD_ID: "dashboard-main",
+    VTDD_DASHBOARD_APP_SERVER_PROFILE: "dashboard-light-chat",
+    VTDD_DASHBOARD_APP_SERVER_MODEL: "gpt-5.3-codex-spark",
+    VTDD_DASHBOARD_APP_SERVER_REASONING_EFFORT: "low"
+  });
+  assert.equal(parsedFromEnv.appServerCostProfile, "dashboard-light-chat");
+  assert.equal(parsedFromEnv.appServerModel, "gpt-5.3-codex-spark");
+  assert.equal(parsedFromEnv.appServerReasoningEffort, "low");
+
+  const parsedFromCli = parseBridgeArgs(
+    [
+      "--app-server-cost-profile",
+      "dashboard-balanced",
+      "--app-server-model",
+      "gpt-5.5",
+      "--app-server-reasoning-effort",
+      "medium"
+    ],
+    {
+      VTDD_RUNTIME_URL: "https://runtime.example",
+      VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
+      VTDD_DASHBOARD_THREAD_ID: "dashboard-main"
+    }
+  );
+  assert.equal(parsedFromCli.appServerCostProfile, "dashboard-balanced");
+  assert.equal(parsedFromCli.appServerModel, "gpt-5.5");
+  assert.equal(parsedFromCli.appServerReasoningEffort, "medium");
+});
+
+test("dashboard app-server bridge creates app-server client with usage tuning args", async () => {
+  const created = [];
+  await runDashboardAppServerBridge({
+    runtimeUrl: "https://runtime.example",
+    token: "secret-token",
+    threadId: "dashboard-main",
+    cwd: "/repo",
+    repoSyncPreflight: false,
+    reconnect: false,
+    reconnectLimit: 0,
+    appServerCostProfile: "dashboard-light-chat",
+    appServerModel: "gpt-5.3-codex-spark",
+    appServerReasoningEffort: "low",
+    appServerFactory(options) {
+      created.push(options);
+      return {
+        async initialize() {},
+        drainApprovalRequests() {
+          return Promise.resolve();
+        }
+      };
+    },
+    WebSocketImpl: class MockWebSocket {
+      constructor() {
+        this.listeners = new Map();
+        queueMicrotask(() => {
+          this.listeners.get("open")?.({});
+          this.listeners.get("close")?.({});
+        });
+      }
+      addEventListener(type, handler) {
+        this.listeners.set(type, handler);
+      }
+      send() {}
+    }
+  });
+
+  assert.equal(created.length, 1);
+  assert.deepEqual(created[0], {
+    cwd: "/repo",
+    args: [
+      "app-server",
+      "--listen",
+      "stdio://",
+      "-c",
+      'model="gpt-5.3-codex-spark"',
+      "-c",
+      'model_reasoning_effort="low"'
+    ]
+  });
 });
 
 test("dashboard app-server bridge repo sync preflight allows clean in-sync main with known artifacts", async () => {

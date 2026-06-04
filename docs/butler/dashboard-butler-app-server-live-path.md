@@ -16,6 +16,19 @@ VPS Dashboard Bridge / `codex app-server` path when the bridge is connected.
 Worker-side deterministic replies must not pretend to answer as Butler or stop
 the turn only to save Codex usage.
 
+Codex usage tuning belongs on the VPS Dashboard Bridge / `codex app-server`
+side, not in Worker-side pseudo-answers. The bridge may start app-server with
+operator-provided usage profile overrides:
+
+- `VTDD_DASHBOARD_APP_SERVER_PROFILE`
+- `VTDD_DASHBOARD_APP_SERVER_MODEL`
+- `VTDD_DASHBOARD_APP_SERVER_REASONING_EFFORT`
+
+When configured, these values are passed as `codex app-server -c ...` argv
+overrides and surfaced as bridge runtime truth. They do not grant command,
+file-change, patch, merge, deploy, credential, permission, or approval authority.
+If unset, the bridge uses the normal Codex config for that VPS account.
+
 The Dashboard Butler implementation target is:
 
 ```text
