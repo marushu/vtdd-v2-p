@@ -107,6 +107,42 @@ export function buildAppServerTurnStartRequest({ id, codexThreadId, text, cwd = 
   };
 }
 
+export function buildDashboardAppServerCostBoundary({
+  profile = "",
+  model = "",
+  reasoningEffort = ""
+} = {}) {
+  const normalizedProfile = normalizeBridgeText(profile) || "default";
+  const normalizedModel = normalizeBridgeText(model);
+  const normalizedReasoningEffort = normalizeBridgeText(reasoningEffort);
+  return {
+    profile: normalizedProfile,
+    codexWillStart: true,
+    appServerBridgeRequired: true,
+    modelConfigured: Boolean(normalizedModel),
+    reasoningEffortConfigured: Boolean(normalizedReasoningEffort),
+    ...(normalizedModel ? { model: normalizedModel } : {}),
+    ...(normalizedReasoningEffort ? { reasoningEffort: normalizedReasoningEffort } : {})
+  };
+}
+
+export function buildDashboardAppServerCommandArgs({
+  listen = "stdio://",
+  model = "",
+  reasoningEffort = ""
+} = {}) {
+  const args = ["app-server", "--listen", normalizeBridgeText(listen) || "stdio://"];
+  const normalizedModel = normalizeBridgeText(model);
+  const normalizedReasoningEffort = normalizeBridgeText(reasoningEffort);
+  if (normalizedModel) {
+    args.push("-c", `model=${JSON.stringify(normalizedModel)}`);
+  }
+  if (normalizedReasoningEffort) {
+    args.push("-c", `model_reasoning_effort=${JSON.stringify(normalizedReasoningEffort)}`);
+  }
+  return args;
+}
+
 export function buildDashboardTurnInputText(request = {}) {
   const ownerText = String(request.text || "").trim();
   const repository = String(request.repository || "").trim();
@@ -1596,6 +1632,9 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     repoSyncPreflight: env.VTDD_DASHBOARD_BRIDGE_REPO_SYNC_PREFLIGHT !== "0",
     repoSyncBaseRef: env.VTDD_DASHBOARD_BRIDGE_REPO_SYNC_BASE_REF || DEFAULT_REPO_SYNC_BASE_REF,
     sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || "",
+    appServerCostProfile: env.VTDD_DASHBOARD_APP_SERVER_PROFILE || "",
+    appServerModel: env.VTDD_DASHBOARD_APP_SERVER_MODEL || "",
+    appServerReasoningEffort: env.VTDD_DASHBOARD_APP_SERVER_REASONING_EFFORT || "",
     turnTimeoutMs: Number(env.VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS || DEFAULT_TURN_TIMEOUT_MS),
     activityQuietMs: Number(env.VTDD_DASHBOARD_APP_SERVER_ACTIVITY_QUIET_MS || DEFAULT_ACTIVITY_QUIET_MS),
     reconnectDelayMs: Number(env.VTDD_DASHBOARD_BRIDGE_RECONNECT_DELAY_MS || 1000),
@@ -1610,6 +1649,9 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--repo-sync-base-ref") options.repoSyncBaseRef = argv[++index] || DEFAULT_REPO_SYNC_BASE_REF;
     if (arg === "--skip-repo-sync-preflight") options.repoSyncPreflight = false;
     if (arg === "--sandbox") options.sandboxMode = argv[++index] || "";
+    if (arg === "--app-server-cost-profile") options.appServerCostProfile = argv[++index] || "";
+    if (arg === "--app-server-model") options.appServerModel = argv[++index] || "";
+    if (arg === "--app-server-reasoning-effort") options.appServerReasoningEffort = argv[++index] || "";
     if (arg === "--turn-timeout-ms") options.turnTimeoutMs = Number(argv[++index] || DEFAULT_TURN_TIMEOUT_MS);
     if (arg === "--activity-quiet-ms") options.activityQuietMs = Number(argv[++index] || DEFAULT_ACTIVITY_QUIET_MS);
     if (arg === "--reconnect-delay-ms") options.reconnectDelayMs = Number(argv[++index] || 1000);
@@ -1643,7 +1685,27 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
     }
   }
   const endpoint = buildDashboardAppServerBridgeEndpoint(options);
-  const appServer = options.appServer || new JsonLineAppServerClient({ cwd: options.cwd });
+  const costBoundary =
+    options.costBoundary ||
+    buildDashboardAppServerCostBoundary({
+      profile: options.appServerCostProfile,
+      model: options.appServerModel,
+      reasoningEffort: options.appServerReasoningEffort
+    });
+  const appServerArgs = buildDashboardAppServerCommandArgs({
+    model: options.appServerModel,
+    reasoningEffort: options.appServerReasoningEffort
+  });
+  const appServerFactory =
+    typeof options.appServerFactory === "function"
+      ? options.appServerFactory
+      : (clientOptions) => new JsonLineAppServerClient(clientOptions);
+  const appServer =
+    options.appServer ||
+    appServerFactory({
+      cwd: options.cwd,
+      args: appServerArgs
+    });
   await appServer.initialize();
   let reconnects = 0;
   for (;;) {
@@ -1651,6 +1713,7 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
       ...options,
       endpoint,
       appServer,
+      costBoundary,
       WebSocketImpl: options.WebSocketImpl || WebSocket
     });
     if (options.reconnect === false) {
@@ -1890,7 +1953,13 @@ function runBridgeCommand(command, args, options = {}) {
   });
 }
 
-export function buildDashboardBridgeConnectedEvent({ endpoint, threadId = "", cwd = process.cwd(), resumedAt = new Date().toISOString() } = {}) {
+export function buildDashboardBridgeConnectedEvent({
+  endpoint,
+  threadId = "",
+  cwd = process.cwd(),
+  resumedAt = new Date().toISOString(),
+  costBoundary = null
+} = {}) {
   const dashboardThreadId =
     normalizeBridgeText(threadId) ||
     (() => {
@@ -1911,7 +1980,8 @@ export function buildDashboardBridgeConnectedEvent({ endpoint, threadId = "", cw
       status: "connected",
       threadId: dashboardThreadId || null,
       cwd: normalizeBridgeText(cwd) || null,
-      connectedAt: normalizeBridgeText(resumedAt) || new Date().toISOString()
+      connectedAt: normalizeBridgeText(resumedAt) || new Date().toISOString(),
+      costBoundary: costBoundary && typeof costBoundary === "object" ? costBoundary : buildDashboardAppServerCostBoundary()
     }
   };
 }
@@ -1982,6 +2052,7 @@ export async function connectDashboardAppServerBridgeOnce({
   runtimeUrl = "",
   fetchImpl = globalThis.fetch,
   mediaTmpRoot = os.tmpdir(),
+  costBoundary = null,
   WebSocketImpl = WebSocket
 } = {}) {
   const bearerProtocol = `vtdd-bearer.${Buffer.from(token, "utf8").toString("base64url")}`;
@@ -2030,7 +2101,7 @@ export async function connectDashboardAppServerBridgeOnce({
 
   socket.addEventListener("open", () => {
     scheduleHeartbeat();
-    safeSend(buildDashboardBridgeConnectedEvent({ endpoint, cwd }));
+    safeSend(buildDashboardBridgeConnectedEvent({ endpoint, cwd, costBoundary }));
   });
 
   socket.addEventListener("message", (event) => {
