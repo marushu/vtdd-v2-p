@@ -1783,6 +1783,69 @@ test("dashboard app-server bridge emits fallback live progress before a quiet lo
   assert.ok(events.find((event) => event.type === "app_server_reply"));
 });
 
+test("dashboard app-server bridge does not suppress live fallback after low-information progress", async () => {
+  const events = [];
+  let notificationHandler = () => {};
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      notificationHandler = handler;
+      return () => {};
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-590" } };
+      }
+      if (message.method === "turn/start") {
+        setTimeout(() => {
+          notificationHandler({
+            method: "item/started",
+            params: {
+              threadId: "codex-thread-590",
+              turnId: "turn-590",
+              item: { type: "command_execution" }
+            }
+          });
+        }, 1);
+        setTimeout(() => {
+          notificationHandler({
+            method: "turn/completed",
+            params: {
+              threadId: "codex-thread-590",
+              turnId: "turn-590",
+              status: "completed"
+            }
+          });
+        }, 12);
+        return { turn: { id: "turn-590" } };
+      }
+      return {};
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      text: "Issue #590 の低情報 progress 後 fallback を確認して"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    liveProgressInitialDelayMs: 5,
+    liveProgressIntervalMs: 1000
+  });
+
+  assert.ok(events.find((event) => event.type === "app_server_status" && event.stage === "command"));
+  const fallback = events.find((event) => event.type === "app_server_status" && event.stage === "long_turn_checkpoint");
+  assert.ok(fallback);
+  assert.equal(fallback.persistProgress, true);
+  assert.match(fallback.text, /作業を継続しています/);
+});
+
 test("dashboard app-server bridge rejects out-of-range Issue #590 debug slow turn duration", async () => {
   const events = [];
   await handleDashboardTurnRequest({

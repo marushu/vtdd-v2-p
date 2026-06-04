@@ -5146,6 +5146,48 @@ test("DashboardChatRoom separates low-information transient progress from owner-
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 
+test("DashboardChatRoom keeps long-turn fallback as owner-facing progress checkpoint", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "long_turn_checkpoint",
+      persistProgress: true,
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-590",
+      text: "作業を継続しています。まだ最終回答は生成中です。"
+    })
+  );
+
+  const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
+  assert.equal(snapshot.text, "作業を継続しています。まだ最終回答は生成中です。");
+  assert.deepEqual(
+    snapshot.progressSummary.entries.map((entry) => entry.text),
+    ["作業を継続しています。まだ最終回答は生成中です。"]
+  );
+  const transientPayload = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "transient_status");
+  assert.deepEqual(
+    transientPayload.transientProgressSnapshot.progressSummary.entries.map((entry) => entry.text),
+    ["作業を継続しています。まだ最終回答は生成中です。"]
+  );
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+});
+
 test("DashboardChatRoom clears transient progress snapshot after final reply", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
