@@ -13,7 +13,9 @@ const DEFAULT_SCHEMA = "vtdd.dashboard.app_server_bridge.v1";
 const DANGER_FULL_ACCESS_SANDBOX = "danger-full-access";
 const APP_SERVER_FAILURE_ALREADY_SENT = Symbol("appServerFailureAlreadySent");
 const DEFAULT_APP_SERVER_ERROR_TEXT =
-  "codex app-server が応答生成中に失敗しました。画像を解析できなかった可能性があります。もう一度送るか、画像なしで内容を短く説明してください。";
+  "codex app-server が応答生成中に失敗しました。入力は Dashboard thread に保存済みです。同じ thread で補足するか、内容を短くしてもう一度送れます。";
+const MEDIA_APP_SERVER_ERROR_TEXT =
+  "codex app-server が応答生成中に失敗しました。入力と添付情報は Dashboard thread に保存済みです。添付画像の取得または解析で失敗した可能性があります。画像なしで要点を短く説明して再送するか、画像を添付し直してください。";
 const APP_SERVER_TURN_TIMEOUT_TEXT =
   "codex app-server の応答確認が長引いています。入力と文脈は Dashboard thread に保存済みです。再接続と状態確認を続けています。同じ thread で補足やキャンセル指示を送れます。遅れて返信が届いた場合は、この thread に追加します。";
 const APP_SERVER_TURN_QUIET_TEXT =
@@ -514,6 +516,10 @@ function sanitizeBridgeError(error) {
   return normalizeBridgeText(error?.message || error || "media fetch failed").slice(0, 240);
 }
 
+function sanitizeOptionalBridgeError(error) {
+  return normalizeBridgeText(error?.message || error || "").slice(0, 240);
+}
+
 export function buildAppServerSandboxOverrides(sandboxMode = "") {
   const normalized = String(sandboxMode || "").trim().toLowerCase();
   if (!normalized) {
@@ -818,7 +824,14 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
         threadId: context.dashboardThreadId,
         codexThreadId: params.threadId || context.codexThreadId || null,
         status: turnStatus,
-        text: turnStatus === "interrupted" ? "生成を停止しました。" : DEFAULT_APP_SERVER_ERROR_TEXT
+        text:
+          turnStatus === "interrupted"
+            ? "生成を停止しました。"
+            : buildDashboardAppServerFailureText({
+                text: params.message || params.reason || params.error,
+                status: turnStatus,
+                mediaReferences: context.mediaReferences
+              })
       };
     }
     return {
@@ -836,10 +849,40 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       schema: DEFAULT_SCHEMA,
       threadId: context.dashboardThreadId,
       codexThreadId: context.codexThreadId || null,
-      text: params.message || params.reason || DEFAULT_APP_SERVER_ERROR_TEXT
+      text: buildDashboardAppServerFailureText({
+        text: params.message || params.reason || params.error,
+        status: "failed",
+        mediaReferences: context.mediaReferences
+      })
     };
   }
   return null;
+}
+
+export function buildDashboardAppServerFailureText({ text = "", status = "", mediaReferences = [] } = {}) {
+  const normalizedStatus = normalizeBridgeText(status).toLowerCase();
+  if (normalizedStatus === "interrupted") {
+    return "生成を停止しました。";
+  }
+  const references = Array.isArray(mediaReferences) ? mediaReferences.filter(Boolean) : [];
+  const baseText = references.length > 0 ? MEDIA_APP_SERVER_ERROR_TEXT : DEFAULT_APP_SERVER_ERROR_TEXT;
+  const detail = sanitizeOptionalBridgeError(text);
+  const mediaDetail = buildDashboardAppServerMediaFailureDetail(references);
+  return [baseText, detail ? `詳細: ${detail}` : "", mediaDetail].filter(Boolean).join("\n");
+}
+
+function buildDashboardAppServerMediaFailureDetail(mediaReferences = []) {
+  const references = Array.isArray(mediaReferences) ? mediaReferences.filter(Boolean) : [];
+  if (references.length === 0) {
+    return "";
+  }
+  const statuses = references.map((reference) => {
+    const mediaId = normalizeBridgeText(reference?.mediaId || reference?.id) || "unknown";
+    const fetchStatus = normalizeBridgeText(reference?.fetchStatus || reference?.fetch_status) || "metadata_only";
+    const fetchError = sanitizeOptionalBridgeError(reference?.fetchError || reference?.fetch_error);
+    return fetchError ? `${mediaId}: ${fetchStatus} (${fetchError})` : `${mediaId}: ${fetchStatus}`;
+  });
+  return `添付取得状態: ${statuses.slice(0, 3).join(" / ")}${statuses.length > 3 ? ` / 他${statuses.length - 3}件` : ""}`;
 }
 
 export function buildAppServerReplyDeltaProgressText({ accumulatedText = "", delta = "", maxLength = 1200 } = {}) {
@@ -1564,6 +1607,7 @@ export async function handleDashboardTurnRequest({
   let liveProgressFallbackHandle = null;
   let liveProgressFallbackCount = 0;
   let ownerFacingProgressSeen = false;
+  let materializedMediaReferences = [];
   let cleanupNotifications = () => {};
   let resolveTurn = () => {};
   let rejectTurn = () => {};
@@ -1656,7 +1700,8 @@ export async function handleDashboardTurnRequest({
     const event = mapAppServerNotificationToDashboardEvent(message, {
       dashboardThreadId,
       codexThreadId,
-      accumulatedText
+      accumulatedText,
+      mediaReferences: materializedMediaReferences
     });
     if (!event) return;
     if (event.type === "app_server_reply_delta") {
@@ -1733,7 +1778,7 @@ export async function handleDashboardTurnRequest({
     restoreApprovalRequestHandler();
   };
   try {
-    const materializedMediaReferences = await materializeDashboardMediaReferences({
+    materializedMediaReferences = await materializeDashboardMediaReferences({
       mediaReferences: request.mediaReferences,
       runtimeUrl,
       token,
@@ -2368,7 +2413,11 @@ export async function connectDashboardAppServerBridgeOnce({
             type: "app_server_turn_failed",
             schema: DEFAULT_SCHEMA,
             threadId: payload.threadId,
-            text: error?.message || DEFAULT_APP_SERVER_ERROR_TEXT
+            text: buildDashboardAppServerFailureText({
+              text: error?.message,
+              status: "failed",
+              mediaReferences: payload.mediaReferences
+            })
           });
         });
     }

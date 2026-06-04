@@ -5020,6 +5020,45 @@ test("DashboardChatRoom dedupes repeated app-server stalled recovery messages", 
   );
 });
 
+test("DashboardChatRoom dedupes repeated app-server failed recovery messages", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const failedEvent = {
+    type: "app_server_turn_failed",
+    status: "failed",
+    threadId: "dashboard-main-unresolved",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 590,
+    text: "codex app-server が応答生成中に失敗しました。入力は Dashboard thread に保存済みです。同じ thread で補足するか、内容を短くしてもう一度送れます。"
+  };
+
+  await room.webSocketMessage(bridgeSocket, JSON.stringify(failedEvent));
+  await room.webSocketMessage(bridgeSocket, JSON.stringify(failedEvent));
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].role, "system");
+  assert.equal(stored[0].status, "failed");
+  assert.match(stored[0].text, /応答生成中に失敗しました/);
+  assert.doesNotMatch(stored[0].text, /画像を解析できなかった/);
+
+  const threadBroadcasts = dashboardSocket.sent
+    .map((message) => JSON.parse(message))
+    .filter((message) => message.type === "thread");
+  assert.equal(threadBroadcasts.length, 1);
+  assert.equal(threadBroadcasts[0].messages.length, 1);
+});
+
 test("DashboardChatRoom sends app-server thinking status as transient UI state", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");

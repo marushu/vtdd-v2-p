@@ -10,6 +10,7 @@ import {
   buildDashboardAppServerBridgeEndpoint,
   buildDashboardAppServerCommandArgs,
   buildDashboardAppServerCostBoundary,
+  buildDashboardAppServerFailureText,
   buildDashboardAppServerUsageProfileCommandConfig,
   buildAppServerInitializeRequest,
   buildOwnerActionRequiredPayloadForAppServerApproval,
@@ -440,6 +441,49 @@ test("dashboard app-server bridge formats failed media delivery without raw bina
   assert.match(lines[0], /fetchStatus: fetch_failed/);
   assert.match(lines[0], /fetchError: media download failed with HTTP 404/);
   assert.equal(lines[0].includes("fake image bytes"), false);
+});
+
+test("dashboard app-server bridge does not blame images for non-media app-server failures", () => {
+  const text = buildDashboardAppServerFailureText({
+    status: "failed",
+    text: "model turn failed"
+  });
+
+  assert.match(text, /応答生成中に失敗しました/);
+  assert.match(text, /入力は Dashboard thread に保存済み/);
+  assert.match(text, /同じ thread で補足/);
+  assert.match(text, /詳細: model turn failed/);
+  assert.doesNotMatch(text, /画像/);
+  assert.doesNotMatch(text, /添付/);
+});
+
+test("dashboard app-server bridge omits fabricated detail when app-server failure has no reason", () => {
+  const text = buildDashboardAppServerFailureText({ status: "failed" });
+
+  assert.match(text, /応答生成中に失敗しました/);
+  assert.doesNotMatch(text, /詳細:/);
+  assert.doesNotMatch(text, /media fetch failed/);
+  assert.doesNotMatch(text, /画像/);
+});
+
+test("dashboard app-server bridge adds media recovery guidance only when media is present", () => {
+  const text = buildDashboardAppServerFailureText({
+    status: "failed",
+    text: "turn failed",
+    mediaReferences: [
+      {
+        mediaId: "med_screen",
+        fetchStatus: "fetch_failed",
+        fetchError: "media download failed with HTTP 403"
+      }
+    ]
+  });
+
+  assert.match(text, /入力と添付情報は Dashboard thread に保存済み/);
+  assert.match(text, /添付画像の取得または解析/);
+  assert.match(text, /画像なしで要点を短く説明/);
+  assert.match(text, /添付取得状態: med_screen: fetch_failed/);
+  assert.match(text, /HTTP 403/);
 });
 
 test("dashboard app-server bridge materializes dashboard media with bearer auth", async () => {
