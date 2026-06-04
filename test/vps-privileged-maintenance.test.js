@@ -151,6 +151,7 @@ test("VPS privileged maintenance helper command registry exposes initial presets
   assert.equal(commandClasses.includes("systemd_user_app_server_bridge_unresolved_status"), true);
   assert.equal(commandClasses.includes("systemd_user_app_server_bridge_unresolved_restart"), true);
   assert.equal(commandClasses.includes("systemd_user_app_server_bridge_unresolved_logs"), true);
+  assert.equal(commandClasses.includes("dashboard_bridge_unresolved_deploy_sync_restart"), true);
   assert.equal(commandClasses.includes("vps_runner_status_dry_run"), true);
   assert.equal(commandClasses.includes("vps_maintenance_install_inventory_collect"), true);
   assert.equal(
@@ -162,6 +163,28 @@ test("VPS privileged maintenance helper command registry exposes initial presets
     true
   );
   assert.equal(registry.every((entry) => entry.initialPreset === true), true);
+});
+
+test("VPS privileged maintenance registry includes fixed deploy bridge sync/restart helper", () => {
+  const registry = listVpsPrivilegedMaintenanceCommandRegistry();
+  const entry = registry.find((item) => item.commandClass === "dashboard_bridge_unresolved_deploy_sync_restart");
+
+  assert.ok(entry);
+  assert.equal(entry.title, "Sync checkout and restart repo-less Dashboard app-server bridge after deploy");
+  assert.deepEqual(entry.argv, [
+    "node",
+    "scripts/sync-dashboard-app-server-bridge-after-deploy.mjs",
+    "--service",
+    "vtdd-dashboard-app-server-bridge-unresolved.service",
+    "--ref",
+    "origin/main"
+  ]);
+  assert.deepEqual(entry.allowedArgs, [
+    "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main"
+  ]);
+  assert.equal(entry.requiredRiskLevel, "medium");
+  assert.equal(entry.requiresRoot, false);
+  assert.equal(entry.initialPreset, true);
 });
 
 test("VPS privileged maintenance registry separates repo-less Dashboard bridge service", () => {

@@ -154,6 +154,24 @@ const HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
     initialPreset: true
   },
   {
+    commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+    title: "Sync checkout and restart repo-less Dashboard app-server bridge after deploy",
+    allowedArgs: [
+      "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main"
+    ],
+    argv: [
+      "node",
+      "scripts/sync-dashboard-app-server-bridge-after-deploy.mjs",
+      "--service",
+      "vtdd-dashboard-app-server-bridge-unresolved.service",
+      "--ref",
+      "origin/main"
+    ],
+    requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
     commandClass: "vps_runner_status_dry_run",
     title: "Check VPS runner queue status without executing work",
     allowedArgs: ["node scripts/run-vps-runner.mjs --dry-run"],
