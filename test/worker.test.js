@@ -3175,6 +3175,7 @@ test("worker maps repo-less Dashboard bridge restart intent to unresolved bridge
 test("worker maps Dashboard Butler VPS runner status text to the low-risk preset", async () => {
   const store = createInMemoryDashboardChatStore();
   const provider = createInMemoryMemoryProvider();
+  const githubCalls = [];
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/messages", {
       method: "POST",
@@ -3197,22 +3198,40 @@ test("worker maps Dashboard Butler VPS runner status text to the low-risk preset
       DASHBOARD_CHAT_STORE: store,
       MEMORY_PROVIDER: provider,
       VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
-      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 63703,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/637#issuecomment-63703"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
     }
   );
 
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.execution.status, "approval_required");
+  assert.equal(body.execution.status, "queued_for_vps_helper_execution");
   assert.equal(body.execution.approvalScope.vpsCapabilityId, "systemd.user.runner.status");
   assert.equal(body.execution.approvalScope.vpsOperation, "review");
-  assert.equal(body.execution.runtimeTruth.capabilityId, "systemd.user.runner.status");
+  assert.equal(body.execution.runtimeTruth.approvalRequired, false);
+  assert.equal(body.execution.runtimeTruth.approvalBypassReason, "low_risk_read");
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, true);
   assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
-  assert.match(body.messages[1].text, /確認対象: Check VTDD runner user service status/);
-  assert.match(body.messages[1].text, /操作: review/);
-  assert.match(body.messages[1].text, /risk: low/);
-  assert.match(body.messages[1].text, /承認なしに root \/ sudo \/ helper 実行は開始しません/);
+  assert.equal(body.messages[1].status, "sent");
+  assert.match(body.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
+  assert.match(body.messages[1].text, /low-risk read/);
+  assert.doesNotMatch(body.messages[1].text, /approval URL/);
+  assert.equal(githubCalls.length, 1);
+  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
+  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:"), true);
+  assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
+  assert.equal(queueCommentBody.includes('"approvalBypassReason": "low_risk_read"'), true);
 
   const records = await provider.retrieve({ ids: [body.execution.vpsProposalId] });
   const proposalRecord = records[0];
@@ -3226,6 +3245,7 @@ test("worker maps Dashboard Butler VPS runner status text to the low-risk preset
 test("worker detects app-server bridge recovery intent without internal VPS helper words", async () => {
   const store = createInMemoryDashboardChatStore();
   const provider = createInMemoryMemoryProvider();
+  const githubCalls = [];
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/messages", {
       method: "POST",
@@ -3242,23 +3262,38 @@ test("worker detects app-server bridge recovery intent without internal VPS help
       DASHBOARD_CHAT_STORE: store,
       MEMORY_PROVIDER: provider,
       VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
-      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 63704,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/637#issuecomment-63704"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
     }
   );
 
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.execution.status, "approval_required");
+  assert.equal(body.execution.status, "queued_for_vps_helper_execution");
   assert.equal(body.execution.approvalScope.vpsCapabilityId, "systemd.user.app.server.bridge.status");
   assert.equal(body.execution.approvalScope.vpsOperation, "review");
-  assert.equal(body.execution.runtimeTruth.capabilityId, "systemd.user.app.server.bridge.status");
+  assert.equal(body.execution.runtimeTruth.approvalRequired, false);
+  assert.equal(body.execution.runtimeTruth.approvalBypassReason, "low_risk_read");
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, true);
   assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
-  assert.match(body.messages[1].text, /VPS 復旧・保守の確認リクエスト/);
-  assert.match(body.messages[1].text, /確認対象: Check Dashboard app-server bridge status/);
-  assert.match(body.messages[1].text, /操作: review/);
-  assert.match(body.messages[1].text, /risk: low/);
-  assert.match(body.messages[1].text, /scoped passkey approval が必要/);
+  assert.equal(body.messages[1].status, "sent");
+  assert.match(body.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
+  assert.match(body.messages[1].text, /low-risk read/);
+  assert.doesNotMatch(body.messages[1].text, /approval URL/);
+  assert.equal(githubCalls.length, 1);
+  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
+  assert.equal(queueCommentBody.includes('"approvalBypassReason": "low_risk_read"'), true);
 
   const records = await provider.retrieve({ ids: [body.execution.vpsProposalId] });
   const proposalRecord = records[0];
@@ -4093,6 +4128,7 @@ test("DashboardChatRoom forwards repo-less PR status owner turns to app-server b
 test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal before app-server bridge", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
+  const githubCalls = [];
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
   const room = new DashboardChatRoom(
@@ -4107,7 +4143,18 @@ test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal be
       MEMORY_PROVIDER: provider,
       VTDD_RUNTIME_URL: "https://example.com",
       VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
-      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 63705,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/637#issuecomment-63705"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
     }
   );
 
@@ -4131,9 +4178,11 @@ test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal be
   assert.equal(finalBroadcast.messages.length, 2);
   assert.equal(finalBroadcast.messages[0].role, "owner");
   assert.equal(finalBroadcast.messages[1].role, "butler");
-  assert.equal(finalBroadcast.messages[1].status, "blocked");
-  assert.match(finalBroadcast.messages[1].text, /approval_required/);
-  assert.match(finalBroadcast.messages[1].text, /systemd\.user\.runner\.status|approval URL/);
+  assert.equal(finalBroadcast.messages[1].status, "sent");
+  assert.match(finalBroadcast.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
+  assert.match(finalBroadcast.messages[1].text, /low-risk read/);
+  assert.doesNotMatch(finalBroadcast.messages[1].text, /approval URL/);
+  assert.equal(githubCalls.length, 1);
 
   const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
   const proposalRecord = records.find((record) => record.content?.kind === "vps_privileged_maintenance_approval_proposal");
@@ -4141,7 +4190,7 @@ test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal be
   assert.equal(proposalRecord.content.proposal.capability.riskLevel, "low");
 });
 
-test("DashboardChatRoom uses WebSocket request origin for VPS approval URLs", async () => {
+test("DashboardChatRoom still uses WebSocket request origin for VPS restart approval URLs", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-e2e-637-origin");
@@ -4166,7 +4215,7 @@ test("DashboardChatRoom uses WebSocket request origin for VPS approval URLs", as
       type: "owner_message",
       repository: "marushu/vtdd-v2-p",
       issueNumber: 637,
-      text: "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。"
+      text: "Dashboard Butler から VPS runner を再起動して。root 実行は passkey 境界で止める。"
     }),
     {
       role: "dashboard",
@@ -4190,6 +4239,7 @@ test("DashboardChatRoom uses WebSocket request origin for VPS approval URLs", as
 test("DashboardChatRoom routes VPS maintenance owner turns without an app-server bridge socket", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
+  const githubCalls = [];
   const storage = createMockDurableObjectStorage();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-e2e-637-post697");
   const room = new DashboardChatRoom(
@@ -4204,7 +4254,18 @@ test("DashboardChatRoom routes VPS maintenance owner turns without an app-server
       MEMORY_PROVIDER: provider,
       VTDD_RUNTIME_URL: "https://example.com",
       VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
-      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 63706,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/637#issuecomment-63706"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
     }
   );
 
@@ -4227,9 +4288,11 @@ test("DashboardChatRoom routes VPS maintenance owner turns without an app-server
   assert.equal(finalBroadcast.messages.length, 2);
   assert.equal(finalBroadcast.messages[0].role, "owner");
   assert.equal(finalBroadcast.messages[1].role, "butler");
-  assert.equal(finalBroadcast.messages[1].status, "blocked");
-  assert.match(finalBroadcast.messages[1].text, /approval_required/);
-  assert.match(finalBroadcast.messages[1].text, /systemd\.user\.runner\.status|approval URL/);
+  assert.equal(finalBroadcast.messages[1].status, "sent");
+  assert.match(finalBroadcast.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
+  assert.match(finalBroadcast.messages[1].text, /low-risk read/);
+  assert.doesNotMatch(finalBroadcast.messages[1].text, /approval URL/);
+  assert.equal(githubCalls.length, 1);
 
   const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
   const proposalRecord = records.find((record) => record.content?.kind === "vps_privileged_maintenance_approval_proposal");

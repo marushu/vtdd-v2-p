@@ -34,6 +34,15 @@ message alone is not enough for work that is blocked on owner attention.
 - PWA notification is sent for `approval_needed`, `execution_completed`, and
   `blocked_owner_action_required`.
 
+Low-risk read/status operations are the narrow exception to the approval step.
+When Dashboard Butler maps natural language to a reviewed registry capability
+with `operation=review`, `riskLevel=low`, and `requiresRoot=false`, the Worker
+may enqueue the bounded helper handoff without a passkey grant. The queue and
+runtime truth must mark `approvalBypassReason=low_risk_read`. This exception
+must not apply to restart, enable, add, disable, remove, rollback, root-required
+capabilities, credential mutation, permission mutation, destructive cleanup, or
+any capability whose registry entry is not explicitly low-risk and non-root.
+
 ## Capability Lifecycle
 
 Capabilities must be manageable from iPhone after approval:
