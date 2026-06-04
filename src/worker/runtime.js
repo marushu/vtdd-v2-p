@@ -16068,7 +16068,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
-    .progress-summary { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: rgba(247, 248, 244, .8); color: var(--muted); }
+    .progress-summary { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel-strong); color: var(--muted); }
     .progress-summary summary { cursor: pointer; font-weight: 800; color: var(--text); }
     .progress-summary ol { margin: 10px 0 0; padding-left: 22px; }
     .progress-summary li { margin-top: 6px; overflow-wrap: anywhere; word-break: break-word; }

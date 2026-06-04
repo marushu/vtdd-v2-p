@@ -1273,6 +1273,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function renderProgressSummaryDetails(progressSummary)"), true);
   assert.equal(body.includes("進行ログ"), true);
   assert.equal(body.includes(".progress-summary"), true);
+  assert.equal(body.includes("background: var(--panel-strong); color: var(--muted);"), true);
+  assert.equal(body.includes("data-thread-progress-checkpoint"), true);
+  assert.equal(body.includes("function renderThreadProgressCheckpoint(snapshot)"), true);
+  assert.equal(body.includes("function clearThreadProgressCheckpoint()"), true);
+  assert.equal(body.includes("latestProgressCheckpointText(transientProgressSnapshotState)"), true);
+  assert.equal(body.includes("snapshot: body.transientProgressSnapshot || null"), true);
   const renderTransientProgressSource = body.match(/function renderTransientProgress\(\) \{[\s\S]*?\n      \}/)?.[0] || "";
   assert.equal(renderTransientProgressSource.includes("scrollToLatest()"), false);
   assert.equal(renderTransientProgressSource.includes("updateComposerReserve()"), true);
