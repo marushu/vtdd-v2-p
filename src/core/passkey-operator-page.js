@@ -70,7 +70,7 @@ export function renderPasskeyOperatorPage(input = {}) {
   const heroDescription = dashboardMode
     ? "このページは Dashboard Butler を開くための読み取り専用パスキー確認です。Cloudflare Access が使えない時だけ、同一 origin の passkey で dashboard session を更新します。"
     : deployOneTapMode
-      ? "このページは production deploy を承認して、そのまま反映を開始するためのパスキー確認です。内部の承認IDや workflow 入力は通常操作では扱いません。"
+      ? "このページは production deploy を承認して、そのまま反映を開始するためのパスキー確認です。反映開始後は Dashboard Butler のチャットへ戻り、内部の承認IDや workflow 入力は通常操作では扱いません。"
       : "このページは real WebAuthn/passkey approval 用の operator helper です。登録と high-risk approval の両方を same-origin で実行し、最終的に <code>approvalGrantId</code> を取得できます。";
   const approvalHeading = deployOneTapMode
     ? "本番反映の承認"
@@ -620,12 +620,28 @@ export function renderPasskeyOperatorPage(input = {}) {
       function buildDeployResultText(body) {
         const deploy = body?.deploy || {};
         if (deploy.status === "dispatched") {
-          return "deploy を開始しました。完了通知を待ってください。";
+          return "deploy を開始しました。Dashboard Butler のチャットに戻って追跡します。";
         }
         if (deploy.status === "dispatch_accepted_unverified") {
-          return "deploy request は受理されました。GitHub Actions の run 確認は未確定です。";
+          return "deploy request は受理されました。GitHub Actions の run 確認は未確定です。この画面で詳細を確認してください。";
         }
-        return "deploy request を受け付けました。";
+        return "deploy request を受け付けました。この画面で詳細を確認してください。";
+      }
+
+      function shouldReturnToButlerAfterDeployDispatch(body) {
+        return body?.deploy?.status === "dispatched";
+      }
+
+      function returnToButlerAfterDeployDispatch(body) {
+        if (!shouldReturnToButlerAfterDeployDispatch(body)) {
+          return;
+        }
+        if (operatorMode !== "deploy" || !returnToButlerLink || !returnToButlerLink.href) {
+          return;
+        }
+        window.setTimeout(() => {
+          window.location.assign(returnToButlerLink.href);
+        }, 900);
       }
 
       function extractMergePullRequestUrl(body) {
@@ -826,6 +842,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         if (deployDebugOutput) {
           deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
         }
+        returnToButlerAfterDeployDispatch(deployBody);
       }
 
       async function continueVpsMaintenanceFromApproval() {

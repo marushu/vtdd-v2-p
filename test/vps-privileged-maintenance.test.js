@@ -148,6 +148,9 @@ test("VPS privileged maintenance helper command registry exposes initial presets
   assert.equal(commandClasses.includes("systemd_user_app_server_bridge_status"), true);
   assert.equal(commandClasses.includes("systemd_user_app_server_bridge_restart"), true);
   assert.equal(commandClasses.includes("systemd_user_app_server_bridge_logs"), true);
+  assert.equal(commandClasses.includes("systemd_user_app_server_bridge_unresolved_status"), true);
+  assert.equal(commandClasses.includes("systemd_user_app_server_bridge_unresolved_restart"), true);
+  assert.equal(commandClasses.includes("systemd_user_app_server_bridge_unresolved_logs"), true);
   assert.equal(commandClasses.includes("vps_runner_status_dry_run"), true);
   assert.equal(commandClasses.includes("vps_maintenance_install_inventory_collect"), true);
   assert.equal(
@@ -159,6 +162,44 @@ test("VPS privileged maintenance helper command registry exposes initial presets
     true
   );
   assert.equal(registry.every((entry) => entry.initialPreset === true), true);
+});
+
+test("VPS privileged maintenance registry separates repo-less Dashboard bridge service", () => {
+  const registry = listVpsPrivilegedMaintenanceCommandRegistry();
+  const unresolvedRestart = registry.find(
+    (entry) => entry.commandClass === "systemd_user_app_server_bridge_unresolved_restart"
+  );
+  const unresolvedStatus = registry.find(
+    (entry) => entry.commandClass === "systemd_user_app_server_bridge_unresolved_status"
+  );
+  const unresolvedLogs = registry.find(
+    (entry) => entry.commandClass === "systemd_user_app_server_bridge_unresolved_logs"
+  );
+
+  assert.deepEqual(unresolvedRestart.argv, [
+    "systemctl",
+    "--user",
+    "restart",
+    "vtdd-dashboard-app-server-bridge-unresolved.service"
+  ]);
+  assert.deepEqual(unresolvedStatus.argv, [
+    "systemctl",
+    "--user",
+    "is-active",
+    "vtdd-dashboard-app-server-bridge-unresolved.service"
+  ]);
+  assert.deepEqual(unresolvedLogs.argv, [
+    "journalctl",
+    "--user",
+    "-u",
+    "vtdd-dashboard-app-server-bridge-unresolved.service",
+    "--no-pager",
+    "-n",
+    "200"
+  ]);
+  assert.equal(unresolvedRestart.requiredRiskLevel, "medium");
+  assert.equal(unresolvedStatus.requiredRiskLevel, "low");
+  assert.equal(unresolvedLogs.requiredRiskLevel, "low");
 });
 
 test("VPS privileged maintenance helper command registry does not expose mutable internal arrays", () => {
