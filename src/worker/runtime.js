@@ -10182,6 +10182,7 @@ const DASHBOARD_APP_SERVER_STAGE_TEXT = {
   waiting_user_input: "確認が必要です。",
   quiet: "接続と実行状態を確認中です。入力と文脈は保持しています。",
   debug_slow_turn: "Issue #590 slow turn E2E を実行しています。",
+  long_turn_checkpoint: "作業を継続しています。まだ最終回答は生成中です。",
   thinking: "考えています。",
   implementation: "実装に入っています。",
   implement: "実装に入っています。",

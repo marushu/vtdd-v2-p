@@ -5337,6 +5337,7 @@ test("DashboardChatRoom maps app-server progress stages to owner-facing transien
     ["waiting_approval", "承認待ちです。"],
     ["waiting_user_input", "確認が必要です。"],
     ["quiet", "接続と実行状態を確認中です。入力と文脈は保持しています。"],
+    ["long_turn_checkpoint", "作業を継続しています。まだ最終回答は生成中です。"],
     ["implementation", "実装に入っています。"],
     ["test", "テストを実行しています。"],
     ["pr_body", "PR本文を作成しています。"],

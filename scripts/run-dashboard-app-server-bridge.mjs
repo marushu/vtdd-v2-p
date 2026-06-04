@@ -21,6 +21,8 @@ const APP_SERVER_TURN_QUIET_TEXT =
 const DASHBOARD_MEDIA_TMP_DIR = "vtdd-dashboard-media";
 const DEFAULT_TURN_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_ACTIVITY_QUIET_MS = 90 * 1000;
+const DEFAULT_LIVE_PROGRESS_INITIAL_DELAY_MS = 30 * 1000;
+const DEFAULT_LIVE_PROGRESS_INTERVAL_MS = 60 * 1000;
 const DEBUG_SLOW_TURN_DEFAULT_SECONDS = 150;
 const DEBUG_SLOW_TURN_MIN_SECONDS = 10;
 const DEBUG_SLOW_TURN_MAX_SECONDS = 10 * 60;
@@ -962,8 +964,51 @@ function shouldPersistAppServerProgressStage(stage = "") {
     "pr_create",
     "reviewer_wait",
     "reviewer_revision",
-    "debug_slow_turn"
+    "debug_slow_turn",
+    "long_turn_checkpoint"
   ].includes(normalized);
+}
+
+function isDashboardBridgeOwnerFacingProgressEvent(event = {}) {
+  if (!event || event.type !== "app_server_status" || event.persistProgress !== true) {
+    return false;
+  }
+  const stage = String(event.stage || "").trim().toLowerCase().replaceAll("-", "_");
+  return shouldPersistAppServerProgressStage(stage) && stage !== "thinking";
+}
+
+export function buildDashboardBridgeLiveProgressFallbackEvent({
+  dashboardThreadId = "",
+  codexThreadId = "",
+  turnId = "",
+  messageId = "",
+  checkpointNumber = 1,
+  now = new Date().toISOString()
+} = {}) {
+  const count = Number.isFinite(Number(checkpointNumber)) && Number(checkpointNumber) > 1 ? Number(checkpointNumber) : 1;
+  return {
+    type: "app_server_status",
+    schema: DEFAULT_SCHEMA,
+    threadId: dashboardThreadId,
+    codexThreadId: codexThreadId || null,
+    turnId: turnId || null,
+    status: "thinking",
+    stage: "long_turn_checkpoint",
+    persistProgress: true,
+    text:
+      count === 1
+        ? "作業を継続しています。まだ最終回答は生成中です。"
+        : "作業を継続しています。追加の進行イベントを待っています。",
+    bridgeLifecycle: {
+      status: "long_turn_checkpoint",
+      dashboardThreadId: dashboardThreadId || null,
+      codexThreadId: codexThreadId || null,
+      turnId: turnId || null,
+      messageId: messageId || null,
+      checkpointNumber: count,
+      updatedAt: String(now || new Date().toISOString())
+    }
+  };
 }
 
 function mapAppServerItemToProgressStage(item = {}) {
@@ -1425,7 +1470,9 @@ export async function handleDashboardTurnRequest({
   usageProfile = null,
   costBoundary = null,
   debugSlowTurnDelayImpl = delay,
-  debugSlowTurnProgressIntervalMs = DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS
+  debugSlowTurnProgressIntervalMs = DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS,
+  liveProgressInitialDelayMs = DEFAULT_LIVE_PROGRESS_INITIAL_DELAY_MS,
+  liveProgressIntervalMs = DEFAULT_LIVE_PROGRESS_INTERVAL_MS
 }) {
   const dashboardThreadId = String(request.threadId || "");
   const text = String(request.text || "");
@@ -1497,6 +1544,9 @@ export async function handleDashboardTurnRequest({
   let turnSettled = false;
   let timedOut = false;
   let lateCompletionCleanupHandle = null;
+  let liveProgressFallbackHandle = null;
+  let liveProgressFallbackCount = 0;
+  let ownerFacingProgressSeen = false;
   let cleanupNotifications = () => {};
   let resolveTurn = () => {};
   let rejectTurn = () => {};
@@ -1542,6 +1592,34 @@ export async function handleDashboardTurnRequest({
     activityWatchdog.markActivity();
   };
 
+  const stopLiveProgressFallback = () => {
+    clearTimeout(liveProgressFallbackHandle);
+    liveProgressFallbackHandle = null;
+  };
+
+  const scheduleLiveProgressFallback = (delayMs = liveProgressInitialDelayMs) => {
+    stopLiveProgressFallback();
+    const normalizedDelay = Math.max(0, Number(delayMs) || 0);
+    liveProgressFallbackHandle = setTimeout(async () => {
+      liveProgressFallbackHandle = null;
+      if (turnSettled || timedOut || ownerFacingProgressSeen) {
+        return;
+      }
+      liveProgressFallbackCount += 1;
+      const fallbackEvent = buildDashboardBridgeLiveProgressFallbackEvent({
+        dashboardThreadId,
+        codexThreadId: codexThreadId || null,
+        turnId: activeTurnId || "",
+        messageId: request.messageId,
+        checkpointNumber: liveProgressFallbackCount
+      });
+      ownerFacingProgressSeen = true;
+      await sendDashboardEvent(fallbackEvent);
+      ownerFacingProgressSeen = false;
+      scheduleLiveProgressFallback(liveProgressIntervalMs);
+    }, normalizedDelay);
+  };
+
   const turnCompletion = new Promise((resolve, reject) => {
     resolveTurn = resolve;
     rejectTurn = reject;
@@ -1568,6 +1646,10 @@ export async function handleDashboardTurnRequest({
       accumulatedText += event.text;
       void sendDashboardEvent(event);
       return;
+    }
+    if (isDashboardBridgeOwnerFacingProgressEvent(event)) {
+      ownerFacingProgressSeen = true;
+      stopLiveProgressFallback();
     }
     if (event.type === "app_server_status" && event.status === "replied") {
       event.type = "app_server_reply";
@@ -1679,10 +1761,12 @@ export async function handleDashboardTurnRequest({
         costBoundary: turnCostBoundary
       })
     );
+    scheduleLiveProgressFallback(liveProgressInitialDelayMs);
     markAppServerActivity();
     await turnCompletion;
   } finally {
     activityWatchdog.stop();
+    stopLiveProgressFallback();
     if (!timedOut && typeof appServer.drainApprovalRequests === "function") {
       await appServer.drainApprovalRequests();
     }
