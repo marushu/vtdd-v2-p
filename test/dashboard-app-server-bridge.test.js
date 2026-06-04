@@ -4,9 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  classifyDashboardAppServerUsageProfile
+} from "../src/core/dashboard-app-server-usage-profile.js";
+import {
   buildDashboardAppServerBridgeEndpoint,
   buildDashboardAppServerCommandArgs,
   buildDashboardAppServerCostBoundary,
+  buildDashboardAppServerUsageProfileCommandConfig,
   buildAppServerInitializeRequest,
   buildOwnerActionRequiredPayloadForAppServerApproval,
   buildAppServerRequestApprovalResponse,
@@ -21,6 +25,7 @@ import {
   buildDashboardTurnInputText,
   collectDashboardBridgeRepoSyncStatus,
   connectDashboardAppServerBridgeOnce,
+  createDashboardAppServerClientSelector,
   ensureDashboardBridgeRepoSynced,
   executeVpsRunnerWakeup,
   extractAppServerNotificationTurnId,
@@ -183,6 +188,80 @@ test("dashboard app-server bridge builds optional app-server usage tuning args",
       reasoningEffort: "low"
     }
   );
+});
+
+test("dashboard app-server usage profile classifier separates conversation, read, development, and long development", () => {
+  assert.deepEqual(
+    classifyDashboardAppServerUsageProfile({ text: "今日は何月何日？日本時間を答えて" }),
+    {
+      profile: "conversation",
+      reasoningEffort: "low",
+      selectedBy: "content",
+      reason: "ordinary_conversation"
+    }
+  );
+  assert.deepEqual(
+    classifyDashboardAppServerUsageProfile({ text: "PR #756 の状況を確認だけして" }),
+    {
+      profile: "status_read",
+      reasoningEffort: "low",
+      selectedBy: "content",
+      reason: "status_or_read_request"
+    }
+  );
+  assert.deepEqual(
+    classifyDashboardAppServerUsageProfile({ text: "Issue #455 の修正を実装してテストも通して" }),
+    {
+      profile: "development",
+      reasoningEffort: "medium",
+      selectedBy: "content",
+      reason: "implementation_or_repository_work"
+    }
+  );
+  assert.deepEqual(
+    classifyDashboardAppServerUsageProfile({ text: "長時間開発で最後まで一塊でやって。E2E と deploy 追跡も必要" }),
+    {
+      profile: "long_development",
+      reasoningEffort: "high",
+      selectedBy: "content",
+      reason: "long_running_development_or_e2e"
+    }
+  );
+});
+
+test("dashboard app-server bridge builds command args from content-aware usage profile", () => {
+  const conversation = buildDashboardAppServerUsageProfileCommandConfig({
+    usageProfile: {
+      profile: "conversation",
+      reasoningEffort: "low",
+      reason: "ordinary_conversation"
+    }
+  });
+  assert.deepEqual(conversation.args, ["app-server", "--listen", "stdio://", "-c", 'model_reasoning_effort="low"']);
+  assert.equal(conversation.usageProfile.profile, "conversation");
+  assert.equal(conversation.costBoundary.contentAwareProfile, true);
+  assert.equal(conversation.costBoundary.reasoningEffort, "low");
+
+  const longDevelopment = buildDashboardAppServerUsageProfileCommandConfig({
+    usageProfile: {
+      profile: "long_development",
+      reasoningEffort: "high",
+      reason: "long_running_development_or_e2e"
+    },
+    defaultModel: "gpt-5.3-codex-spark"
+  });
+  assert.deepEqual(longDevelopment.args, [
+    "app-server",
+    "--listen",
+    "stdio://",
+    "-c",
+    'model="gpt-5.3-codex-spark"',
+    "-c",
+    'model_reasoning_effort="high"'
+  ]);
+  assert.equal(longDevelopment.usageProfile.profile, "long_development");
+  assert.equal(longDevelopment.costBoundary.modelConfigured, true);
+  assert.equal(longDevelopment.costBoundary.reasoningEffort, "high");
 });
 
 test("dashboard app-server bridge runner wakeup uses only fixed user systemd start command", async () => {
@@ -2357,6 +2436,52 @@ test("dashboard app-server bridge creates app-server client with usage tuning ar
       'model_reasoning_effort="low"'
     ]
   });
+});
+
+test("dashboard app-server bridge selects app-server client by content-aware usage profile", async () => {
+  const created = [];
+  const selector = createDashboardAppServerClientSelector({
+    defaultAppServer: { id: "default" },
+    appServerFactory(options) {
+      const client = {
+        id: `client-${created.length + 1}`,
+        async initialize() {}
+      };
+      created.push({ ...options, client });
+      return client;
+    },
+    cwd: "/repo"
+  });
+
+  const conversation = await selector({
+    usageProfile: {
+      profile: "conversation",
+      reasoningEffort: "low",
+      reason: "ordinary_conversation"
+    }
+  });
+  const conversationAgain = await selector({
+    usageProfile: {
+      profile: "conversation",
+      reasoningEffort: "low",
+      reason: "ordinary_conversation"
+    }
+  });
+  const development = await selector({
+    usageProfile: {
+      profile: "development",
+      reasoningEffort: "medium",
+      reason: "implementation_or_repository_work"
+    }
+  });
+
+  assert.equal(created.length, 2);
+  assert.equal(conversation.appServer, conversationAgain.appServer);
+  assert.notEqual(conversation.appServer, development.appServer);
+  assert.deepEqual(created[0].args, ["app-server", "--listen", "stdio://", "-c", 'model_reasoning_effort="low"']);
+  assert.deepEqual(created[1].args, ["app-server", "--listen", "stdio://", "-c", 'model_reasoning_effort="medium"']);
+  assert.equal(conversation.costBoundary.profile, "conversation");
+  assert.equal(development.costBoundary.profile, "development");
 });
 
 test("dashboard app-server bridge repo sync preflight allows clean in-sync main with known artifacts", async () => {

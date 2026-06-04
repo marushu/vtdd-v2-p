@@ -7,6 +7,7 @@ import {
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
   buildCodexAnalyticsUsageDelta,
+  buildDashboardAppServerUsageCostBoundary,
   buildVpsCapabilityProposal,
   buildCostCheckerRuntimeTruth,
   buildVpsPrivilegedMaintenanceInstallInventory,
@@ -28,6 +29,7 @@ import {
   evaluateButlerSelfParity,
   evaluateCustomGptSetupDiagnostics,
   evaluateExecutionContinuity,
+  classifyDashboardAppServerUsageProfile,
   evaluateMemorySafety,
   executeGitHubHighRiskPlane,
   inferRelatedIssueFromGatewayInput,
@@ -61,6 +63,7 @@ import {
   mergeAliasRegistries,
   retrieveStoredAliasRegistry,
   retrieveGitHubReadPlane,
+  normalizeDashboardAppServerUsageProfile,
   TaskMode,
   bindNaturalGitHubWriteApproval,
   cancelVpsRunnerQueue,
@@ -425,7 +428,12 @@ export class DashboardChatRoom {
     await this.broadcastTransientStatus({
       threadId,
       status: "thinking",
-      text: buildDashboardAppServerUsageTransientText({ text, repository, relatedIssue }),
+      text: buildDashboardAppServerUsageTransientText({
+        text,
+        repository,
+        relatedIssue,
+        mediaReferences: ownerMessage.mediaReferences || ownerMessage.media_references || []
+      }),
       snapshot: true,
       snapshotSource: "owner_message_dispatch"
     });
@@ -445,6 +453,13 @@ export class DashboardChatRoom {
     const repository = normalizeCanonicalRepositoryInput(message.repository);
     const relatedIssue = normalizePositiveInteger(message.relatedIssue || message.issueNumber);
     const mediaReferences = normalizeMediaReferences(message.mediaReferences || message.media_references || []);
+    const usageProfile = classifyDashboardAppServerUsageProfile({
+      text,
+      repository,
+      relatedIssue,
+      mediaReferences
+    });
+    const costBoundary = buildDashboardAppServerUsageCostBoundary(usageProfile);
     const trafficControl = await buildDashboardChatTrafficControlContext({
       env: this.env,
       repository,
@@ -469,6 +484,8 @@ export class DashboardChatRoom {
         turnMethod: "turn/start"
       },
       authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }),
+      usageProfile,
+      costBoundary,
       trafficControl
     };
     return this.sendSocket(bridgeSocket, turnRequest);
@@ -9833,10 +9850,25 @@ function buildDashboardAppServerFailureTransientText({ messageStatus = "", failu
   return sanitizeDashboardChatText(failureText) || "app-server bridge の返信を待っています";
 }
 
-function buildDashboardAppServerUsageTransientText({ repository = "", relatedIssue = "" } = {}) {
+function buildDashboardAppServerUsageTransientText({
+  text = "",
+  repository = "",
+  relatedIssue = "",
+  mediaReferences = []
+} = {}) {
+  const usageProfile = normalizeDashboardAppServerUsageProfile(
+    classifyDashboardAppServerUsageProfile({
+      text,
+      repository,
+      relatedIssue,
+      mediaReferences
+    })
+  );
   const scope = [
     repository ? `repo=${repository}` : "repo=未指定",
-    relatedIssue ? `Issue #${relatedIssue}` : "Issue=未指定"
+    relatedIssue ? `Issue #${relatedIssue}` : "Issue=未指定",
+    `usage_profile=${usageProfile.profile}`,
+    `reasoning_effort=${usageProfile.reasoningEffort}`
   ].join(" / ");
   return `Codex app-server に渡しています。Codex usage を消費し得ます。${scope}`;
 }

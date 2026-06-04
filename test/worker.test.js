@@ -3920,6 +3920,10 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(turnRequest.appServer.startThreadMethod, "thread/start");
   assert.equal(turnRequest.appServer.turnMethod, "turn/start");
   assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
+  assert.equal(turnRequest.usageProfile.profile, "conversation");
+  assert.equal(turnRequest.usageProfile.reasoningEffort, "low");
+  assert.equal(turnRequest.costBoundary.profile, "conversation");
+  assert.equal(turnRequest.costBoundary.contentAwareProfile, true);
   assert.equal(turnRequest.trafficControl.status, "未確認");
   assert.equal(turnRequest.trafficControl.currentSurface, "dashboard_butler");
   assert.match(turnRequest.trafficControl.reason, /repository is required/);
@@ -3937,6 +3941,8 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(status.status, "thinking");
   assert.match(status.text, /Codex app-server に渡しています/);
   assert.match(status.text, /Codex usage を消費し得ます/);
+  assert.match(status.text, /usage_profile=conversation/);
+  assert.match(status.text, /reasoning_effort=low/);
 });
 
 test("DashboardChatRoom forwards cost-aware owner turns to app-server bridge", async () => {
@@ -3969,6 +3975,9 @@ test("DashboardChatRoom forwards cost-aware owner turns to app-server bridge", a
   assert.equal(turnRequest.threadId, "dashboard-main-unresolved");
   assert.equal(turnRequest.repository, null);
   assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
+  assert.equal(turnRequest.usageProfile.profile, "conversation");
+  assert.equal(turnRequest.usageProfile.reasoningEffort, "low");
+  assert.equal(turnRequest.costBoundary.profile, "conversation");
   assert.equal(dashboardSocket.sent.length, 3);
   const ownerBroadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(ownerBroadcast.messages.length, 1);
@@ -3980,6 +3989,7 @@ test("DashboardChatRoom forwards cost-aware owner turns to app-server bridge", a
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.match(status.text, /Codex app-server に渡しています/);
+  assert.match(status.text, /usage_profile=conversation/);
 });
 
 test("DashboardChatRoom forwards PR status owner turns to app-server bridge", async () => {
@@ -4040,9 +4050,13 @@ test("DashboardChatRoom forwards PR status owner turns to app-server bridge", as
   assert.equal(turnRequest.type, "app_server_turn_requested");
   assert.equal(turnRequest.threadId, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(turnRequest.repository, "marushu/vtdd-v2-p");
+  assert.equal(turnRequest.usageProfile.profile, "status_read");
+  assert.equal(turnRequest.usageProfile.reasoningEffort, "low");
+  assert.equal(turnRequest.costBoundary.profile, "status_read");
   const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
   assert.equal(sentPayloads.at(-1).type, "transient_status");
   assert.match(sentPayloads.at(-1).text, /Codex app-server に渡しています/);
+  assert.match(sentPayloads.at(-1).text, /usage_profile=status_read/);
 });
 
 test("DashboardChatRoom forwards repo-less PR status owner turns to app-server bridge", async () => {
