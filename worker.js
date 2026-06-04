@@ -72731,31 +72731,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function ensureTransientProgressCard() {
-        if (transientProgressCard && transientProgressCard.isConnected) return transientProgressCard;
-        if (progressPane) {
-          progressPane.setAttribute("data-transient-progress", "true");
-          transientProgressCard = progressPane;
-          return progressPane;
-        }
-        const article = document.createElement("div");
-        article.className = "composer-progress";
-        article.setAttribute("aria-live", "polite");
-        article.setAttribute("data-transient-progress", "true");
-        const title = document.createElement("div");
-        title.className = "progress-title";
-        title.textContent = "\u9032\u884C\u4E2D";
-        const text = document.createElement("p");
-        text.className = "progress-text";
-        article.appendChild(title);
-        article.appendChild(text);
-        transientProgressCard = article;
-        form.insertBefore(article, form.querySelector(".composer-box") || status);
-        return article;
+        return null;
       }
 
       function renderTransientProgress() {
         if (!transientProgressState) return;
         const card = ensureTransientProgressCard();
+        if (!card) {
+          updateComposerReserve();
+          return;
+        }
         card.hidden = false;
         card.classList.toggle("thinking", transientProgressState.thinking === true);
         const title = card.querySelector(".progress-title");
@@ -72799,6 +72784,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
           transientProgressCard = null;
         }
+        if (progressPane) {
+          progressPane.hidden = true;
+          progressPane.classList.remove("thinking");
+          const text = progressPane.querySelector(".progress-text");
+          if (text) text.textContent = "";
+        }
         clearThreadProgressCheckpoint();
       }
 
@@ -72832,6 +72823,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         body.appendChild(paragraph);
         article.appendChild(header);
         article.appendChild(body);
+        const summary = document.createElement("details");
+        summary.className = "progress-summary live-progress-summary";
+        const summaryTitle = document.createElement("summary");
+        summaryTitle.textContent = "\u9032\u884C\u30ED\u30B0";
+        const list = document.createElement("ol");
+        summary.appendChild(summaryTitle);
+        summary.appendChild(list);
+        article.appendChild(summary);
         entry.appendChild(article);
         threadProgressCheckpointCard = entry;
         log.appendChild(entry);
@@ -72851,6 +72850,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const paragraph = card.querySelector(".message-body p");
         if (paragraph) {
           paragraph.textContent = text;
+        }
+        const entries = Array.isArray(transientProgressSnapshotState && transientProgressSnapshotState.progressSummary && transientProgressSnapshotState.progressSummary.entries)
+          ? transientProgressSnapshotState.progressSummary.entries
+          : [];
+        const details = card.querySelector(".live-progress-summary");
+        const list = details ? details.querySelector("ol") : null;
+        if (details && list) {
+          list.replaceChildren();
+          for (const entry of entries) {
+            const entryText = String(entry && entry.text || entry || "").trim();
+            if (!entryText) continue;
+            const item = document.createElement("li");
+            item.textContent = entryText;
+            list.appendChild(item);
+          }
+          details.hidden = entries.length <= 1;
         }
         scrollToLatest();
         return true;

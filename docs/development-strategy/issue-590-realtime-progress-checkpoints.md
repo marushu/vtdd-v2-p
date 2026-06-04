@@ -4,7 +4,9 @@
 
 Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投げたとき、owner は無言で待たされない。低情報の状態、たとえば「考えています」「コマンドを実行しています」は composer 下の一時状態として表示し続ける。一方で owner-facing な進行 checkpoint は通常チャット欄の末尾に表示され、アプリ切替、スリープ、WebSocket 再接続後も最新 checkpoint 1件から復帰できる。
 
-完了時は checkpoint 表示を消し、最終 Butler 返信に折りたたみの `進行ログ` として集約する。通常チャット履歴に raw event や高頻度 progress message は残さない。
+完了時は、その live progress message を最終 Butler 返信と折りたたみの `進行ログ` に一気に置き換える。通常チャット履歴に raw event や高頻度 progress message は残さない。
+
+2026-06-04 の production E2E で、composer 下の `進行中` とチャット本文内の checkpoint が二重表示になり、さらに `codex app-server が応答を生成しています。` のような低情報 status が本文側に混ざることを確認した。以後の設計は「composer 下の進行中カードを主表示にしない」「1 turn / 1 execution に対してチャット本文内の live progress message 1件だけを更新する」「完了時だけ final summary へ置換する」に修正する。
 
 ## VTDD 全体で進める部分
 
@@ -12,18 +14,20 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 ## 設計
 
-既存実装には `transient_progress_snapshot:<threadId>` があり、Durable Object に最新 snapshot 1件だけ保存される。これを新しい永続 chat message にせず、Dashboard UI が chat log 内に ephemeral checkpoint card として描画する。
+既存実装には `transient_progress_snapshot:<threadId>` があり、Durable Object に最新 snapshot 1件だけ保存される。これを新しい永続 chat message にせず、Dashboard UI が chat log 内に `live_progress_message_id` 相当の ephemeral checkpoint card として描画する。
+
+`live_progress_message_id` は checkpoint 1件ごとの ID ではない。1 owner turn / 1 app-server turn / 1 runner execution に対して、チャット本文内に表示する一時 progress message 1個の UI identity として扱う。checkpoint が増えても message row は増やさず、その 1個の中身だけを更新する。
 
 分類は二層にする。
 
-- composer 下: transport/transient 状態。`thinking` / `command` / `quiet` など低情報の状態も表示する。
-- chat 内 checkpoint: owner-facing progress。`planning` / `implementation` / `test` / `PR作成` / `CI待ち` など、作業段階が分かるものだけを表示する。
+- composer 下: 低情報 status の主表示場所にはしない。この slice では composer 下の progress card を非表示化し、最下部の短い status line だけに限定する。
+- chat 内 live progress message: owner-facing progress。`planning` / `implementation` / `test` / `PR作成` / `CI待ち` など、作業段階が分かるものだけを 1件の一時 message として更新表示する。
 
-完了時は現在の `attachDashboardProgressSummaryToFinalMessages` を使い、snapshot の `progressSummary` を最終返信に付ける。snapshot は最終返信後に clear されるため、chat 内 checkpoint card も消える。
+完了時は現在の `attachDashboardProgressSummaryToFinalMessages` を使い、snapshot の `progressSummary` を最終返信に付ける。snapshot は最終返信後に clear されるため、chat 内 live progress message は消え、最終返信の `進行ログ` に集約される。
 
 ## 仮説
 
-現在の不満の根は、bridge が進行 event を受けて transient snapshot へ保存しているのに、UI がそれを composer 下の「進行中」枠としてしか描画していないことにある。iPad でアプリ切替やスリープが入ると composer 下の一時表示は見失いやすく、owner の体感は「最後にまとめて出る」になる。
+現在の不満の根は、bridge が進行 event を受けて transient snapshot へ保存しているのに、UI が「composer 下の進行中」「チャット本文内 checkpoint」「最下部 status line」を混在させていることにある。iPad でアプリ切替やスリープが入ると composer 下の一時表示は見失いやすく、owner の体感は「最後にまとめて出る」または「変な場所に出る」になる。
 
 狭く durable chat message を増やすと、通常履歴が progress で汚れ、Cloudflare write も増える。逆に既存 snapshot を chat log 内に描画するだけなら、write volume は増えず、復帰可能性も保てる。
 
@@ -39,7 +43,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 - `src/worker/runtime.js`
   - `buildDashboardProgressSummarySnapshot`: 低情報 progress を summary から除外する。既存 snapshot write は維持する。
-  - Dashboard client script: `transientProgressSnapshot.progressSummary` から最新 checkpoint を chat log 内に ephemeral card として描画し、clear 時に消す。
+- Dashboard client script: `transientProgressSnapshot.progressSummary` から最新 checkpoint を chat log 内の live progress message 1件として描画し、clear 時に消す。composer progress card は主表示として使わない。
   - Dashboard CSS: checkpoint card と progress summary の dark mode 対応を最小限整える。
 - `test/worker.test.js`
   - 低情報 progress が summary に入らないこと。
@@ -68,6 +72,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 - chat 内 checkpoint card を通常 message と同じ DOM に入れると、copy/reply/scroll の既存挙動を壊す可能性がある。
 - completion 後の clear が漏れると、古い checkpoint が final reply の下に残る。
 - dark mode の progress summary 背景が light 固定だと #744 の見えづらさを悪化させる。
+- media attach / pending media preview の再描画で chat log 内の live progress message が消えると、owner には「チャットに出ていたテキストが消えた」と見える。#498 本体ではないが、この slice の E2E 観測対象に入れる。
 
 ## PR 前に確認すること
 
@@ -90,9 +95,9 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 ## merge 後に通す E2E
 
-- production PWA から #637 相当の低リスク read/status を投げ、30秒以内に composer 下の transient と chat 内 checkpoint のどちらかが見えること。
-- app 切替またはリロード後、最新 checkpoint が chat log 内に復帰すること。
-- completion 後、checkpoint card が消え、最終 Butler 返信に `進行ログ` が残ること。
+- production PWA から #637 相当の低リスク read/status を投げ、30秒以内に chat 内 live progress message が1件だけ見えること。
+- app 切替、リロード、または画像添付プレビュー追加後、最新 checkpoint が chat log 内に復帰または維持されること。
+- completion 後、live progress message が消え、最終 Butler 返信に `進行ログ` が残ること。
 - low-risk read/status は passkey なし、deploy / bridge restart は従来通り passkey 境界を維持すること。
 
 ## 次の PR を増やさない理由
