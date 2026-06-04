@@ -4,6 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import process from "node:process";
+import {
+  buildDashboardAppServerUsageCostBoundary,
+  normalizeDashboardAppServerUsageProfile
+} from "../src/core/dashboard-app-server-usage-profile.js";
 
 const DEFAULT_SCHEMA = "vtdd.dashboard.app_server_bridge.v1";
 const DANGER_FULL_ACCESS_SANDBOX = "danger-full-access";
@@ -126,6 +130,36 @@ export function buildDashboardAppServerCostBoundary({
   };
 }
 
+export function buildDashboardAppServerUsageProfileCommandConfig({
+  usageProfile = null,
+  defaultProfile = "",
+  defaultModel = "",
+  defaultReasoningEffort = ""
+} = {}) {
+  const normalizedUsageProfile = normalizeDashboardAppServerUsageProfile(usageProfile || defaultProfile || "conversation");
+  const model = normalizeBridgeText(normalizedUsageProfile.model || defaultModel);
+  const reasoningEffort = normalizeBridgeText(normalizedUsageProfile.reasoningEffort || defaultReasoningEffort);
+  const profile = normalizeBridgeText(normalizedUsageProfile.profile || defaultProfile) || "conversation";
+  return {
+    usageProfile: {
+      ...normalizedUsageProfile,
+      profile,
+      ...(model ? { model } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {})
+    },
+    costBoundary: buildDashboardAppServerUsageCostBoundary({
+      ...normalizedUsageProfile,
+      profile,
+      ...(model ? { model } : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {})
+    }),
+    args: buildDashboardAppServerCommandArgs({
+      model,
+      reasoningEffort
+    })
+  };
+}
+
 export function buildDashboardAppServerCommandArgs({
   listen = "stdio://",
   model = "",
@@ -152,12 +186,19 @@ export function buildDashboardTurnInputText(request = {}) {
     request.trafficControl && typeof request.trafficControl === "object"
       ? request.trafficControl
       : null;
+  const usageProfile =
+    request.usageProfile && typeof request.usageProfile === "object"
+      ? normalizeDashboardAppServerUsageProfile(request.usageProfile)
+      : null;
+  const costBoundary = request.costBoundary && typeof request.costBoundary === "object" ? request.costBoundary : null;
   const mediaReferences = Array.isArray(request.mediaReferences) ? request.mediaReferences : [];
   const hasDashboardContext = Boolean(
     repository ||
       relatedIssue ||
       authority ||
       trafficControl ||
+      usageProfile ||
+      costBoundary ||
       mediaReferences.length > 0
   );
   if (!hasDashboardContext) {
@@ -169,6 +210,12 @@ export function buildDashboardTurnInputText(request = {}) {
     `- repository: ${repository || "未指定"}`,
     `- relatedIssue: ${relatedIssue ? `#${relatedIssue}` : "未指定"}`,
     `- mediaReferences: ${mediaReferences.length}`,
+    usageProfile
+      ? `- usageProfile: ${JSON.stringify(usageProfile)}`
+      : "- usageProfile: 未指定",
+    costBoundary
+      ? `- costBoundary: ${JSON.stringify(costBoundary)}`
+      : "- costBoundary: 未指定",
     "- surface: Dashboard Butler PWA via VPS Dashboard Bridge / codex app-server",
     "- trafficControlRule: repo-backed vtdd-chief-butler / Issue/PR/docs/runtime truth を先に読み、blocker / next action / authority boundary / evidence gap を分けて報告する。",
     "- completionRule: Butler Completion Gate と E2E evidence が揃うまで Dashboard Butler 完了とは言わない。",
@@ -1365,11 +1412,18 @@ export async function handleDashboardTurnRequest({
   token = "",
   fetchImpl = globalThis.fetch,
   mediaTmpRoot = os.tmpdir(),
+  usageProfile = null,
+  costBoundary = null,
   debugSlowTurnDelayImpl = delay,
   debugSlowTurnProgressIntervalMs = DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS
 }) {
   const dashboardThreadId = String(request.threadId || "");
   const text = String(request.text || "");
+  const turnUsageProfile = normalizeDashboardAppServerUsageProfile(usageProfile || request.usageProfile || "conversation");
+  const turnCostBoundary =
+    costBoundary && typeof costBoundary === "object"
+      ? costBoundary
+      : buildDashboardAppServerUsageCostBoundary(turnUsageProfile);
   if (!dashboardThreadId || !text) {
     await sendDashboardEvent({
       type: "app_server_turn_failed",
@@ -1583,6 +1637,8 @@ export async function handleDashboardTurnRequest({
       relatedIssue: request.relatedIssue || request.issueNumber,
       authority: request.authority,
       trafficControl: request.trafficControl,
+      usageProfile: turnUsageProfile,
+      costBoundary: turnCostBoundary,
       mediaReferences: materializedMediaReferences
     });
     const startedTurn = await appServer.request(
@@ -1607,7 +1663,9 @@ export async function handleDashboardTurnRequest({
         codexThreadId,
         turnId: activeTurnId || startedTurnId,
         messageId: request.messageId,
-        resumedExistingThread
+        resumedExistingThread,
+        usageProfile: turnUsageProfile,
+        costBoundary: turnCostBoundary
       })
     );
     markAppServerActivity();
@@ -1707,12 +1765,22 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
       args: appServerArgs
     });
   await appServer.initialize();
+  const selectAppServerForRequest = createDashboardAppServerClientSelector({
+    defaultAppServer: appServer,
+    staticAppServer: Boolean(options.appServer),
+    appServerFactory,
+    cwd: options.cwd,
+    defaultProfile: options.appServerCostProfile,
+    defaultModel: options.appServerModel,
+    defaultReasoningEffort: options.appServerReasoningEffort
+  });
   let reconnects = 0;
   for (;;) {
     await connectDashboardAppServerBridgeOnce({
       ...options,
       endpoint,
       appServer,
+      selectAppServerForRequest,
       costBoundary,
       WebSocketImpl: options.WebSocketImpl || WebSocket
     });
@@ -1725,6 +1793,45 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
     reconnects += 1;
     await delay(normalizeReconnectDelayMs(options.reconnectDelayMs));
   }
+}
+
+export function createDashboardAppServerClientSelector({
+  defaultAppServer = null,
+  staticAppServer = false,
+  appServerFactory,
+  cwd = process.cwd(),
+  defaultProfile = "",
+  defaultModel = "",
+  defaultReasoningEffort = ""
+} = {}) {
+  const clients = new Map();
+  return async function selectAppServerForRequest(request = {}) {
+    const config = buildDashboardAppServerUsageProfileCommandConfig({
+      usageProfile: request.usageProfile,
+      defaultProfile,
+      defaultModel,
+      defaultReasoningEffort
+    });
+    if (staticAppServer || !request.usageProfile) {
+      return {
+        appServer: defaultAppServer,
+        ...config
+      };
+    }
+    const key = JSON.stringify(config.args);
+    if (!clients.has(key)) {
+      const client = appServerFactory({
+        cwd,
+        args: config.args
+      });
+      await client.initialize();
+      clients.set(key, client);
+    }
+    return {
+      appServer: clients.get(key),
+      ...config
+    };
+  };
 }
 
 export function buildDashboardAppServerBridgeEndpoint(options = {}) {
@@ -2016,8 +2123,11 @@ export function buildDashboardBridgeTurnStartedStatusEvent({
   turnId = "",
   messageId = "",
   resumedExistingThread = false,
+  usageProfile = null,
+  costBoundary = null,
   startedAt = new Date().toISOString()
 } = {}) {
+  const normalizedUsageProfile = usageProfile ? normalizeDashboardAppServerUsageProfile(usageProfile) : null;
   return {
     type: "app_server_status",
     schema: DEFAULT_SCHEMA,
@@ -2035,6 +2145,8 @@ export function buildDashboardBridgeTurnStartedStatusEvent({
       turnId: turnId || null,
       messageId: messageId || null,
       resumedExistingThread: Boolean(resumedExistingThread),
+      usageProfile: normalizedUsageProfile,
+      costBoundary: costBoundary && typeof costBoundary === "object" ? costBoundary : null,
       startedAt: normalizeBridgeText(startedAt) || new Date().toISOString()
     }
   };
@@ -2044,6 +2156,7 @@ export async function connectDashboardAppServerBridgeOnce({
   endpoint,
   token,
   appServer,
+  selectAppServerForRequest = null,
   cwd = process.cwd(),
   sandboxMode = "",
   turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
@@ -2114,10 +2227,16 @@ export async function connectDashboardAppServerBridgeOnce({
     if (payload?.type === "app_server_turn_requested") {
       turnQueue = turnQueue
         .catch(() => {})
-        .then(() =>
-          handleDashboardTurnRequest({
+        .then(async () => {
+          const selected =
+            typeof selectAppServerForRequest === "function"
+              ? await selectAppServerForRequest(payload)
+              : { appServer, usageProfile: payload.usageProfile || null, costBoundary: payload.costBoundary || null };
+          return handleDashboardTurnRequest({
             request: payload,
-            appServer,
+            appServer: selected.appServer || appServer,
+            usageProfile: selected.usageProfile || payload.usageProfile || null,
+            costBoundary: selected.costBoundary || payload.costBoundary || null,
             sendDashboardEvent: async (dashboardEvent) => safeSend(dashboardEvent),
             cwd,
             sandboxMode,
@@ -2127,8 +2246,8 @@ export async function connectDashboardAppServerBridgeOnce({
             token,
             fetchImpl,
             mediaTmpRoot
-          })
-        )
+          });
+        })
         .catch((error) => {
           if (isAppServerFailureAlreadySent(error)) {
             return;

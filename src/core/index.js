@@ -52,6 +52,12 @@ export {
   parseCodexAnalyticsUsageText,
   sanitizeCodexAnalyticsUsageSnapshot
 } from "./codex-analytics-usage.js";
+export {
+  DASHBOARD_APP_SERVER_USAGE_PROFILES,
+  buildDashboardAppServerUsageCostBoundary,
+  classifyDashboardAppServerUsageProfile,
+  normalizeDashboardAppServerUsageProfile
+} from "./dashboard-app-server-usage-profile.js";
 export { buildVtddCloudflarePageDirectory, renderVtddHelpGuidePage } from "./help-guide-page.js";
 export { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
 export { validateDeployApprovalGrant } from "./deploy-approval-grant.js";
