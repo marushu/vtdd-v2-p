@@ -974,7 +974,24 @@ function isDashboardBridgeOwnerFacingProgressEvent(event = {}) {
     return false;
   }
   const stage = String(event.stage || "").trim().toLowerCase().replaceAll("-", "_");
-  return shouldPersistAppServerProgressStage(stage) && stage !== "thinking";
+  return [
+    "planning",
+    "hypothesis",
+    "target",
+    "verify",
+    "verification",
+    "waiting_approval",
+    "waiting_user_input",
+    "implementation",
+    "test",
+    "tests",
+    "pr_body",
+    "pr_create",
+    "reviewer_wait",
+    "reviewer_revision",
+    "debug_slow_turn",
+    "long_turn_checkpoint"
+  ].includes(stage);
 }
 
 export function buildDashboardBridgeLiveProgressFallbackEvent({

@@ -12,6 +12,8 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 
 2026-06-04 の PR #780 deploy 後、composer 下の transient status は戻ったが、chat-visible live progress は相変わらず出ないことを owner が確認した。bridge が `planning` / `command` / `file_change` のような具体 event を受けられない turn でも、30秒以内に owner-facing fallback checkpoint を生成しなければ、#590 の無言待ち解消にはならない。
 
+2026-06-04 の追加調査で、bridge は `command` / `file_change` / `tool_call` など低情報 event を `ownerFacingProgressSeen=true` と扱って fallback timer を止めていた。一方 Worker は「コマンドを実行しています」「ファイル変更を確認しています」系を progress summary から除外する。結果として、低情報 event が fallback を潰し、chat-visible checkpoint が出ない。次 slice は、fallback 停止条件を summary に残る owner-facing stage のみに狭める。
+
 ## VTDD 全体で進める部分
 
 この slice は #590 の realtime progress checkpoint stream の最小実装に限定する。#637 の production E2E で確認した「低リスク read/status が passkey なしで helper queue に渡る」経路を、#590 の進行表示 E2E の観測対象として使えるようにする。
@@ -52,6 +54,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
   - Dashboard CSS: checkpoint card と progress summary の dark mode 対応を最小限整える。
 - `scripts/run-dashboard-app-server-bridge.mjs`
   - turn 開始後、owner-facing progress event が一定時間届かない場合に `long_turn_checkpoint` を送る。
+  - `command` / `file_change` / `tool_call` のような低情報 event では fallback を止めず、`planning` / `implementation` / `test` / `pr_create` など owner-facing stage でのみ fallback を止める。
   - checkpoint は raw delta ではなく、turn lifecycle 由来の低頻度 owner-facing 文に限定する。
 - `test/worker.test.js`
   - 低情報 progress が summary に入らないこと。
@@ -73,6 +76,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 - app-server bridge が 30秒以内に owner-facing stage を送ることは、この slice で fallback として保証する。ただし WebSocket が iPad バックグラウンドで停止している間の即時表示は保証しない。
 - WebSocket が iPad PWA のバックグラウンドで停止する挙動自体は、この slice では直さない。復帰時に snapshot から見えることを優先する。
 - raw assistant delta をそのまま checkpoint にするかは未採用。思考や未整理文を流すリスクがあるため、この slice では stage-based checkpoint に限定する。
+- `long_turn_checkpoint` が production PWA で 30秒以内に見えるかは merge/deploy 後 E2E で確認する。local test は fallback event と snapshot 化までの証拠に留める。
 
 ## 穴が出そうな箇所
 
@@ -104,6 +108,7 @@ Dashboard Butler で長時間の VPS Codex CLI / app-server bridge 作業を投�
 ## merge 後に通す E2E
 
 - production PWA から #637 相当の低リスク read/status を投げ、30秒以内に chat-visible owner-facing checkpoint が見えること。
+- `command` / `file_change` の低情報 event が先に来ても、fallback checkpoint が潰れないこと。
 - app 切替またはリロード後、最新 checkpoint が chat log 内に復帰すること。
 - owner が途中を読んでいる状態で checkpoint が更新されても、画面が下に引っ張られないこと。
 - completion 後、checkpoint card が消え、最終 Butler 返信に `進行ログ` が残ること。
