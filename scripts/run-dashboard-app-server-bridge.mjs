@@ -186,6 +186,10 @@ export function buildDashboardTurnInputText(request = {}) {
     request.trafficControl && typeof request.trafficControl === "object"
       ? request.trafficControl
       : null;
+  const vpsMaintenancePassThrough =
+    request.vpsMaintenancePassThrough && typeof request.vpsMaintenancePassThrough === "object"
+      ? request.vpsMaintenancePassThrough
+      : null;
   const usageProfile =
     request.usageProfile && typeof request.usageProfile === "object"
       ? normalizeDashboardAppServerUsageProfile(request.usageProfile)
@@ -197,6 +201,7 @@ export function buildDashboardTurnInputText(request = {}) {
       relatedIssue ||
       authority ||
       trafficControl ||
+      vpsMaintenancePassThrough ||
       usageProfile ||
       costBoundary ||
       mediaReferences.length > 0
@@ -234,6 +239,11 @@ export function buildDashboardTurnInputText(request = {}) {
 
   if (trafficControl) {
     lines.push(`- trafficControl: ${JSON.stringify(trafficControl)}`);
+  }
+
+  if (vpsMaintenancePassThrough) {
+    lines.push(`- vpsMaintenancePassThrough: ${JSON.stringify(vpsMaintenancePassThrough)}`);
+    lines.push("- vpsMaintenancePassThroughRule: 不足 context/config がある VPS/root/helper/restart intent は実行を開始せず、不足情報を日本語で短く確認する。");
   }
 
   if (authority) {
@@ -1637,6 +1647,7 @@ export async function handleDashboardTurnRequest({
       relatedIssue: request.relatedIssue || request.issueNumber,
       authority: request.authority,
       trafficControl: request.trafficControl,
+      vpsMaintenancePassThrough: request.vpsMaintenancePassThrough,
       usageProfile: turnUsageProfile,
       costBoundary: turnCostBoundary,
       mediaReferences: materializedMediaReferences

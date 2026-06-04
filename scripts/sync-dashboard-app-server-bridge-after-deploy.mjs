@@ -59,11 +59,13 @@ function runCommand({ command, args = [], cwd, allowFailure = false, runner = sp
 
 function readGitState({ cwd, runner }) {
   const head = runCommand({ command: "git", args: ["rev-parse", "HEAD"], cwd, runner }).stdout;
+  const originMain = runCommand({ command: "git", args: ["rev-parse", "origin/main"], cwd, runner, allowFailure: true }).stdout;
   const branch = runCommand({ command: "git", args: ["status", "--short", "--branch"], cwd, runner }).stdout;
   const diff = runCommand({ command: "git", args: ["diff", "--quiet"], cwd, runner, allowFailure: true });
   const staged = runCommand({ command: "git", args: ["diff", "--cached", "--quiet"], cwd, runner, allowFailure: true });
   return {
     head,
+    originMain,
     branch,
     trackedDirty: diff.exitCode !== 0 || staged.exitCode !== 0
   };
@@ -139,6 +141,7 @@ export async function runDeployBridgeSyncRestart({
   const restart = runCommand({ command: "systemctl", args: ["--user", "restart", service], cwd, runner });
   const afterGit = readGitState({ cwd, runner });
   const afterService = readServiceState({ cwd, service, runner });
+  const afterMatchesTargetRef = Boolean(afterGit.head && afterGit.originMain && afterGit.head === afterGit.originMain);
   return {
     ok: true,
     status: "synced_and_restarted",
@@ -164,6 +167,10 @@ export async function runDeployBridgeSyncRestart({
       rootExecutionStarted: false,
       helperExecutionStarted: true,
       serviceRestarted: true,
+      targetRef: ref,
+      targetRefSha: afterGit.originMain,
+      syncVerified: afterMatchesTargetRef,
+      afterMatchesTargetRef,
       beforeSha: beforeGit.head,
       afterSha: afterGit.head,
       beforeServiceActiveState: beforeService.activeState || beforeService.active,

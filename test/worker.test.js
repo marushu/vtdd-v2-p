@@ -3289,16 +3289,9 @@ test("worker reports Dashboard VPS maintenance config blockers before creating a
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.execution.status, "blocked");
-  assert.equal(body.execution.runtimeTruth.status, "vps_privileged_maintenance_context_required");
-  assert.equal(body.execution.runtimeTruth.dashboardNaturalLanguagePathReached, true);
-  assert.equal(body.execution.runtimeTruth.proposalCreated, false);
-  assert.deepEqual(body.execution.runtimeTruth.missingContext, ["relatedIssue"]);
-  assert.deepEqual(body.execution.runtimeTruth.missingConfiguration, ["host", "workingDirectories"]);
-  assert.match(body.messages[1].text, /関連 Issue: 未指定/);
-  assert.match(body.messages[1].text, /relatedIssue or issueNumber is required/);
-  assert.match(body.messages[1].text, /VTDD_DASHBOARD_VPS_MAINTENANCE_HOST/);
-  assert.match(body.messages[1].text, /rootExecutionStarted=false/);
+  assert.equal(body.execution, null);
+  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages[0].role, "owner");
 
   const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
   assert.equal(records.length, 0);
@@ -3333,20 +3326,16 @@ test("worker uses only Dashboard maintenance runtime config for privileged maint
 
   assert.equal(response.status, 202);
   const body = await response.json();
-  assert.equal(body.execution.status, "blocked");
-  assert.equal(body.execution.runtimeTruth.status, "vps_privileged_maintenance_configuration_required");
-  assert.deepEqual(body.execution.runtimeTruth.missingConfiguration, ["host", "workingDirectories"]);
-  assert.match(body.messages[1].text, /VTDD_DASHBOARD_VPS_MAINTENANCE_HOST/);
-  assert.doesNotMatch(
-    body.messages[1].text,
-    /VTDD_VPS_RUNNER_HOST|VTDD_VPS_RUNNER_WORKDIR|VTDD_VPS_MAINTENANCE_HOST|VTDD_VPS_MAINTENANCE_WORKDIR|owner-chat-host|owner-chat-workdir/
-  );
+  assert.equal(body.execution, null);
+  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages[0].role, "owner");
+  assert.doesNotMatch(JSON.stringify(body), /owner-chat-host|owner-chat-workdir/);
 
   const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
   assert.equal(records.length, 0);
 });
 
-test("DashboardChatRoom keeps VPS maintenance intent in Worker path when repo and config are missing", async () => {
+test("DashboardChatRoom passes VPS maintenance intent to app-server bridge when repo and config are missing", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
@@ -3374,17 +3363,22 @@ test("DashboardChatRoom keeps VPS maintenance intent in Worker path when repo an
     })
   );
 
-  assert.equal(bridgeSocket.sent.length, 0);
-  const finalBroadcast = JSON.parse(dashboardSocket.sent.at(-1));
+  assert.equal(bridgeSocket.sent.length, 1);
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.type, "app_server_turn_requested");
+  assert.equal(turnRequest.text, "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。");
+  assert.equal(turnRequest.vpsMaintenancePassThrough.status, "passed_to_app_server_bridge");
+  assert.deepEqual(turnRequest.vpsMaintenancePassThrough.missingContext, ["repository", "relatedIssue"]);
+  assert.deepEqual(turnRequest.vpsMaintenancePassThrough.missingConfiguration, ["host", "workingDirectories"]);
+  assert.equal(turnRequest.vpsMaintenancePassThrough.rootExecutionStarted, false);
+  assert.equal(turnRequest.vpsMaintenancePassThrough.helperExecutionStarted, false);
+  assert.equal(turnRequest.vpsMaintenancePassThrough.workerProposalCreated, false);
+  assert.match(turnRequest.vpsMaintenancePassThrough.guidance.join("\n"), /実行を開始しない/);
+  assert.match(turnRequest.vpsMaintenancePassThrough.guidance.join("\n"), /不足している repository/);
+  const finalBroadcast = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "thread");
   assert.equal(finalBroadcast.type, "thread");
-  assert.equal(finalBroadcast.messages.length, 2);
-  assert.equal(finalBroadcast.messages[1].role, "butler");
-  assert.equal(finalBroadcast.messages[1].status, "blocked");
-  assert.match(finalBroadcast.messages[1].text, /対象 repo: 未指定/);
-  assert.match(finalBroadcast.messages[1].text, /関連 Issue: 未指定/);
-  assert.match(finalBroadcast.messages[1].text, /proposal repository is required/);
-  assert.match(finalBroadcast.messages[1].text, /relatedIssue or issueNumber is required/);
-  assert.match(finalBroadcast.messages[1].text, /VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR/);
+  assert.equal(finalBroadcast.messages.length, 1);
+  assert.equal(finalBroadcast.messages[0].role, "owner");
 
   const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
   assert.equal(records.length, 0);
@@ -6349,6 +6343,28 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   });
   await pushStore.put(pushKeys.subscription);
   const pushCalls = [];
+  const queueCalls = [];
+  await provider.store({
+    id: "approval:must-not-persist",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:must-not-persist",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-20T00:09:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "deploy_production",
+        highRiskKind: "deploy_production",
+        repositoryInput: "marushu/vtdd-v2-p"
+      }
+    },
+    metadata: { source: "deploy-event-test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-20T00:09:00.000Z"
+  });
   const vapidEnv = await createTestVapidEnv({
     DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
       pushCalls.push({ input, init });
@@ -6385,7 +6401,18 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
       DASHBOARD_PUSH_SUBSCRIPTION_STORE: pushStore,
       MEMORY_PROVIDER: provider,
       VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
-      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_deploy_bridge_followup",
+      GITHUB_API_FETCH: async (url, init) => {
+        queueCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 74101,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/741#issuecomment-74101"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
     }
   );
 
@@ -6411,30 +6438,32 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(eventBody.messages[0].status, "replied");
   assert.equal(eventBody.messages[0].text.includes("デプロイ完了イベントを受信しました。"), true);
   assert.equal(eventBody.messages[0].text.includes("- PR: PR #552"), true);
-  assert.equal(eventBody.messages[0].text.includes("deploy 後 bridge sync/restart approval URL を同じ chat に出します。"), true);
+  assert.equal(eventBody.messages[0].text.includes("deploy 後 bridge sync/restart helper queue handoff を同じ chat に出します。"), true);
   assert.equal(eventBody.messages[0].text.includes("- production E2E / runtime truth を確認します。"), true);
   assert.equal(eventBody.messages[0].text.includes("merge / deploy / credential / permission"), true);
   assert.equal(eventBody.messages[1].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458:deploy-bridge-followup");
   assert.equal(eventBody.messages[1].role, "system");
-  assert.equal(eventBody.messages[1].status, "blocked");
+  assert.equal(eventBody.messages[1].status, "sent");
   assert.equal(eventBody.messages[1].relatedIssue, 741);
-  assert.equal(eventBody.messages[1].text.includes("deploy 後 bridge sync/restart の承認が必要です。"), true);
+  assert.equal(eventBody.messages[1].text.includes("deploy 後 bridge sync/restart を VPS helper queue へ渡しました。"), true);
   assert.equal(eventBody.messages[1].text.includes("vtdd-dashboard-app-server-bridge-unresolved.service"), true);
-  assert.equal(eventBody.messages[1].text.includes("status=approval_required, rootExecutionStarted=false, helperExecutionStarted=false"), true);
-  assert.equal(eventBody.deployBridgeFollowup.status, "approval_required");
-  assert.equal(eventBody.deployBridgeFollowup.proposalCreated, true);
-  assert.equal(eventBody.deployBridgeFollowup.approvalScope.vpsCapabilityId, "dashboard.bridge.unresolved.deploy.sync.restart");
-  const followupApprovalUrl = new URL(eventBody.deployBridgeFollowup.approvalOperatorUrl);
-  assert.equal(followupApprovalUrl.searchParams.get("mode"), "vps");
-  assert.equal(followupApprovalUrl.searchParams.get("dashboardThreadId"), "dashboard-main-marushu-vtdd-v2-p");
-  assert.equal(followupApprovalUrl.searchParams.get("vpsProposalId"), eventBody.deployBridgeFollowup.vpsProposalId);
-  const approvalRecords = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
-  const followupProposalRecord = approvalRecords.find((record) => record.id === eventBody.deployBridgeFollowup.vpsProposalId);
-  assert.equal(followupProposalRecord.content.proposal.capability.commandClass, "dashboard_bridge_unresolved_deploy_sync_restart");
-  assert.deepEqual(followupProposalRecord.content.proposal.capability.allowedArgs, [
-    "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main"
-  ]);
+  assert.equal(eventBody.messages[1].text.includes("追加 passkey は不要です。"), true);
+  assert.equal(eventBody.messages[1].text.includes("status=queued_for_vps_helper_execution, rootExecutionStarted=false, helperExecutionStarted=false"), true);
+  assert.equal(eventBody.deployBridgeFollowup.status, "queued_for_vps_helper_execution");
+  assert.equal(eventBody.deployBridgeFollowup.proposalCreated, false);
+  assert.equal(eventBody.deployBridgeFollowup.queueCreated, true);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperQueueReached, true);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperExecutionStarted, false);
+  assert.equal(queueCalls.length, 1);
+  const queueCommentBody = JSON.parse(queueCalls[0].init.body).body;
+  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:deploy-bridge-followup-26133044458"), true);
+  assert.equal(queueCommentBody.includes('"commandClass": "dashboard_bridge_unresolved_deploy_sync_restart"'), true);
+  assert.equal(queueCommentBody.includes("sync-dashboard-app-server-bridge-after-deploy.mjs"), true);
+  assert.equal(queueCommentBody.includes("deploy-approval-verified-redacted"), true);
+  assert.equal(queueCommentBody.includes("approval:must-not-persist"), false);
   assert.equal(JSON.stringify(eventBody.messages).includes("approval:must-not-persist"), false);
+  assert.equal(JSON.stringify(eventBody.deployBridgeFollowup).includes("approval:must-not-persist"), false);
   assert.equal(JSON.stringify(eventBody.messages).includes("secret-must-not-persist"), false);
   assert.equal(eventBody.webSocketBroadcast, true);
   assert.equal(rooms.calls.length, 1);
@@ -6481,70 +6510,8 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(chatBody.messages[0].text.includes("デプロイ完了イベントを受信しました。"), true);
   assert.equal(chatBody.messages[0].text.includes("- PR: PR #552"), true);
   assert.equal(chatBody.messages[0].text.includes("bare #552"), false);
-  assert.equal(chatBody.messages[1].text.includes("approval URL:"), true);
-
-  await provider.store({
-    id: "approval:deploy-bridge-followup",
-    type: MemoryRecordType.APPROVAL_LOG,
-    content: {
-      kind: "passkey_grant",
-      status: "verified",
-      approvalId: "approval:deploy-bridge-followup",
-      credentialId: "AQIDBA",
-      verifiedAt: "2026-05-20T00:11:00.000Z",
-      expiresAt: "2999-01-01T00:00:00.000Z",
-      scope: eventBody.deployBridgeFollowup.approvalScope
-    },
-    metadata: { source: "deploy-bridge-followup-test" },
-    priority: 96,
-    tags: ["passkey_grant", "passkey_approval", "verified"],
-    createdAt: "2026-05-20T00:11:00.000Z"
-  });
-  const queueCalls = [];
-  const approvedResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/messages", {
-      method: "POST",
-      headers: gatewayAuthHeaders,
-      body: JSON.stringify({
-        threadId: "dashboard-main-marushu-vtdd-v2-p",
-        repository: "marushu/vtdd-v2-p",
-        issueNumber: 741,
-        text: "deploy 後 bridge sync/restart を承認済みなので進めて。",
-        vpsProposalId: eventBody.deployBridgeFollowup.vpsProposalId,
-        approvalGrantId: "approval:deploy-bridge-followup",
-        executionId: "deploy-bridge-followup-26133044458"
-      })
-    }),
-    {
-      ...gatewayAuthEnv,
-      DASHBOARD_CHAT_STORE: chatStore,
-      MEMORY_PROVIDER: provider,
-      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
-      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
-      GITHUB_APP_INSTALLATION_TOKEN: "ghs_deploy_bridge_followup",
-      GITHUB_API_FETCH: async (url, init) => {
-        queueCalls.push({ url, init });
-        return new Response(
-          JSON.stringify({
-            id: 74101,
-            html_url: "https://github.com/marushu/vtdd-v2-p/issues/741#issuecomment-74101"
-          }),
-          { status: 201, headers: { "content-type": "application/json" } }
-        );
-      }
-    }
-  );
-  assert.equal(approvedResponse.status, 202);
-  const approvedBody = await approvedResponse.json();
-  assert.equal(approvedBody.execution.status, "queued_for_vps_helper_execution");
-  assert.equal(approvedBody.execution.runtimeTruth.helperQueueReached, true);
-  assert.equal(approvedBody.execution.runtimeTruth.rootExecutionStarted, false);
-  assert.equal(approvedBody.execution.runtimeTruth.helperExecutionStarted, false);
-  assert.equal(queueCalls.length, 1);
-  const queueCommentBody = JSON.parse(queueCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:deploy-bridge-followup-26133044458"), true);
-  assert.equal(queueCommentBody.includes('"commandClass": "dashboard_bridge_unresolved_deploy_sync_restart"'), true);
-  assert.equal(queueCommentBody.includes("sync-dashboard-app-server-bridge-after-deploy.mjs"), true);
+  assert.equal(chatBody.messages[1].text.includes("approval URL:"), false);
+  assert.equal(chatBody.messages[1].text.includes("追加 passkey は不要です。"), true);
 
   const duplicateResponse = await worker.fetch(
     new Request("https://example.com/v2/events/github-actions", {
@@ -6590,14 +6557,14 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: chatStore }
   );
   const duplicateChatBody = await duplicateChat.json();
-  assert.equal(duplicateChatBody.messages.length, 4);
+  assert.equal(duplicateChatBody.messages.length, 2);
   assert.equal(duplicateChatBody.messages[0].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458");
   assert.equal(duplicateBody.deployBridgeFollowup.status, "duplicate_event_skipped");
   const approvalRecordsAfterDuplicate = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 20 });
   const duplicateFollowupProposals = approvalRecordsAfterDuplicate.filter(
     (record) => record.content?.proposal?.capability?.commandClass === "dashboard_bridge_unresolved_deploy_sync_restart"
   );
-  assert.equal(duplicateFollowupProposals.length, 1);
+  assert.equal(duplicateFollowupProposals.length, 0);
   const runtimeSource = await fs.readFile(path.join(process.cwd(), "src", "worker", "runtime.js"), "utf8");
   assert.equal(runtimeSource.includes("PRIMARY KEY (thread_id, message_id)"), true);
   assert.equal(runtimeSource.includes("INSERT OR REPLACE INTO vtdd_dashboard_chat_messages"), true);

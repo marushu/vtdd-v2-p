@@ -286,6 +286,7 @@ jobs:
           DEPLOY_SHA: ${{ github.sha }}
           DEPLOY_BRANCH: ${{ github.ref_name }}
           RUNTIME_URL: ${{ github.event.inputs.runtime_url }}
+          APPROVAL_GRANT_ID: ${{ github.event.inputs.approval_grant_id }}
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
@@ -372,6 +373,7 @@ jobs:
               displayTitle: changeSummary || "deploy-production",
               changeSummary: changeSummary || null,
               pullNumber: pullNumber || null,
+              approvalGrantId: process.env.APPROVAL_GRANT_ID || null,
               updatedAt: new Date().toISOString()
             };
             process.stdout.write(JSON.stringify(payload));

@@ -348,6 +348,33 @@ test("dashboard app-server bridge wraps repository traffic-control context into 
   assert.match(text, /Owner message:\nDashboard Butler が交通整理できるようにして/);
 });
 
+test("dashboard app-server bridge wraps VPS maintenance pass-through context into turn input", () => {
+  const text = buildDashboardTurnInputText({
+    text: "app-server bridge を再起動したい。",
+    vpsMaintenancePassThrough: {
+      kind: "dashboard_vps_maintenance_pass_through",
+      status: "passed_to_app_server_bridge",
+      missingContext: ["repository", "relatedIssue"],
+      missingConfiguration: ["host", "workingDirectories"],
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      workerProposalCreated: false,
+      guidance: [
+        "VPS / root / helper / restart / deploy recovery の実行を開始しないでください。",
+        "不足している repository、related Issue、または runtime config を日本語で短く確認してください。"
+      ]
+    }
+  });
+
+  assert.match(text, /Dashboard Butler turn context/);
+  assert.match(text, /vpsMaintenancePassThrough/);
+  assert.match(text, /"missingContext":\["repository","relatedIssue"\]/);
+  assert.match(text, /"missingConfiguration":\["host","workingDirectories"\]/);
+  assert.match(text, /"rootExecutionStarted":false/);
+  assert.match(text, /実行を開始しない/);
+  assert.match(text, /不足情報を日本語で短く確認/);
+});
+
 test("dashboard app-server bridge includes attachment delivery truth in turn input", () => {
   const text = buildDashboardTurnInputText({
     repository: "marushu/vtdd-v2-p",

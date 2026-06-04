@@ -11,6 +11,9 @@ function createFakeRunner({ dirty = false } = {}) {
     if (joined === "git rev-parse HEAD") {
       return { status: 0, stdout: `${head}\n`, stderr: "" };
     }
+    if (joined === "git rev-parse origin/main") {
+      return { status: 0, stdout: `${head === "after-sha" ? "after-sha" : "remote-before-sha"}\n`, stderr: "" };
+    }
     if (joined === "git status --short --branch") {
       return { status: 0, stdout: "## main...origin/main\n?? .tmp/\n", stderr: "" };
     }
@@ -62,6 +65,10 @@ test("deploy bridge sync/restart helper fast-forwards checkout and restarts unre
   assert.equal(result.status, "synced_and_restarted");
   assert.equal(result.runtimeTruth.beforeSha, "before-sha");
   assert.equal(result.runtimeTruth.afterSha, "after-sha");
+  assert.equal(result.runtimeTruth.targetRef, "origin/main");
+  assert.equal(result.runtimeTruth.targetRefSha, "after-sha");
+  assert.equal(result.runtimeTruth.syncVerified, true);
+  assert.equal(result.runtimeTruth.afterMatchesTargetRef, true);
   assert.equal(result.runtimeTruth.afterServiceMainPid, "1234");
   assert.deepEqual(fake.calls.filter((call) => call[0] === "systemctl" && call.includes("restart")), [
     ["systemctl", "--user", "restart", "vtdd-dashboard-app-server-bridge-unresolved.service"]

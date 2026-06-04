@@ -103,6 +103,7 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
     true
   );
   assert.equal(workflow.includes("Validate real passkey approval grant"), true);
+  assert.equal(workflow.includes("approval_grant_id is required for production deploy."), true);
   assert.equal(
     workflow.indexOf("Preflight Cloudflare Workers deploy entitlement") <
       workflow.indexOf("Validate real passkey approval grant"),
@@ -229,7 +230,13 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("          NODE\n              rm -f \"$response_file\""), true);
   assert.equal(workflow.includes("deploy remains successful, but dashboard may be stale until the next event"), true);
   assert.equal(workflow.includes("authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}"), true);
-  assert.equal(workflow.includes('approvalGrantId'), false);
+  assert.equal(workflow.includes('APPROVAL_GRANT_ID: ${{ github.event.inputs.approval_grant_id }}'), true);
+  assert.equal(workflow.includes('approvalGrantId: process.env.APPROVAL_GRANT_ID || null'), true);
+  assert.equal(
+    workflow.indexOf('APPROVAL_GRANT_ID: ${{ github.event.inputs.approval_grant_id }}') <
+      workflow.indexOf('approvalGrantId: process.env.APPROVAL_GRANT_ID || null'),
+    true
+  );
   assert.equal(workflow.includes("if: always()"), true);
   assert.equal(
     workflow.includes("DEPLOY_NOTIFICATION_ISSUE_NUMBER: ${{ vars.VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER }}"),
