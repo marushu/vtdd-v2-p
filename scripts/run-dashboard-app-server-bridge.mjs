@@ -138,10 +138,11 @@ export function buildDashboardAppServerUsageProfileCommandConfig({
   usageProfile = null,
   defaultProfile = "",
   defaultModel = "",
-  defaultReasoningEffort = ""
+  defaultReasoningEffort = "",
+  ignoreDefaultModel = false
 } = {}) {
   const normalizedUsageProfile = normalizeDashboardAppServerUsageProfile(usageProfile || defaultProfile || "conversation");
-  const model = normalizeBridgeText(normalizedUsageProfile.model || defaultModel);
+  const model = normalizeBridgeText(normalizedUsageProfile.model || (ignoreDefaultModel ? "" : defaultModel));
   const reasoningEffort = normalizeBridgeText(normalizedUsageProfile.reasoningEffort || defaultReasoningEffort);
   const profile = normalizeBridgeText(normalizedUsageProfile.profile || defaultProfile) || "conversation";
   return {
@@ -179,6 +180,21 @@ export function buildDashboardAppServerCommandArgs({
     args.push("-c", `model_reasoning_effort=${JSON.stringify(normalizedReasoningEffort)}`);
   }
   return args;
+}
+
+export function isDashboardAppServerUnsupportedChatGptAccountModelError(errorLike = null) {
+  const text = normalizeBridgeText(
+    typeof errorLike === "string"
+      ? errorLike
+      : errorLike?.message || errorLike?.error?.message || JSON.stringify(errorLike || "")
+  );
+  return /model is not supported when using Codex with a ChatGPT account/i.test(text);
+}
+
+export function stripDashboardAppServerModelFromUsageProfile(usageProfile = null) {
+  const normalized = normalizeDashboardAppServerUsageProfile(usageProfile || "conversation");
+  const { model: _model, ...withoutModel } = normalized;
+  return withoutModel;
 }
 
 export function buildDashboardTurnInputText(request = {}) {
@@ -2005,13 +2021,24 @@ export function createDashboardAppServerClientSelector({
   defaultReasoningEffort = ""
 } = {}) {
   const clients = new Map();
-  return async function selectAppServerForRequest(request = {}) {
+  async function selectAppServerForRequestWithOptions(request = {}, { ignoreDefaultModel = false, rejectedModel = "" } = {}) {
+    const usageProfile = ignoreDefaultModel
+      ? stripDashboardAppServerModelFromUsageProfile(request.usageProfile || defaultProfile || "conversation")
+      : request.usageProfile;
     const config = buildDashboardAppServerUsageProfileCommandConfig({
-      usageProfile: request.usageProfile,
+      usageProfile,
       defaultProfile,
       defaultModel,
-      defaultReasoningEffort
+      defaultReasoningEffort,
+      ignoreDefaultModel
     });
+    if (ignoreDefaultModel && normalizeBridgeText(rejectedModel)) {
+      config.costBoundary = {
+        ...config.costBoundary,
+        unsupportedModelFallback: true,
+        rejectedModel: normalizeBridgeText(rejectedModel)
+      };
+    }
     if (staticAppServer || !request.usageProfile) {
       return {
         appServer: defaultAppServer,
@@ -2031,7 +2058,14 @@ export function createDashboardAppServerClientSelector({
       appServer: clients.get(key),
       ...config
     };
-  };
+  }
+  const selector = (request = {}) => selectAppServerForRequestWithOptions(request);
+  selector.withoutModel = (request = {}, options = {}) =>
+    selectAppServerForRequestWithOptions(request, {
+      ...options,
+      ignoreDefaultModel: true
+    });
+  return selector;
 }
 
 export function buildDashboardAppServerBridgeEndpoint(options = {}) {
@@ -2432,21 +2466,50 @@ export async function connectDashboardAppServerBridgeOnce({
             typeof selectAppServerForRequest === "function"
               ? await selectAppServerForRequest(payload)
               : { appServer, usageProfile: payload.usageProfile || null, costBoundary: payload.costBoundary || null };
-          return handleDashboardTurnRequest({
-            request: payload,
-            appServer: selected.appServer || appServer,
-            usageProfile: selected.usageProfile || payload.usageProfile || null,
-            costBoundary: selected.costBoundary || payload.costBoundary || null,
-            sendDashboardEvent: async (dashboardEvent) => safeSend(dashboardEvent),
-            cwd,
-            sandboxMode,
-            turnTimeoutMs,
-            activityQuietMs,
-            runtimeUrl,
-            token,
-            fetchImpl,
-            mediaTmpRoot
-          });
+          const runSelectedTurn = (turnSelection) =>
+            handleDashboardTurnRequest({
+              request: payload,
+              appServer: turnSelection.appServer || appServer,
+              usageProfile: turnSelection.usageProfile || payload.usageProfile || null,
+              costBoundary: turnSelection.costBoundary || payload.costBoundary || null,
+              sendDashboardEvent: async (dashboardEvent) => safeSend(dashboardEvent),
+              cwd,
+              sandboxMode,
+              turnTimeoutMs,
+              activityQuietMs,
+              runtimeUrl,
+              token,
+              fetchImpl,
+              mediaTmpRoot
+            });
+          try {
+            return await runSelectedTurn(selected);
+          } catch (error) {
+            if (
+              !isAppServerFailureAlreadySent(error) &&
+              isDashboardAppServerUnsupportedChatGptAccountModelError(error) &&
+              selected?.costBoundary?.modelConfigured === true &&
+              typeof selectAppServerForRequest?.withoutModel === "function"
+            ) {
+              const fallbackSelected = await selectAppServerForRequest.withoutModel(payload, {
+                rejectedModel: selected.usageProfile?.model || selected.costBoundary?.model || payload.usageProfile?.model || ""
+              });
+              safeSend({
+                type: "app_server_status",
+                schema: DEFAULT_SCHEMA,
+                threadId: payload.threadId,
+                codexThreadId: payload.codexThreadId || null,
+                status: "unsupported_model_fallback",
+                stage: "runtime_recovery",
+                text: "指定 model が ChatGPT account で非対応のため、model override なしで app-server に再送しています。",
+                persistProgress: true,
+                usageProfile: fallbackSelected.usageProfile || null,
+                costBoundary: fallbackSelected.costBoundary || null
+              });
+              return await runSelectedTurn(fallbackSelected);
+            }
+            throw error;
+          }
         })
         .catch((error) => {
           if (isAppServerFailureAlreadySent(error)) {
