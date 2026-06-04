@@ -4771,6 +4771,14 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
   assert.equal(transientDelta.type, "transient_status");
   assert.equal(transientDelta.status, "thinking");
   assert.equal(transientDelta.text, "日本");
+  assert.deepEqual(
+    transientDelta.transientProgressSnapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
+    [["日本", "app_server_reply_delta"]]
+  );
+  assert.deepEqual(
+    storage.values.get("transient_progress_snapshot:dashboard-main-unresolved").progressSummary.entries.map((entry) => [entry.text, entry.source]),
+    [["日本", "app_server_reply_delta"]]
+  );
 
   await room.webSocketMessage(
     bridgeSocket,
@@ -4787,6 +4795,10 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
   assert.equal(stored[0].role, "butler");
   assert.equal(stored[0].status, "replied");
   assert.equal(stored[0].text, "日本時間では、今日は 05月22日 20時09分です。");
+  assert.deepEqual(
+    stored[0].progressSummary.entries.map((entry) => [entry.text, entry.source]),
+    [["日本", "app_server_reply_delta"]]
+  );
 });
 
 test("DashboardChatRoom does not rewrite unchanged app-server thread mapping during transient bursts", async () => {
@@ -4856,6 +4868,62 @@ test("DashboardChatRoom does not rewrite unchanged app-server thread mapping dur
 
   assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-451");
   assert.equal(storage.putCalls.filter((call) => call.key === "app_server_thread:dashboard-main-unresolved").length, 2);
+});
+
+test("DashboardChatRoom keeps only the latest assistant reply delta checkpoint", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "planning",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-590",
+      text: "方針を整理しています。"
+    })
+  );
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply_delta",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-590",
+      progressText: "その通りです。"
+    })
+  );
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply_delta",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-590",
+      progressText: "その通りです。\n\n今の時点で #590 は終わっていません。"
+    })
+  );
+
+  const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
+  assert.deepEqual(
+    snapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
+    [
+      ["方針を整理しています。", "app_server_status"],
+      ["その通りです。\n\n今の時点で #590 は終わっていません。", "app_server_reply_delta"]
+    ]
+  );
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 
 test("DashboardChatRoom persists app-server timeout as recoverable Japanese thread message", async () => {
@@ -5029,7 +5097,7 @@ test("DashboardChatRoom exposes last app-server status snapshot on thread reconn
   assert.deepEqual(payload.transientProgressSnapshot, snapshot);
 });
 
-test("DashboardChatRoom keeps app-server reply deltas out of progress snapshots", async () => {
+test("DashboardChatRoom keeps app-server reply deltas out of durable chat while exposing live checkpoints", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -5054,8 +5122,13 @@ test("DashboardChatRoom keeps app-server reply deltas out of progress snapshots"
     })
   );
 
-  assert.equal(storage.values.has("transient_progress_snapshot:dashboard-main-unresolved"), false);
-  assert.equal(storage.putCalls.some((call) => call.key === "transient_progress_snapshot:dashboard-main-unresolved"), false);
+  const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
+  assert.equal(snapshot.text, "途中の返答断片");
+  assert.deepEqual(
+    snapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
+    [["途中の返答断片", "app_server_reply_delta"]]
+  );
+  assert.equal(storage.putCalls.some((call) => call.key === "transient_progress_snapshot:dashboard-main-unresolved"), true);
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 
