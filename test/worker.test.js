@@ -1270,6 +1270,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function updateTransientProgress(text, options = {})"), true);
   assert.equal(body.includes("function clearTransientProgress()"), true);
   assert.equal(body.includes("function renderTransientProgress()"), true);
+  assert.equal(body.includes("function renderProgressSummaryDetails(progressSummary)"), true);
+  assert.equal(body.includes("進行ログ"), true);
+  assert.equal(body.includes(".progress-summary"), true);
   const renderTransientProgressSource = body.match(/function renderTransientProgress\(\) \{[\s\S]*?\n      \}/)?.[0] || "";
   assert.equal(renderTransientProgressSource.includes("scrollToLatest()"), false);
   assert.equal(renderTransientProgressSource.includes("updateComposerReserve()"), true);
@@ -4966,6 +4969,17 @@ test("DashboardChatRoom clears transient progress snapshot after final reply", a
     JSON.stringify({
       type: "app_server_status",
       status: "thinking",
+      stage: "planning",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "raw plan detail"
+    })
+  );
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
       stage: "test",
       threadId: "dashboard-main-unresolved",
       codexThreadId: "codex-thread-450",
@@ -4973,6 +4987,10 @@ test("DashboardChatRoom clears transient progress snapshot after final reply", a
     })
   );
   assert.equal(storage.values.get("transient_progress_snapshot:dashboard-main-unresolved").text, "テストを実行しています。");
+  assert.deepEqual(
+    storage.values.get("transient_progress_snapshot:dashboard-main-unresolved").progressSummary.entries.map((entry) => entry.text),
+    ["方針を整理しています。", "テストを実行しています。"]
+  );
 
   await room.webSocketMessage(
     bridgeSocket,
@@ -4988,7 +5006,16 @@ test("DashboardChatRoom clears transient progress snapshot after final reply", a
   assert.equal(storage.deleteCalls.filter((call) => call.key === "transient_progress_snapshot:dashboard-main-unresolved").length >= 1, true);
   const threadPayloads = dashboardSocket.sent.map((message) => JSON.parse(message)).filter((message) => message.type === "thread");
   assert.equal(threadPayloads.at(-1).transientProgressSnapshot, null);
-  assert.equal((await store.listThread("dashboard-main-unresolved")).at(-1).text, "検証が終わりました。");
+  const finalMessage = (await store.listThread("dashboard-main-unresolved")).at(-1);
+  assert.equal(finalMessage.text, "検証が終わりました。");
+  assert.deepEqual(
+    finalMessage.progressSummary.entries.map((entry) => entry.text),
+    ["方針を整理しています。", "テストを実行しています。"]
+  );
+  assert.deepEqual(
+    threadPayloads.at(-1).messages.at(-1).progressSummary.entries.map((entry) => entry.text),
+    ["方針を整理しています。", "テストを実行しています。"]
+  );
 });
 
 test("DashboardChatRoom keeps generic opt-in app-server progress transient-only", async () => {

@@ -58433,6 +58433,7 @@ var DashboardChatRoom = class {
         updatedAt: normalized.createdAt
       });
     }
+    const finalProgressSnapshot = normalized.transientStatus === "replied" ? await this.readTransientProgressSnapshot(normalized.threadId) : null;
     if (normalized.transientStatus === "replied") {
       await this.clearTransientProgressSnapshot(normalized.threadId);
     }
@@ -58448,11 +58449,15 @@ var DashboardChatRoom = class {
     if (normalized.messages.length === 0) {
       return;
     }
+    const bridgeMessages = attachDashboardProgressSummaryToFinalMessages(
+      normalized.messages,
+      finalProgressSnapshot
+    );
     const store = resolveDashboardChatStore(this.env);
     const messagesToAppend = await filterDashboardAppServerBridgeMessagesForAppend({
       store,
       threadId: normalized.threadId,
-      messages: normalized.messages
+      messages: bridgeMessages
     });
     if (messagesToAppend.length === 0) {
       return;
@@ -58549,18 +58554,19 @@ var DashboardChatRoom = class {
   }
   async writeTransientProgressSnapshot({ threadId, status = "", text = "", source = "" } = {}) {
     const key = this.transientProgressSnapshotKey(threadId);
+    const previous = await this.readTransientProgressSnapshot(threadId);
     const normalized = normalizeDashboardTransientProgressSnapshot({
       threadId,
       status,
       text,
       source,
+      progressSummary: buildDashboardProgressSummarySnapshot(previous, { text }),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
     if (!key || !normalized || typeof this.ctx?.storage?.put !== "function") {
       return false;
     }
-    const previous = await this.readTransientProgressSnapshot(threadId);
-    if (previous && previous.status === normalized.status && previous.text === normalized.text && previous.source === normalized.source) {
+    if (previous && previous.status === normalized.status && previous.text === normalized.text && previous.source === normalized.source && dashboardProgressSummaryEntriesKey(previous.progressSummary) === dashboardProgressSummaryEntriesKey(normalized.progressSummary)) {
       return false;
     }
     await this.ctx.storage.put(key, normalized);
@@ -66723,13 +66729,76 @@ function normalizeDashboardTransientProgressSnapshot(value) {
   if (!threadId || !text || !isDashboardSnapshotTransientStatus(status)) {
     return null;
   }
+  const progressSummary = normalizeDashboardProgressSummary(input.progressSummary || input.progress_summary);
   return {
     threadId,
     status,
     text,
     source: sanitizeDashboardChatText(input.source || ""),
+    ...progressSummary.entries.length ? { progressSummary } : {},
     updatedAt: normalizeIsoTimestamp(input.updatedAt || input.updated_at) || (/* @__PURE__ */ new Date()).toISOString()
   };
+}
+function normalizeDashboardProgressSummary(value) {
+  const input = normalizeObject12(value);
+  const rawEntries = Array.isArray(input.entries) ? input.entries : [];
+  const entries = [];
+  let totalLength = 0;
+  for (const rawEntry of rawEntries) {
+    const text = sanitizeDashboardChatText(rawEntry?.text || rawEntry);
+    if (!text) continue;
+    const entry = {
+      text,
+      at: normalizeIsoTimestamp(rawEntry?.at || rawEntry?.createdAt || rawEntry?.created_at) || ""
+    };
+    const entryLength = entry.text.length + entry.at.length;
+    if (totalLength + entryLength > 3200) break;
+    entries.push(entry);
+    totalLength += entryLength;
+  }
+  return {
+    entries,
+    updatedAt: normalizeIsoTimestamp(input.updatedAt || input.updated_at) || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function buildDashboardProgressSummarySnapshot(previous, { text = "" } = {}) {
+  const previousSummary = normalizeDashboardProgressSummary(previous?.progressSummary);
+  const entries = [...previousSummary.entries];
+  const normalizedText = sanitizeDashboardChatText(text);
+  if (normalizedText) {
+    const latest = entries.at(-1);
+    if (!latest || latest.text !== normalizedText) {
+      entries.push({
+        text: normalizedText,
+        at: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    }
+  }
+  return normalizeDashboardProgressSummary({
+    entries,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+}
+function dashboardProgressSummaryEntriesKey(progressSummary) {
+  const normalized = normalizeDashboardProgressSummary(progressSummary);
+  return JSON.stringify(normalized.entries.map((entry) => entry.text));
+}
+function attachDashboardProgressSummaryToFinalMessages(messages = [], snapshot = null) {
+  const progressSummary = normalizeDashboardProgressSummary(snapshot?.progressSummary);
+  if (!progressSummary.entries.length) {
+    return messages;
+  }
+  return (Array.isArray(messages) ? messages : []).map((message) => {
+    const role = normalizeDashboardEventText(message?.role).toLowerCase();
+    const status = normalizeDashboardChatStatus(message?.status);
+    if (role !== "butler" || status !== "replied") {
+      return message;
+    }
+    return {
+      ...message,
+      progressSummary
+    };
+  });
 }
 function isDashboardSnapshotTransientStatus(status) {
   return [
@@ -68956,6 +69025,7 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
   }
   const role = normalizeDashboardChatRole(input.role);
   const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || (/* @__PURE__ */ new Date()).toISOString();
+  const progressSummary = normalizeDashboardProgressSummary(input.progressSummary || input.progress_summary);
   return {
     threadId,
     messageId: normalizeDashboardEventText(input.messageId || input.message_id) || crypto.randomUUID(),
@@ -68964,6 +69034,7 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
     relatedIssue: normalizePositiveInteger10(input.relatedIssue || input.issueNumber || input.related_issue),
     status: normalizeDashboardChatStatus(input.status),
     text: sanitizeDashboardChatText(input.text || input.message || input.body) || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09",
+    ...progressSummary.entries.length ? { progressSummary } : {},
     mediaReferences: normalizeMediaReferences(input.mediaReferences || input.media_references || input.media),
     createdAt
   };
@@ -71973,6 +72044,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
+    .progress-summary { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: rgba(247, 248, 244, .8); color: var(--muted); }
+    .progress-summary summary { cursor: pointer; font-weight: 800; color: var(--text); }
+    .progress-summary ol { margin: 10px 0 0; padding-left: 22px; }
+    .progress-summary li { margin-top: 6px; overflow-wrap: anywhere; word-break: break-word; }
     .reply-context { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: min(100%, 680px); margin: 0 0 10px; padding: 8px 10px; border: 0; border-left: 3px solid var(--border); border-radius: 0 8px 8px 0; background: var(--soft); color: var(--muted); font: inherit; font-size: 12px; line-height: 1.45; text-align: left; cursor: pointer; }
     .reply-context:hover, .reply-context:focus-visible { color: var(--text); background: var(--panel-strong); outline: none; }
     .reply-context:focus-visible { box-shadow: 0 0 0 2px var(--link); }
@@ -72955,6 +73030,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (media) {
           article.appendChild(media);
         }
+        const progressSummary = renderProgressSummaryDetails(message.progressSummary || message.progress_summary);
+        if (progressSummary) {
+          article.appendChild(progressSummary);
+        }
         entry.appendChild(article);
         const actions = document.createElement("div");
         actions.className = "message-actions";
@@ -72981,6 +73060,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (target === log && options.scroll !== false) {
           scrollToLatest();
         }
+      }
+
+      function renderProgressSummaryDetails(progressSummary) {
+        const entries = Array.isArray(progressSummary && progressSummary.entries) ? progressSummary.entries : [];
+        const normalizedEntries = entries
+          .map((entry) => String(entry && entry.text || entry || "").trim())
+          .filter(Boolean);
+        if (!normalizedEntries.length) return null;
+        const details = document.createElement("details");
+        details.className = "progress-summary";
+        const summary = document.createElement("summary");
+        summary.textContent = "\u9032\u884C\u30ED\u30B0";
+        details.appendChild(summary);
+        const list = document.createElement("ol");
+        for (const text of normalizedEntries) {
+          const item = document.createElement("li");
+          item.textContent = text;
+          list.appendChild(item);
+        }
+        details.appendChild(list);
+        return details;
       }
 
       function formatMessageTimestamp(value) {
