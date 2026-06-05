@@ -4175,6 +4175,8 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.match(status.text, /Codex usage を消費し得ます/);
   assert.match(status.text, /usage_profile=conversation/);
   assert.match(status.text, /reasoning_effort=low/);
+  assert.equal(status.transientProgressSnapshot.text, status.text);
+  assert.equal(status.transientProgressSnapshot.progressSummary, undefined);
 });
 
 test("DashboardChatRoom forwards cost-aware owner turns to app-server bridge", async () => {
@@ -4224,6 +4226,8 @@ test("DashboardChatRoom forwards cost-aware owner turns to app-server bridge", a
   assert.equal(status.status, "thinking");
   assert.match(status.text, /Codex app-server に渡しています/);
   assert.match(status.text, /usage_profile=conversation/);
+  assert.equal(status.transientProgressSnapshot.text, status.text);
+  assert.equal(status.transientProgressSnapshot.progressSummary, undefined);
 });
 
 test("DashboardChatRoom forwards PR status owner turns to app-server bridge", async () => {
@@ -4291,6 +4295,8 @@ test("DashboardChatRoom forwards PR status owner turns to app-server bridge", as
   assert.equal(sentPayloads.at(-1).type, "transient_status");
   assert.match(sentPayloads.at(-1).text, /Codex app-server に渡しています/);
   assert.match(sentPayloads.at(-1).text, /usage_profile=status_read/);
+  assert.equal(sentPayloads.at(-1).transientProgressSnapshot.text, sentPayloads.at(-1).text);
+  assert.equal(sentPayloads.at(-1).transientProgressSnapshot.progressSummary, undefined);
 });
 
 test("DashboardChatRoom forwards repo-less PR status owner turns to app-server bridge", async () => {
@@ -4325,6 +4331,8 @@ test("DashboardChatRoom forwards repo-less PR status owner turns to app-server b
   const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
   assert.equal(sentPayloads.at(-1).type, "transient_status");
   assert.match(sentPayloads.at(-1).text, /Codex app-server に渡しています/);
+  assert.equal(sentPayloads.at(-1).transientProgressSnapshot.text, sentPayloads.at(-1).text);
+  assert.equal(sentPayloads.at(-1).transientProgressSnapshot.progressSummary, undefined);
 });
 
 test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal before app-server bridge", async () => {
@@ -4893,15 +4901,9 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
   const transientDelta = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(transientDelta.type, "transient_status");
   assert.equal(transientDelta.status, "thinking");
-  assert.equal(transientDelta.text, "日本");
-  assert.deepEqual(
-    transientDelta.transientProgressSnapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
-    [["日本", "app_server_reply_delta"]]
-  );
-  assert.deepEqual(
-    storage.values.get("transient_progress_snapshot:dashboard-main-unresolved").progressSummary.entries.map((entry) => [entry.text, entry.source]),
-    [["日本", "app_server_reply_delta"]]
-  );
+  assert.equal(transientDelta.text, "応答を生成しています。");
+  assert.equal(transientDelta.transientProgressSnapshot.progressSummary, undefined);
+  assert.equal(storage.values.get("transient_progress_snapshot:dashboard-main-unresolved").progressSummary, undefined);
 
   await room.webSocketMessage(
     bridgeSocket,
@@ -4990,7 +4992,7 @@ test("DashboardChatRoom does not rewrite unchanged app-server thread mapping dur
   assert.equal(storage.putCalls.filter((call) => call.key === "app_server_thread:dashboard-main-unresolved").length, 2);
 });
 
-test("DashboardChatRoom keeps only the latest assistant reply delta checkpoint", async () => {
+test("DashboardChatRoom keeps assistant reply deltas transient-only without checkpoint bubbles", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -5036,12 +5038,10 @@ test("DashboardChatRoom keeps only the latest assistant reply delta checkpoint",
   );
 
   const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
+  assert.equal(snapshot.text, "応答を生成しています。");
   assert.deepEqual(
     snapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
-    [
-      ["方針を整理しています。", "app_server_status"],
-      ["その通りです。\n\n今の時点で #590 は終わっていません。", "app_server_reply_delta"]
-    ]
+    [["方針を整理しています。", "app_server_status"]]
   );
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
@@ -5488,7 +5488,7 @@ test("DashboardChatRoom marks bridge lifecycle status as muted progress checkpoi
   );
 });
 
-test("DashboardChatRoom keeps app-server reply deltas out of durable chat while exposing live checkpoints", async () => {
+test("DashboardChatRoom keeps app-server reply deltas out of durable chat and checkpoint bubbles", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -5514,16 +5514,13 @@ test("DashboardChatRoom keeps app-server reply deltas out of durable chat while 
   );
 
   const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
-  assert.equal(snapshot.text, "途中の返答断片");
-  assert.deepEqual(
-    snapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
-    [["途中の返答断片", "app_server_reply_delta"]]
-  );
+  assert.equal(snapshot.text, "応答を生成しています。");
+  assert.equal(snapshot.progressSummary, undefined);
   assert.equal(storage.putCalls.some((call) => call.key === "transient_progress_snapshot:dashboard-main-unresolved"), true);
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 
-test("DashboardChatRoom preserves readable checkpoint when low-information file status follows reply delta", async () => {
+test("DashboardChatRoom does not promote reply delta when low-information file status follows", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -5561,16 +5558,10 @@ test("DashboardChatRoom preserves readable checkpoint when low-information file 
 
   const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
   assert.equal(snapshot.text, "ファイル変更を確認しています。");
-  assert.deepEqual(
-    snapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
-    [["Issue #590 の表示レーンを確認しています。", "app_server_reply_delta"]]
-  );
+  assert.equal(snapshot.progressSummary, undefined);
   const transientPayloads = dashboardSocket.sent.map((message) => JSON.parse(message)).filter((message) => message.type === "transient_status");
   assert.equal(transientPayloads.at(-1).text, "ファイル変更を確認しています。");
-  assert.deepEqual(
-    transientPayloads.at(-1).transientProgressSnapshot.progressSummary.entries.map((entry) => entry.text),
-    ["Issue #590 の表示レーンを確認しています。"]
-  );
+  assert.equal(transientPayloads.at(-1).transientProgressSnapshot.progressSummary, undefined);
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 
@@ -5661,7 +5652,7 @@ test("DashboardChatRoom separates low-information transient progress from owner-
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 
-test("DashboardChatRoom keeps long-turn fallback as owner-facing progress checkpoint", async () => {
+test("DashboardChatRoom keeps long-turn fallback transient-only without chat checkpoint bubbles", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
@@ -5691,15 +5682,10 @@ test("DashboardChatRoom keeps long-turn fallback as owner-facing progress checkp
 
   const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
   assert.equal(snapshot.text, "作業を継続しています。まだ最終回答は生成中です。");
-  assert.deepEqual(
-    snapshot.progressSummary.entries.map((entry) => entry.text),
-    ["作業を継続しています。まだ最終回答は生成中です。"]
-  );
+  assert.equal(snapshot.progressSummary, undefined);
   const transientPayload = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "transient_status");
-  assert.deepEqual(
-    transientPayload.transientProgressSnapshot.progressSummary.entries.map((entry) => entry.text),
-    ["作業を継続しています。まだ最終回答は生成中です。"]
-  );
+  assert.equal(transientPayload.text, "作業を継続しています。まだ最終回答は生成中です。");
+  assert.equal(transientPayload.transientProgressSnapshot.progressSummary, undefined);
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 

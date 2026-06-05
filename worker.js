@@ -66729,7 +66729,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   let snapshotSource = "";
   if (eventType === "app_server_reply_delta") {
     transientStatus = "thinking";
-    transientText = progressText || text;
+    transientText = "\u5FDC\u7B54\u3092\u751F\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
     snapshotTransientStatus = true;
     snapshotSource = "app_server_reply_delta";
   } else if (eventType === "app_server_reply") {
@@ -66883,7 +66883,7 @@ function buildDashboardProgressSummarySnapshot(previous, { text = "", source = "
   const normalizedSource = sanitizeDashboardChatText(source);
   const entries = normalizedSource === "app_server_reply_delta" ? previousSummary.entries.filter((entry) => entry.source !== "app_server_reply_delta") : [...previousSummary.entries];
   const normalizedText = sanitizeDashboardChatText(text);
-  if (normalizedText && shouldIncludeDashboardProgressSummaryEntry(normalizedText)) {
+  if (normalizedText && shouldIncludeDashboardProgressSummaryEntry(normalizedText, { source: normalizedSource })) {
     const latest = entries.at(-1);
     if (!latest || latest.text !== normalizedText) {
       entries.push({
@@ -66898,9 +66898,13 @@ function buildDashboardProgressSummarySnapshot(previous, { text = "", source = "
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   });
 }
-function shouldIncludeDashboardProgressSummaryEntry(text) {
+function shouldIncludeDashboardProgressSummaryEntry(text, { source = "" } = {}) {
   const normalizedText = sanitizeDashboardChatText(text);
   if (!normalizedText) {
+    return false;
+  }
+  const normalizedSource = sanitizeDashboardChatText(source);
+  if (DASHBOARD_PROGRESS_SUMMARY_EXCLUDED_SOURCES.has(normalizedSource)) {
     return false;
   }
   return !DASHBOARD_LOW_INFORMATION_PROGRESS_TEXT.has(normalizedText);
@@ -67053,13 +67057,21 @@ var DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = /* @__PURE__ */ new Set([
   "waiting_approval",
   "waiting_user_input"
 ]);
+var DASHBOARD_PROGRESS_SUMMARY_EXCLUDED_SOURCES = /* @__PURE__ */ new Set([
+  "app_server_reply_delta",
+  "owner_message_dispatch",
+  "pending_app_server_bridge",
+  "pending_app_server_bridge_drained"
+]);
 var DASHBOARD_LOW_INFORMATION_PROGRESS_TEXT = /* @__PURE__ */ new Set([
   "\u8003\u3048\u3066\u3044\u307E\u3059\u3002",
   "codex app-server \u304C\u5FDC\u7B54\u3092\u751F\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
   "\u30B3\u30DE\u30F3\u30C9\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
   "\u30D5\u30A1\u30A4\u30EB\u5909\u66F4\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
   "\u5916\u90E8\u30C4\u30FC\u30EB\u306E\u7D50\u679C\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
-  "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u614B\u3092\u78BA\u8A8D\u4E2D\u3067\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"
+  "\u5FDC\u7B54\u3092\u751F\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u614B\u3092\u78BA\u8A8D\u4E2D\u3067\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002",
+  "\u4F5C\u696D\u3092\u7D99\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002\u307E\u3060\u6700\u7D42\u56DE\u7B54\u306F\u751F\u6210\u4E2D\u3067\u3059\u3002"
 ]);
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
   if (transientStatus === "replied" || status === "replied") {

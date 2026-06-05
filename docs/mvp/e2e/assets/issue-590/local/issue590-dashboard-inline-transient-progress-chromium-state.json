@@ -15,7 +15,19 @@
     "textHeight": 42.875,
     "progressTextMaxHeight": "64.3125px",
     "progressTextLineClamp": "2",
-    "bubbleCount": 3,
+    "preexistingBubbleCount": 3,
+    "fixtureAddedBubbleCount": 18,
+    "bubbleCountBeforeProgress": 21,
+    "bubbleCountAfterProgress": 21,
+    "bubbleCountDeltaAfterProgress": 0,
+    "progressAddedBubbleCount": 0,
+    "blockedProgressBubbleMatches": 0,
+    "blockedProgressBubbleTexts": [],
+    "blockedPhrases": [
+      "Codex app-server に渡しています",
+      "作業を継続しています。まだ最終回答は生成中です。",
+      "続き生成中"
+    ],
     "transientCount": 1
   },
   "layoutAfterProgressUpdate": {
@@ -24,9 +36,9 @@
     "afterNextFrames": 0
   },
   "scrollPreservation": {
-    "before": 52,
-    "afterImmediate": 52,
-    "afterNextFrames": 52
+    "before": 64,
+    "afterImmediate": 64,
+    "afterNextFrames": 64
   },
   "progressScrollSource": {
     "hasGentleFollow": false,
