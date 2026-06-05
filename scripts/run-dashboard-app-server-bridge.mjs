@@ -1703,9 +1703,48 @@ export async function handleDashboardTurnRequest({
   }
 
   let codexThreadId = request.codexThreadId || null;
+  let timedOut = false;
+  let timeoutFailureSent = false;
+  const sendTimeoutFailureOnce = async () => {
+    if (timeoutFailureSent) return;
+    timeoutFailureSent = true;
+    timedOut = true;
+    await sendDashboardEvent(
+      buildAppServerTurnTimeoutEvent({
+        dashboardThreadId,
+        codexThreadId,
+        repository: request.repository,
+        relatedIssue: request.relatedIssue || request.issueNumber,
+        ownerText: text
+      })
+    );
+  };
+  const awaitAppServerRequestWithTimeout = async (promise) => {
+    const timeoutMs = Number(turnTimeoutMs);
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+      return await promise;
+    }
+    let timeoutHandle = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            sendTimeoutFailureOnce()
+              .catch(() => {})
+              .finally(() => reject(createAppServerFailureAlreadySentError(APP_SERVER_TURN_TIMEOUT_TEXT)));
+          }, timeoutMs);
+        })
+      ]);
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  };
   const resumedExistingThread = Boolean(codexThreadId);
   if (codexThreadId) {
-    await appServer.request(buildAppServerThreadResumeRequest({ id: appServer.nextRequestId(), codexThreadId, cwd, sandboxMode }));
+    await awaitAppServerRequestWithTimeout(
+      appServer.request(buildAppServerThreadResumeRequest({ id: appServer.nextRequestId(), codexThreadId, cwd, sandboxMode }))
+    );
     await sendDashboardEvent(
       buildDashboardBridgeResumeStatusEvent({
         dashboardThreadId,
@@ -1714,7 +1753,9 @@ export async function handleDashboardTurnRequest({
       })
     );
   } else {
-    const started = await appServer.request(buildAppServerThreadStartRequest({ id: appServer.nextRequestId(), cwd, sandboxMode }));
+    const started = await awaitAppServerRequestWithTimeout(
+      appServer.request(buildAppServerThreadStartRequest({ id: appServer.nextRequestId(), cwd, sandboxMode }))
+    );
     codexThreadId = started?.thread?.id || null;
     await sendDashboardEvent({
       type: "app_server_status",
@@ -1729,7 +1770,6 @@ export async function handleDashboardTurnRequest({
   let accumulatedText = "";
   let activeTurnId = "";
   let turnSettled = false;
-  let timedOut = false;
   let lateCompletionCleanupHandle = null;
   let liveProgressFallbackHandle = null;
   let liveProgressFallbackCount = 0;
@@ -1752,15 +1792,7 @@ export async function handleDashboardTurnRequest({
         text: APP_SERVER_TURN_QUIET_TEXT
       }),
     onStalled: () => {
-      timedOut = true;
-      const timeoutEvent = buildAppServerTurnTimeoutEvent({
-        dashboardThreadId,
-        codexThreadId,
-        repository: request.repository,
-        relatedIssue: request.relatedIssue || request.issueNumber,
-        ownerText: text
-      });
-      void sendDashboardEvent(timeoutEvent);
+      void sendTimeoutFailureOnce();
       lateCompletionCleanupHandle = setTimeout(() => {
         cleanupNotifications();
       }, lateCompletionTimeoutMs);
@@ -1937,14 +1969,16 @@ export async function handleDashboardTurnRequest({
       costBoundary: turnCostBoundary,
       mediaReferences: materializedMediaReferences
     });
-    const startedTurn = await appServer.request(
-      buildAppServerTurnStartRequest({
-        id: appServer.nextRequestId(),
-        codexThreadId,
-        text: turnInputText,
-        cwd,
-        sandboxMode
-      })
+    const startedTurn = await awaitAppServerRequestWithTimeout(
+      appServer.request(
+        buildAppServerTurnStartRequest({
+          id: appServer.nextRequestId(),
+          codexThreadId,
+          text: turnInputText,
+          cwd,
+          sandboxMode
+        })
+      )
     );
     const startedTurnId = String(startedTurn?.turn?.id || "");
     if (activeTurnId && startedTurnId && activeTurnId !== startedTurnId) {
