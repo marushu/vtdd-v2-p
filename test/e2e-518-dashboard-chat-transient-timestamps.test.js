@@ -126,7 +126,7 @@ test("E2E-518 dashboard route exposes timestamp renderer and transient status UI
   assert.equal(html.includes("function renderReplyContext("), true);
   assert.equal(html.includes("function appendMessage(message, target = log, options = {})"), true);
   assert.equal(html.includes("appendMessage(message, fragment, { scroll: false })"), true);
-  assert.equal(html.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-sample-org-vtdd-v2-p"'), true);
+  assert.equal(html.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-unresolved"'), true);
 });
 
 test("E2E-518 app-server stages update transient status without generic chat spam and final reply resets status", async () => {
