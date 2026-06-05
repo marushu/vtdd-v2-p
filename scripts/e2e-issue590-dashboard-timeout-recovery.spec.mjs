@@ -258,11 +258,16 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
       bubbleCountBeforeProgress: expectedBubbleCount,
       bubbleCountAfterProgress,
       bubbleCountDeltaAfterProgress: bubbleCountAfterProgress - expectedBubbleCount,
+      blockedProgressBubbleMatches: Array.from(document.querySelectorAll(".bubble")).filter((bubble) => {
+        const body = bubble.textContent || "";
+        return body.includes("Codex app-server に渡しています") || body.includes("続き生成中");
+      }).length,
       transientCount: document.querySelectorAll("[data-transient-progress='true']").length
     };
   }, beforeBubbleCount);
   expect(layout.transientCount).toBe(1);
   expect(layout.bubbleCountDeltaAfterProgress).toBe(0);
+  expect(layout.blockedProgressBubbleMatches).toBe(0);
   expect(layout.paneLeft).toBeGreaterThanOrEqual(0);
   expect(layout.paneRight).toBeLessThanOrEqual(layout.viewportWidth);
   expect(layout.paneWidth).toBeLessThanOrEqual(layout.logWidth);
@@ -312,6 +317,7 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
       "inline transient progress is visible above the composer in 390x844 mobile viewport",
       "inline transient progress does not append durable chat bubbles",
       "app-server handoff status remains transient-only",
+      "handoff and continuation markers are absent from chat bubbles",
       "progress text wraps without horizontal overflow",
       "transient progress updates preserve the owner's chat scroll position",
       "Dashboard page does not include gentle progress auto-scroll"

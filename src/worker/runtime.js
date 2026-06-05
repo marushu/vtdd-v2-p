@@ -9968,7 +9968,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   if (eventType === "app_server_reply_delta") {
     // Streaming deltas are transient progress, not durable chat messages.
     transientStatus = "thinking";
-    transientText = progressText || text;
+    transientText = "応答を生成しています。";
     snapshotTransientStatus = true;
     snapshotSource = "app_server_reply_delta";
   } else if (eventType === "app_server_reply") {
@@ -10160,9 +10160,6 @@ function shouldIncludeDashboardProgressSummaryEntry(text, { source = "" } = {}) 
   }
   const normalizedSource = sanitizeDashboardChatText(source);
   if (DASHBOARD_PROGRESS_SUMMARY_EXCLUDED_SOURCES.has(normalizedSource)) {
-    return false;
-  }
-  if (/^Codex app-server に渡しています。/.test(normalizedText)) {
     return false;
   }
   return !DASHBOARD_LOW_INFORMATION_PROGRESS_TEXT.has(normalizedText);
@@ -10362,6 +10359,7 @@ const DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = new Set([
 ]);
 
 const DASHBOARD_PROGRESS_SUMMARY_EXCLUDED_SOURCES = new Set([
+  "app_server_reply_delta",
   "owner_message_dispatch",
   "pending_app_server_bridge",
   "pending_app_server_bridge_drained"
@@ -10373,6 +10371,7 @@ const DASHBOARD_LOW_INFORMATION_PROGRESS_TEXT = new Set([
   "コマンドを実行しています。",
   "ファイル変更を確認しています。",
   "外部ツールの結果を待っています。",
+  "応答を生成しています。",
   "接続と実行状態を確認中です。入力と文脈は保持しています。",
   "作業を継続しています。まだ最終回答は生成中です。"
 ]);

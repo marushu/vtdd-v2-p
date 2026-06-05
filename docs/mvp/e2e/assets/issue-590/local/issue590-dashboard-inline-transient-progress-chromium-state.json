@@ -18,12 +18,13 @@
     "bubbleCountBeforeProgress": 21,
     "bubbleCountAfterProgress": 21,
     "bubbleCountDeltaAfterProgress": 0,
+    "blockedProgressBubbleMatches": 0,
     "transientCount": 1
   },
   "layoutAfterProgressUpdate": {
-    "before": 0,
-    "afterImmediate": 0,
-    "afterNextFrames": 0
+    "before": 1411,
+    "afterImmediate": 1411,
+    "afterNextFrames": 1411
   },
   "scrollPreservation": {
     "before": 64,
