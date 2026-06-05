@@ -68722,11 +68722,13 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
         }
       };
     }
+    const dashboardThreadId = normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id);
+    const executionId = normalizeText33(payload?.executionId || payload?.execution_id) || createDashboardRequestId(`dashboard-butler-issue${relatedIssue || "unknown"}-vps-maintenance`);
     const proposal = await createVpsPrivilegedMaintenanceProposal({
       payload: {
         ...proposalPayload,
-        dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
-        executionId: normalizeText33(payload?.executionId || payload?.execution_id)
+        dashboardThreadId,
+        executionId
       },
       provider,
       origin: origin || "https://example.com"
@@ -68772,10 +68774,14 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
         kind: "dashboard_vps_privileged_maintenance_natural_language",
         status: "approval_required",
         vpsProposalId: proposal.body.vpsProposalId,
+        executionId,
         approvalScope: proposal.body.approvalScope,
         approvalOperatorUrl: proposal.body.approvalOperatorUrl,
         runtimeTruth: {
           ...proposal.body.runtimeTruth,
+          executionId,
+          dashboardThreadIdIncluded: Boolean(dashboardThreadId),
+          approvalOperatorUrlComplete: Boolean(proposal.body.vpsProposalId && dashboardThreadId && executionId),
           dashboardNaturalLanguagePathReached: true,
           helperQueueReached: false
         }
@@ -69219,6 +69225,7 @@ function buildDashboardVpsPrivilegedMaintenanceApprovalRequiredReply({ repositor
     `- \u64CD\u4F5C: ${operation}`,
     `- risk: ${riskLevel}`,
     `- vpsProposalId: ${proposal?.vpsProposalId || "\u672A\u4F5C\u6210"}`,
+    "- owner action: \u3053\u306E approval URL \u3092\u958B\u3044\u3066 passkey \u627F\u8A8D\u3060\u3051\u884C\u3063\u3066\u304F\u3060\u3055\u3044\u3002vpsProposalId \u3084 approvalGrantId \u306E\u30B3\u30D4\u30FC\u306F\u4E0D\u8981\u3067\u3059\u3002",
     "- authority: scoped passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002\u627F\u8A8D\u306A\u3057\u306B root / sudo / helper \u5B9F\u884C\u306F\u958B\u59CB\u3057\u307E\u305B\u3093\u3002",
     "- runtime truth: status=approval_required, rootExecutionStarted=false, helperExecutionStarted=false",
     proposal?.approvalOperatorUrl ? `- approval URL: ${proposal.approvalOperatorUrl}` : "- approval URL: \u672A\u751F\u6210",
