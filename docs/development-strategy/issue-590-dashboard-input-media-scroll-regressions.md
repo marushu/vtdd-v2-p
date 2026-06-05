@@ -86,3 +86,13 @@ deploy 後、production Dashboard Butler PWA で次を確認する。
 - URL decode が secrets / approval grants / arbitrary URL を変形する可能性が見えたら停止する。
 - media validation 緩和が repo-scoped media の cross-repo 流用を許す場合は停止する。
 - iPad scroll lock が CSS ではなく service worker / browser viewport / PWA manifest 側の問題だと判明したら、今回の runtime patch を広げず別 Issue 候補にする。
+
+## review 対応境界
+
+PR #810 の fallback reviewer は、private unscoped media 例外の広さと、`sanitizeDashboardChatText()` 全体に decode を入れた文面破壊リスクを request_changes とした。対応方針は次の通り。
+
+- decode は `sanitizeDashboardChatText()` から外し、Dashboard command 表示/保存正規化と repository / issue 抽出に限定する。
+- URL encoded newline を command block として復元する条件は、本文先頭が `go:` / `repository:` / `repo:` / `relatedIssue:` / `issueNumber:` の場合に限定する。
+- command block 内でも URL らしい行は decode しない。
+- ラベル無しの `%20marushu%2Fvtdd-v2-p%20%23590` のような全文 percent encoded 文字列は、通常文面破壊リスクを避けるため自動 decode しない。
+- private unscoped Dashboard media は、保存済み record の `sourceEventId` が現在送信中の `clientMessageId` と一致する場合だけ、本文から解決した repo / issue context へ添付できる。別送信への再利用は repository / issue mismatch として拒否する。

@@ -8593,14 +8593,14 @@ function shouldDecodeDashboardCommandText(source) {
   if (/^https?:\/\//i.test(text)) return false;
   if (/^go:%[0-9a-f]{2}/i.test(text)) return true;
   if (/^(?:repository|repo|relatedIssue|issueNumber)\s*[:=]/i.test(text)) return true;
-  if (/^(?:%[0-9a-f]{2})+[A-Za-z0-9_.~-]*%2f[A-Za-z0-9_.~-]+/i.test(text)) return true;
-  if (/%0a/i.test(text) && /(?:repository|repo|relatedIssue|issueNumber|%23|#)/i.test(text)) return true;
   return false;
 }
 
-function decodeDashboardCommandTextSegment(source) {
+function decodeDashboardCommandTextSegment(source, force = false) {
   const text = String(source || "");
-  if (!shouldDecodeDashboardCommandText(text)) return text;
+  if (/^https?:\/\//i.test(text.trim()) || /^https?%3a%2f%2f/i.test(text.trim())) return text;
+  if (!force && !shouldDecodeDashboardCommandText(text)) return text;
+  if (!/%[0-9a-f]{2}/i.test(text)) return text;
   try {
     return decodeURIComponent(text);
   } catch {
@@ -8610,11 +8610,21 @@ function decodeDashboardCommandTextSegment(source) {
 
 function decodeSafeDashboardChatCommandText(text) {
   const source = String(text || "");
-  const wholeDecoded = decodeDashboardCommandTextSegment(source);
-  return wholeDecoded
+  const commandBlock = shouldSplitEncodedDashboardCommandText(source);
+  const commandText = commandBlock
+    ? source.replace(/%0d%0a|%0a|%0d/gi, "\n")
+    : source;
+  return commandText
     .split("\n")
-    .map((line) => decodeDashboardCommandTextSegment(line))
+    .map((line) => decodeDashboardCommandTextSegment(line, commandBlock))
     .join("\n");
+}
+
+function shouldSplitEncodedDashboardCommandText(source) {
+  const text = String(source || "").trim();
+  if (!/%0d|%0a/i.test(text)) return false;
+  if (/^https?:\/\//i.test(text)) return false;
+  return /^go:%[0-9a-f]{2}/i.test(text) || /^(?:repository|repo|relatedIssue|issueNumber)\s*[:=]/i.test(text);
 }
 
 async function handlePasskeyRegistrationOptionsRequest(request, env) {
@@ -10487,7 +10497,7 @@ async function notifyDashboardChatRoom({ env, threadId, messages }) {
 }
 
 function extractCanonicalRepositoryTokenFromDashboardChatText(value) {
-  const text = sanitizeDashboardChatText(value);
+  const text = sanitizeDashboardChatText(decodeSafeDashboardChatCommandText(value));
   if (!text) {
     return "";
   }
@@ -10509,7 +10519,7 @@ function extractCanonicalRepositoryTokenFromDashboardChatText(value) {
 }
 
 function extractRepositoryTokenFromDashboardChatText(value) {
-  const text = sanitizeDashboardChatText(value);
+  const text = sanitizeDashboardChatText(decodeSafeDashboardChatCommandText(value));
   if (!text) {
     return "";
   }
@@ -10522,7 +10532,7 @@ function extractRepositoryTokenFromDashboardChatText(value) {
 }
 
 function extractIssueNumberFromDashboardChatText(value) {
-  const text = sanitizeDashboardChatText(value);
+  const text = sanitizeDashboardChatText(decodeSafeDashboardChatCommandText(value));
   const labeledMatch = text.match(/(?:relatedIssue|issueNumber|関連\s*Issue|Issue)\s*(?:は|:|：|=)?\s*#?\s*([1-9][0-9]*)/iu);
   const match = labeledMatch || text.match(/#([1-9][0-9]*)/);
   return normalizePositiveInteger(match?.[1]);
@@ -12071,7 +12081,7 @@ function normalizeMediaReferences(value) {
     .slice(0, MEDIA_REFERENCE_LIMIT);
 }
 
-async function resolveDashboardChatMediaReferences({ env, mediaReferences, repository, relatedIssue }) {
+async function resolveDashboardChatMediaReferences({ env, mediaReferences, repository, relatedIssue, clientMessageId }) {
   const requested = normalizeMediaReferences(mediaReferences);
   if (requested.length === 0) {
     return { ok: true, mediaReferences: [] };
@@ -12103,7 +12113,8 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
         reason: `media reference ${reference.mediaId} は保存期間が切れました。必要であれば再添付してください。`
       };
     }
-    const media = toMediaReference(record);
+    const normalizedRecord = normalizeMediaObjectRecord(record);
+    const media = toMediaReference(normalizedRecord);
     if (!media) {
       return {
         ok: false,
@@ -12111,11 +12122,18 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
         reason: `media reference ${reference.mediaId} is malformed`
       };
     }
+    const mediaSourceEventId = normalizeDashboardEventText(normalizedRecord?.sourceEventId);
+    const ownerMessageId = sanitizeDashboardChatText(clientMessageId);
+    const sameOwnerMessageUpload =
+      ownerMessageId &&
+      mediaSourceEventId === ownerMessageId &&
+      mediaSourceEventId.startsWith("dashboard_owner_message:");
     const privateUnscopedDashboardMedia =
       !media.repository &&
       !media.relatedIssue &&
       media.visibility === "private" &&
-      media.sourceSurface === "dashboard_butler";
+      media.sourceSurface === "dashboard_butler" &&
+      sameOwnerMessageUpload;
     if (resolvedRepository && media.repository !== resolvedRepository && !privateUnscopedDashboardMedia) {
       return {
         ok: false,
@@ -12137,10 +12155,11 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
 
 async function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject(payload);
-  const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
   const clientMessageId = sanitizeDashboardChatText(input.clientMessageId || input.client_message_id);
+  const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
+  const normalizedTextInput = normalizeDashboardChatMessageText(input.text || input.message || input.body);
   const text =
-    sanitizeDashboardChatText(input.text || input.message || input.body) ||
+    sanitizeDashboardChatText(normalizedTextInput) ||
     (mediaReferences.length > 0 ? "添付を追加しました。" : "");
   if (!text) {
     return {
@@ -12161,7 +12180,8 @@ async function buildDashboardChatTurn(payload, options = {}) {
     env: options.env,
     mediaReferences: input.mediaReferences || input.media_references || input.media,
     repository,
-    relatedIssue
+    relatedIssue,
+    clientMessageId
   });
   if (!mediaValidation.ok) {
     return mediaValidation;
@@ -13072,7 +13092,7 @@ function normalizeDashboardThreadId(value) {
 }
 
 function sanitizeDashboardChatText(value) {
-  const text = decodeSafeDashboardChatCommandText(normalizeText(value))
+  const text = normalizeText(value)
     .replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]")
     .replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]")
     .replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]")
@@ -17834,15 +17854,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function decodeSafeChatCommandText(text) {
         const source = String(text || "");
-        const decodeSegment = (segment) => {
+        const decodeSegment = (segment, force = false) => {
           const value = String(segment || "");
+          if (/^https?:\\/\\//i.test(value.trim()) || /^https?%3a%2f%2f/i.test(value.trim())) return value;
           if (!/%[0-9a-f]{2}/i.test(value)) return value;
-          if (/^https?:\\/\\//i.test(value)) return value;
           if (
+            !force &&
             !/^go:%[0-9a-f]{2}/i.test(value) &&
-            !/^(?:repository|repo|relatedIssue|issueNumber)\\s*[:=]/i.test(value) &&
-            !/^(?:%[0-9a-f]{2})+[A-Za-z0-9_.~-]*%2f[A-Za-z0-9_.~-]+/i.test(value) &&
-            !(/%0a/i.test(value) && /(?:repository|repo|relatedIssue|issueNumber|%23|#)/i.test(value))
+            !/^(?:repository|repo|relatedIssue|issueNumber)\\s*[:=]/i.test(value)
           ) {
             return value;
           }
@@ -17852,9 +17871,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             return value;
           }
         };
-        return decodeSegment(source)
+        const commandBlock =
+          /%0d|%0a/i.test(source) &&
+          !/^https?:\\/\\//i.test(source.trim()) &&
+          (/^go:%[0-9a-f]{2}/i.test(source.trim()) || /^(?:repository|repo|relatedIssue|issueNumber)\\s*[:=]/i.test(source.trim()));
+        const commandText = commandBlock
+            ? source.replace(/%0d%0a|%0a|%0d/gi, "\\n")
+            : source;
+        return commandText
           .split("\\n")
-          .map((line) => decodeSegment(line))
+          .map((line) => decodeSegment(line, commandBlock))
           .join("\\n");
       }
 

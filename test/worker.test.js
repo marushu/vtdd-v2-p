@@ -263,7 +263,11 @@ test("dashboard chat message text safely decodes command-like percent encoded li
   );
   assert.equal(
     normalizeDashboardChatMessageText("%20marushu%2Fvtdd-v2-p%20%23590"),
-    " marushu/vtdd-v2-p #590"
+    "%20marushu%2Fvtdd-v2-p%20%23590"
+  );
+  assert.equal(
+    normalizeDashboardChatMessageText("引用: %0Arepository:%20not-a-command"),
+    "引用: %0Arepository:%20not-a-command"
   );
   assert.equal(
     normalizeDashboardChatMessageText("https://example.com/path%20with%20encoded?x=1"),
@@ -1580,7 +1584,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function normalizeMessageDisplayText("), true);
   assert.equal(body.includes("function normalizeMessageCopyText("), true);
   assert.equal(body.includes("function decodeSafeChatCommandText("), true);
-  assert.equal(body.includes("const decodeSegment = (segment) =>"), true);
+  assert.equal(body.includes("const decodeSegment = (segment, force = false) =>"), true);
   assert.equal(body.includes("decodeURIComponent(value)"), true);
   assert.equal(body.includes("repository|repo|relatedIssue|issueNumber"), true);
   assert.equal(body.includes("if (/^https?:") && body.includes("test(value)) return value;"), true);
@@ -2392,6 +2396,7 @@ test("worker allows private unscoped dashboard media when owner text supplies re
   const form = new FormData();
   form.append("repositoryInput", "");
   form.append("sourceSurface", "dashboard_butler");
+  form.append("sourceEventId", "dashboard_owner_message:private-unscoped-media");
   form.append("file", createPngBlob(), "scroll-lock.png");
 
   const uploadResponse = await worker.fetch(
@@ -2438,6 +2443,28 @@ test("worker allows private unscoped dashboard media when owner text supplies re
   assert.equal(chatBody.messages[0].relatedIssue, 590);
   assert.equal(chatBody.messages[0].mediaReferences.length, 1);
   assert.equal(chatBody.messages[0].mediaReferences[0].repository, null);
+
+  const reusedResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        clientMessageId: "dashboard_owner_message:private-unscoped-media-reused",
+        text: "marushu/vtdd-v2-p #590\n前の送信で upload した private unscoped media は再利用しない。",
+        mediaReferences: [uploadBody.media]
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_CHAT_STORE: chatStore,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+  assert.equal(reusedResponse.status, 422);
+  const reusedBody = await reusedResponse.json();
+  assert.equal(reusedBody.error, "media_reference_repository_mismatch");
 });
 
 test("worker creates media D1 schema without multiline exec truncation", async () => {
