@@ -186,6 +186,7 @@ async function runVpsRunnerOnce({
       githubFetch,
       token,
       workRoot,
+      repoRoot,
       execution,
       repositoryPolicies: policies
     });
@@ -296,6 +297,7 @@ async function executeVpsRunnerExecution({
   githubFetch,
   token,
   workRoot,
+  repoRoot = REPOSITORY_ROOT,
   execution,
   repositoryPolicies
 }) {
@@ -335,7 +337,30 @@ async function executeVpsRunnerExecution({
     }
 
     await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_clone", notification });
-    const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
+    const workspaceResolution = resolveVpsRunnerExecutionWorkspace({
+      workRoot,
+      repoRoot,
+      repository: payload.repository,
+      executionId: payload.executionId
+    });
+    if (!workspaceResolution.ok) {
+      await postVpsRunnerEvent({
+        githubFetch,
+        payload,
+        notification,
+        event: {
+          status: "blocked",
+          lastEvent: "workspace_isolation_blocked",
+          currentStep: "workspace_isolation",
+          workspaceIsolation: workspaceResolution
+        }
+      });
+      return {
+        ok: false,
+        reason: workspaceResolution.reason
+      };
+    }
+    const workspace = workspaceResolution.workspace;
     await fs.mkdir(path.dirname(workspace), { recursive: true });
     await runCommand("rm", ["-rf", workspace], { env });
     await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_clone_command", notification });
@@ -396,7 +421,8 @@ async function executeVpsRunnerExecution({
         currentStep: "branch_created",
         branch: payload.branch,
         originalBranch: branchCheckout.originalBranch,
-        branchRecovery: branchCheckout.recovered ? branchCheckout : undefined
+        branchRecovery: branchCheckout.recovered ? branchCheckout : undefined,
+        workspaceIsolation: workspaceResolution
       }
     });
 
@@ -745,6 +771,8 @@ async function collectVpsRunnerCanonicalRepoSyncStatus({
     developmentAllowed: false,
     safeToFastForward: false,
     syncAction: "none",
+    checkoutRole: "control_plane",
+    invariant: "control-plane checkout must stay on origin/main; development work must use an isolated execution workspace",
     reason: null,
     repoRoot,
     baseRef,
@@ -879,6 +907,79 @@ function buildVpsRunnerRepoSyncReason(result) {
   return reasons.length > 0
     ? `VPS runner repo is not safe to use before recovery: ${reasons.join("; ")}.`
     : `VPS runner repo is not synced with origin/${result.baseRef}.`;
+}
+
+function resolveVpsRunnerExecutionWorkspace({
+  workRoot,
+  repoRoot = REPOSITORY_ROOT,
+  repository,
+  executionId
+} = {}) {
+  const normalizedWorkRoot = normalizeText(workRoot);
+  const normalizedRepoRoot = normalizeText(repoRoot);
+  const safeRepository = safePathSegment(repository);
+  const safeExecutionId = safePathSegment(executionId);
+  const issues = [];
+  if (!normalizedWorkRoot) {
+    issues.push("workRoot is required");
+  }
+  if (!normalizedRepoRoot) {
+    issues.push("repoRoot is required");
+  }
+  if (!safeRepository) {
+    issues.push("repository is required");
+  }
+  if (!safeExecutionId) {
+    issues.push("executionId is required");
+  }
+
+  const workspace =
+    normalizedWorkRoot && safeRepository && safeExecutionId
+      ? path.resolve(normalizedWorkRoot, safeRepository, safeExecutionId)
+      : "";
+  const controlPlaneRepoRoot = normalizedRepoRoot ? path.resolve(normalizedRepoRoot) : "";
+  const workRootResolved = normalizedWorkRoot ? path.resolve(normalizedWorkRoot) : "";
+  const workRootInsideControlPlane =
+    Boolean(workRootResolved && controlPlaneRepoRoot) &&
+    isSamePathOrInside({ childPath: workRootResolved, parentPath: controlPlaneRepoRoot });
+  const workspaceInsideControlPlane =
+    Boolean(workspace && controlPlaneRepoRoot) &&
+    isSamePathOrInside({ childPath: workspace, parentPath: controlPlaneRepoRoot });
+  if (workRootInsideControlPlane || workspaceInsideControlPlane) {
+    issues.push("execution workspace must be outside the control-plane checkout");
+  }
+
+  const ok = issues.length === 0;
+  return {
+    ok,
+    workspace: workspace || null,
+    workRoot: workRootResolved || null,
+    controlPlaneRepoRoot: controlPlaneRepoRoot || null,
+    checkoutRole: "development_workspace",
+    controlPlaneCheckoutRole: "control_plane",
+    isolation: "execution workspace must not be the control-plane checkout or a child of it",
+    repository: normalizeRepository(repository) || normalizeText(repository) || null,
+    executionId: normalizeText(executionId) || null,
+    workRootInsideControlPlane,
+    workspaceInsideControlPlane,
+    issues,
+    reason: ok
+      ? "VPS runner execution workspace is isolated from the control-plane checkout."
+      : `VPS runner workspace isolation blocked execution: ${issues.join("; ")}.`
+  };
+}
+
+function isSamePathOrInside({ childPath, parentPath } = {}) {
+  const child = path.resolve(String(childPath || ""));
+  const parent = path.resolve(String(parentPath || ""));
+  if (!child || !parent) {
+    return false;
+  }
+  if (child === parent) {
+    return true;
+  }
+  const relative = path.relative(parent, child);
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 async function collectVpsMainSyncStatus({ repoRoot, baseRef, mergeCommitSha, env }) {
@@ -3233,6 +3334,7 @@ export {
   parseVpsPrivilegedMaintenanceQueueComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
+  resolveVpsRunnerExecutionWorkspace,
   runVpsRunnerOnce,
   resolveRoleGitHubAppInstallationToken,
   summarizeDiagnosticText,
