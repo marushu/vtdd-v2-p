@@ -40,9 +40,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../../repos/vtdd-v2-p/node_modules/pvtsutils/build/index.js
+// node_modules/pvtsutils/build/index.js
 var require_build = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/pvtsutils/build/index.js"(exports) {
+  "node_modules/pvtsutils/build/index.js"(exports) {
     "use strict";
     var ARRAY_BUFFER_NAME = "[object ArrayBuffer]";
     var BufferSourceConverter6 = class _BufferSourceConverter {
@@ -404,9 +404,9 @@ var require_build = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/reflect-metadata/Reflect.js
+// node_modules/reflect-metadata/Reflect.js
 var require_Reflect = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/reflect-metadata/Reflect.js"() {
+  "node_modules/reflect-metadata/Reflect.js"() {
     var Reflect2;
     (function(Reflect3) {
       (function(factory) {
@@ -1495,9 +1495,9 @@ var require_crypto = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/tweetnacl/nacl-fast.js
+// node_modules/tweetnacl/nacl-fast.js
 var require_nacl_fast = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/tweetnacl/nacl-fast.js"(exports, module) {
+  "node_modules/tweetnacl/nacl-fast.js"(exports, module) {
     (function(nacl5) {
       "use strict";
       var gf = function(init) {
@@ -3719,18 +3719,18 @@ var require_nacl_fast = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/consts.js
+// node_modules/tweetnacl-sealedbox-js/src/consts.js
 var import_tweetnacl, overheadLength;
 var init_consts = __esm({
-  "../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/consts.js"() {
+  "node_modules/tweetnacl-sealedbox-js/src/consts.js"() {
     import_tweetnacl = __toESM(require_nacl_fast());
     overheadLength = import_tweetnacl.default.box.publicKeyLength + import_tweetnacl.default.box.overheadLength;
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/blakejs/util.js
+// node_modules/blakejs/util.js
 var require_util = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/blakejs/util.js"(exports, module) {
+  "node_modules/blakejs/util.js"(exports, module) {
     var ERROR_MSG_INPUT = "Input must be an string, Buffer or Uint8Array";
     function normalizeInput(input) {
       let ret;
@@ -3800,9 +3800,9 @@ var require_util = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/blakejs/blake2b.js
+// node_modules/blakejs/blake2b.js
 var require_blake2b = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/blakejs/blake2b.js"(exports, module) {
+  "node_modules/blakejs/blake2b.js"(exports, module) {
     var util2 = require_util();
     function ADD64AA(v2, a, b) {
       const o0 = v2[a] + v2[b];
@@ -4274,7 +4274,7 @@ var require_blake2b = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/nonce.js
+// node_modules/tweetnacl-sealedbox-js/src/nonce.js
 function nonce(pk1, pk2) {
   var state = import_blake2b.default.blake2bInit(import_tweetnacl2.default.box.nonceLength, null);
   import_blake2b.default.blake2bUpdate(state, pk1);
@@ -4283,24 +4283,24 @@ function nonce(pk1, pk2) {
 }
 var import_tweetnacl2, import_blake2b;
 var init_nonce = __esm({
-  "../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/nonce.js"() {
+  "node_modules/tweetnacl-sealedbox-js/src/nonce.js"() {
     import_tweetnacl2 = __toESM(require_nacl_fast());
     import_blake2b = __toESM(require_blake2b());
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/utils.js
+// node_modules/tweetnacl-sealedbox-js/src/utils.js
 function zero(buf) {
   for (var i = 0; i < buf.length; i++) {
     buf[i] = 0;
   }
 }
 var init_utils = __esm({
-  "../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/utils.js"() {
+  "node_modules/tweetnacl-sealedbox-js/src/utils.js"() {
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/seal.js
+// node_modules/tweetnacl-sealedbox-js/src/seal.js
 function seal(m, pk) {
   var c = new Uint8Array(overheadLength + m.length);
   var ek = import_tweetnacl3.default.box.keyPair();
@@ -4313,7 +4313,7 @@ function seal(m, pk) {
 }
 var import_tweetnacl3;
 var init_seal = __esm({
-  "../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/seal.js"() {
+  "node_modules/tweetnacl-sealedbox-js/src/seal.js"() {
     import_tweetnacl3 = __toESM(require_nacl_fast());
     init_nonce();
     init_consts();
@@ -4321,7 +4321,7 @@ var init_seal = __esm({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/open.js
+// node_modules/tweetnacl-sealedbox-js/src/open.js
 function open(c, pk, sk) {
   var epk = c.subarray(0, import_tweetnacl4.default.box.publicKeyLength);
   var nonce2 = nonce(epk, pk);
@@ -4330,13 +4330,13 @@ function open(c, pk, sk) {
 }
 var import_tweetnacl4;
 var init_open = __esm({
-  "../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/open.js"() {
+  "node_modules/tweetnacl-sealedbox-js/src/open.js"() {
     import_tweetnacl4 = __toESM(require_nacl_fast());
     init_nonce();
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/entrypoint.js
+// node_modules/tweetnacl-sealedbox-js/entrypoint.js
 var entrypoint_exports = {};
 __export(entrypoint_exports, {
   default: () => entrypoint_default,
@@ -4346,7 +4346,7 @@ __export(entrypoint_exports, {
 });
 var entrypoint_default;
 var init_entrypoint = __esm({
-  "../../../repos/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/entrypoint.js"() {
+  "node_modules/tweetnacl-sealedbox-js/entrypoint.js"() {
     init_consts();
     init_seal();
     init_open();
@@ -4354,9 +4354,9 @@ var init_entrypoint = __esm({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/code.js
+// node_modules/ajv/dist/compile/codegen/code.js
 var require_code = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/code.js"(exports) {
+  "node_modules/ajv/dist/compile/codegen/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -4508,9 +4508,9 @@ var require_code = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/scope.js
+// node_modules/ajv/dist/compile/codegen/scope.js
 var require_scope = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
+  "node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ValueScope = exports.ValueScopeName = exports.Scope = exports.varKinds = exports.UsedValueState = void 0;
@@ -4653,9 +4653,9 @@ var require_scope = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/index.js
+// node_modules/ajv/dist/compile/codegen/index.js
 var require_codegen = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/index.js"(exports) {
+  "node_modules/ajv/dist/compile/codegen/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.or = exports.and = exports.not = exports.CodeGen = exports.operators = exports.varKinds = exports.ValueScopeName = exports.ValueScope = exports.Scope = exports.Name = exports.regexpCode = exports.stringify = exports.getProperty = exports.nil = exports.strConcat = exports.str = exports._ = void 0;
@@ -5373,9 +5373,9 @@ var require_codegen = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/util.js
+// node_modules/ajv/dist/compile/util.js
 var require_util2 = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/util.js"(exports) {
+  "node_modules/ajv/dist/compile/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.checkStrictMode = exports.getErrorPath = exports.Type = exports.useFunc = exports.setEvaluated = exports.evaluatedPropsToName = exports.mergeEvaluated = exports.eachItem = exports.unescapeJsonPointer = exports.escapeJsonPointer = exports.escapeFragment = exports.unescapeFragment = exports.schemaRefOrVal = exports.schemaHasRulesButRef = exports.schemaHasRules = exports.checkUnknownRules = exports.alwaysValidSchema = exports.toHash = void 0;
@@ -5540,9 +5540,9 @@ var require_util2 = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/names.js
+// node_modules/ajv/dist/compile/names.js
 var require_names = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/names.js"(exports) {
+  "node_modules/ajv/dist/compile/names.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5579,9 +5579,9 @@ var require_names = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/errors.js
+// node_modules/ajv/dist/compile/errors.js
 var require_errors = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/errors.js"(exports) {
+  "node_modules/ajv/dist/compile/errors.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendErrors = exports.resetErrorsCount = exports.reportExtraError = exports.reportError = exports.keyword$DataError = exports.keywordError = void 0;
@@ -5701,9 +5701,9 @@ var require_errors = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/boolSchema.js
+// node_modules/ajv/dist/compile/validate/boolSchema.js
 var require_boolSchema = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
+  "node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.boolOrEmptySchema = exports.topBoolOrEmptySchema = void 0;
@@ -5752,9 +5752,9 @@ var require_boolSchema = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/rules.js
+// node_modules/ajv/dist/compile/rules.js
 var require_rules = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/rules.js"(exports) {
+  "node_modules/ajv/dist/compile/rules.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRules = exports.isJSONType = void 0;
@@ -5783,9 +5783,9 @@ var require_rules = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/applicability.js
+// node_modules/ajv/dist/compile/validate/applicability.js
 var require_applicability = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
+  "node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.shouldUseRule = exports.shouldUseGroup = exports.schemaHasRulesForType = void 0;
@@ -5806,9 +5806,9 @@ var require_applicability = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/dataType.js
+// node_modules/ajv/dist/compile/validate/dataType.js
 var require_dataType = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
+  "node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.reportTypeError = exports.checkDataTypes = exports.checkDataType = exports.coerceAndCheckDataType = exports.getJSONTypes = exports.getSchemaTypes = exports.DataType = void 0;
@@ -5990,9 +5990,9 @@ var require_dataType = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/defaults.js
+// node_modules/ajv/dist/compile/validate/defaults.js
 var require_defaults = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
+  "node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.assignDefaults = void 0;
@@ -6027,9 +6027,9 @@ var require_defaults = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/code.js
+// node_modules/ajv/dist/vocabularies/code.js
 var require_code2 = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/code.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateUnion = exports.validateArray = exports.usePattern = exports.callValidateCode = exports.schemaProperties = exports.allSchemaProperties = exports.noPropertyInData = exports.propertyInData = exports.isOwnProperty = exports.hasPropFunc = exports.reportMissingProp = exports.checkMissingProp = exports.checkReportMissingProp = void 0;
@@ -6160,9 +6160,9 @@ var require_code2 = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/keyword.js
+// node_modules/ajv/dist/compile/validate/keyword.js
 var require_keyword = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
+  "node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateKeywordUsage = exports.validSchemaType = exports.funcKeywordCode = exports.macroKeywordCode = void 0;
@@ -6278,9 +6278,9 @@ var require_keyword = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/subschema.js
+// node_modules/ajv/dist/compile/validate/subschema.js
 var require_subschema = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
+  "node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendSubschemaMode = exports.extendSubschemaData = exports.getSubschema = void 0;
@@ -6361,9 +6361,9 @@ var require_subschema = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/fast-deep-equal/index.js
+// node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/fast-deep-equal/index.js"(exports, module) {
+  "node_modules/fast-deep-equal/index.js"(exports, module) {
     "use strict";
     module.exports = function equal(a, b) {
       if (a === b) return true;
@@ -6396,9 +6396,9 @@ var require_fast_deep_equal = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/json-schema-traverse/index.js
+// node_modules/json-schema-traverse/index.js
 var require_json_schema_traverse = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/json-schema-traverse/index.js"(exports, module) {
+  "node_modules/json-schema-traverse/index.js"(exports, module) {
     "use strict";
     var traverse = module.exports = function(schema, opts, cb) {
       if (typeof opts == "function") {
@@ -6484,9 +6484,9 @@ var require_json_schema_traverse = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/resolve.js
+// node_modules/ajv/dist/compile/resolve.js
 var require_resolve = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/resolve.js"(exports) {
+  "node_modules/ajv/dist/compile/resolve.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getSchemaRefs = exports.resolveUrl = exports.normalizeId = exports._getFullPath = exports.getFullPath = exports.inlineRef = void 0;
@@ -6640,9 +6640,9 @@ var require_resolve = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/index.js
+// node_modules/ajv/dist/compile/validate/index.js
 var require_validate = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/validate/index.js"(exports) {
+  "node_modules/ajv/dist/compile/validate/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getData = exports.KeywordCxt = exports.validateFunctionCode = void 0;
@@ -7148,9 +7148,9 @@ var require_validate = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/runtime/validation_error.js
+// node_modules/ajv/dist/runtime/validation_error.js
 var require_validation_error = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/runtime/validation_error.js"(exports) {
+  "node_modules/ajv/dist/runtime/validation_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var ValidationError = class extends Error {
@@ -7164,9 +7164,9 @@ var require_validation_error = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/ref_error.js
+// node_modules/ajv/dist/compile/ref_error.js
 var require_ref_error = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/ref_error.js"(exports) {
+  "node_modules/ajv/dist/compile/ref_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var resolve_1 = require_resolve();
@@ -7181,9 +7181,9 @@ var require_ref_error = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/index.js
+// node_modules/ajv/dist/compile/index.js
 var require_compile = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/compile/index.js"(exports) {
+  "node_modules/ajv/dist/compile/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.resolveSchema = exports.getCompilingSchema = exports.resolveRef = exports.compileSchema = exports.SchemaEnv = void 0;
@@ -7405,9 +7405,9 @@ var require_compile = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/refs/data.json
+// node_modules/ajv/dist/refs/data.json
 var require_data = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/refs/data.json"(exports, module) {
+  "node_modules/ajv/dist/refs/data.json"(exports, module) {
     module.exports = {
       $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
       description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
@@ -7424,9 +7424,9 @@ var require_data = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/fast-uri/lib/utils.js
+// node_modules/fast-uri/lib/utils.js
 var require_utils = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/fast-uri/lib/utils.js"(exports, module) {
+  "node_modules/fast-uri/lib/utils.js"(exports, module) {
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
@@ -7737,9 +7737,9 @@ var require_utils = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/fast-uri/lib/schemes.js
+// node_modules/fast-uri/lib/schemes.js
 var require_schemes = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/fast-uri/lib/schemes.js"(exports, module) {
+  "node_modules/fast-uri/lib/schemes.js"(exports, module) {
     "use strict";
     var { isUUID } = require_utils();
     var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
@@ -7947,9 +7947,9 @@ var require_schemes = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/fast-uri/index.js
+// node_modules/fast-uri/index.js
 var require_fast_uri = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/fast-uri/index.js"(exports, module) {
+  "node_modules/fast-uri/index.js"(exports, module) {
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
@@ -8233,9 +8233,9 @@ var require_fast_uri = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/runtime/uri.js
+// node_modules/ajv/dist/runtime/uri.js
 var require_uri = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/runtime/uri.js"(exports) {
+  "node_modules/ajv/dist/runtime/uri.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var uri = require_fast_uri();
@@ -8244,9 +8244,9 @@ var require_uri = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/core.js
+// node_modules/ajv/dist/core.js
 var require_core = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/core.js"(exports) {
+  "node_modules/ajv/dist/core.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = void 0;
@@ -8855,9 +8855,9 @@ var require_core = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/id.js
+// node_modules/ajv/dist/vocabularies/core/id.js
 var require_id = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var def = {
@@ -8870,9 +8870,9 @@ var require_id = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/ref.js
+// node_modules/ajv/dist/vocabularies/core/ref.js
 var require_ref = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.callRef = exports.getValidate = void 0;
@@ -8992,9 +8992,9 @@ var require_ref = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/index.js
+// node_modules/ajv/dist/vocabularies/core/index.js
 var require_core2 = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var id_1 = require_id();
@@ -9013,9 +9013,9 @@ var require_core2 = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
+// node_modules/ajv/dist/vocabularies/validation/limitNumber.js
 var require_limitNumber = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9045,9 +9045,9 @@ var require_limitNumber = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
+// node_modules/ajv/dist/vocabularies/validation/multipleOf.js
 var require_multipleOf = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9073,9 +9073,9 @@ var require_multipleOf = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/runtime/ucs2length.js
+// node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
+  "node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     function ucs2length(str) {
@@ -9099,9 +9099,9 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitLength.js
+// node_modules/ajv/dist/vocabularies/validation/limitLength.js
 var require_limitLength = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9131,9 +9131,9 @@ var require_limitLength = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/pattern.js
+// node_modules/ajv/dist/vocabularies/validation/pattern.js
 var require_pattern = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -9168,9 +9168,9 @@ var require_pattern = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
+// node_modules/ajv/dist/vocabularies/validation/limitProperties.js
 var require_limitProperties = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9197,9 +9197,9 @@ var require_limitProperties = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/required.js
+// node_modules/ajv/dist/vocabularies/validation/required.js
 var require_required = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -9279,9 +9279,9 @@ var require_required = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitItems.js
+// node_modules/ajv/dist/vocabularies/validation/limitItems.js
 var require_limitItems = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9308,9 +9308,9 @@ var require_limitItems = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/runtime/equal.js
+// node_modules/ajv/dist/runtime/equal.js
 var require_equal = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/runtime/equal.js"(exports) {
+  "node_modules/ajv/dist/runtime/equal.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var equal = require_fast_deep_equal();
@@ -9319,9 +9319,9 @@ var require_equal = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
+// node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
 var require_uniqueItems = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dataType_1 = require_dataType();
@@ -9386,9 +9386,9 @@ var require_uniqueItems = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/const.js
+// node_modules/ajv/dist/vocabularies/validation/const.js
 var require_const = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9415,9 +9415,9 @@ var require_const = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/enum.js
+// node_modules/ajv/dist/vocabularies/validation/enum.js
 var require_enum = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9464,9 +9464,9 @@ var require_enum = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/index.js
+// node_modules/ajv/dist/vocabularies/validation/index.js
 var require_validation = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var limitNumber_1 = require_limitNumber();
@@ -9502,9 +9502,9 @@ var require_validation = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
+// node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
 var require_additionalItems = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateAdditionalItems = void 0;
@@ -9555,9 +9555,9 @@ var require_additionalItems = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/items.js
+// node_modules/ajv/dist/vocabularies/applicator/items.js
 var require_items = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateTuple = void 0;
@@ -9612,9 +9612,9 @@ var require_items = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
+// node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
 var require_prefixItems = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var items_1 = require_items();
@@ -9629,9 +9629,9 @@ var require_prefixItems = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/items2020.js
+// node_modules/ajv/dist/vocabularies/applicator/items2020.js
 var require_items2020 = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9664,9 +9664,9 @@ var require_items2020 = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/contains.js
+// node_modules/ajv/dist/vocabularies/applicator/contains.js
 var require_contains = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9758,9 +9758,9 @@ var require_contains = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
+// node_modules/ajv/dist/vocabularies/applicator/dependencies.js
 var require_dependencies = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateSchemaDeps = exports.validatePropertyDeps = exports.error = void 0;
@@ -9852,9 +9852,9 @@ var require_dependencies = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
+// node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
 var require_propertyNames = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9895,9 +9895,9 @@ var require_propertyNames = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
+// node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
 var require_additionalProperties = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -10001,9 +10001,9 @@ var require_additionalProperties = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/properties.js
+// node_modules/ajv/dist/vocabularies/applicator/properties.js
 var require_properties = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var validate_1 = require_validate();
@@ -10059,9 +10059,9 @@ var require_properties = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
+// node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
 var require_patternProperties = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -10133,9 +10133,9 @@ var require_patternProperties = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/not.js
+// node_modules/ajv/dist/vocabularies/applicator/not.js
 var require_not = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util2();
@@ -10164,9 +10164,9 @@ var require_not = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
+// node_modules/ajv/dist/vocabularies/applicator/anyOf.js
 var require_anyOf = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -10181,9 +10181,9 @@ var require_anyOf = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
+// node_modules/ajv/dist/vocabularies/applicator/oneOf.js
 var require_oneOf = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -10239,9 +10239,9 @@ var require_oneOf = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/allOf.js
+// node_modules/ajv/dist/vocabularies/applicator/allOf.js
 var require_allOf = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util2();
@@ -10266,9 +10266,9 @@ var require_allOf = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/if.js
+// node_modules/ajv/dist/vocabularies/applicator/if.js
 var require_if = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -10335,9 +10335,9 @@ var require_if = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
+// node_modules/ajv/dist/vocabularies/applicator/thenElse.js
 var require_thenElse = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util2();
@@ -10353,9 +10353,9 @@ var require_thenElse = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/index.js
+// node_modules/ajv/dist/vocabularies/applicator/index.js
 var require_applicator = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var additionalItems_1 = require_additionalItems();
@@ -10401,9 +10401,9 @@ var require_applicator = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/format/format.js
+// node_modules/ajv/dist/vocabularies/format/format.js
 var require_format = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -10491,9 +10491,9 @@ var require_format = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/format/index.js
+// node_modules/ajv/dist/vocabularies/format/index.js
 var require_format2 = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var format_1 = require_format();
@@ -10502,9 +10502,9 @@ var require_format2 = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/metadata.js
+// node_modules/ajv/dist/vocabularies/metadata.js
 var require_metadata = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.contentVocabulary = exports.metadataVocabulary = void 0;
@@ -10525,9 +10525,9 @@ var require_metadata = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/draft7.js
+// node_modules/ajv/dist/vocabularies/draft7.js
 var require_draft7 = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var core_1 = require_core2();
@@ -10547,9 +10547,9 @@ var require_draft7 = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/discriminator/types.js
+// node_modules/ajv/dist/vocabularies/discriminator/types.js
 var require_types = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DiscrError = void 0;
@@ -10561,9 +10561,9 @@ var require_types = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/discriminator/index.js
+// node_modules/ajv/dist/vocabularies/discriminator/index.js
 var require_discriminator = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
+  "node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -10666,9 +10666,9 @@ var require_discriminator = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/refs/json-schema-draft-07.json
+// node_modules/ajv/dist/refs/json-schema-draft-07.json
 var require_json_schema_draft_07 = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
+  "node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
     module.exports = {
       $schema: "http://json-schema.org/draft-07/schema#",
       $id: "http://json-schema.org/draft-07/schema#",
@@ -10823,9 +10823,9 @@ var require_json_schema_draft_07 = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv/dist/ajv.js
+// node_modules/ajv/dist/ajv.js
 var require_ajv = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv/dist/ajv.js"(exports, module) {
+  "node_modules/ajv/dist/ajv.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv = void 0;
@@ -10893,9 +10893,9 @@ var require_ajv = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv-formats/dist/formats.js
+// node_modules/ajv-formats/dist/formats.js
 var require_formats = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv-formats/dist/formats.js"(exports) {
+  "node_modules/ajv-formats/dist/formats.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
@@ -11096,9 +11096,9 @@ var require_formats = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv-formats/dist/limit.js
+// node_modules/ajv-formats/dist/limit.js
 var require_limit = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv-formats/dist/limit.js"(exports) {
+  "node_modules/ajv-formats/dist/limit.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatLimitDefinition = void 0;
@@ -11168,9 +11168,9 @@ var require_limit = __commonJS({
   }
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/ajv-formats/dist/index.js
+// node_modules/ajv-formats/dist/index.js
 var require_dist = __commonJS({
-  "../../../repos/vtdd-v2-p/node_modules/ajv-formats/dist/index.js"(exports, module) {
+  "node_modules/ajv-formats/dist/index.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var formats_1 = require_formats();
@@ -11392,7 +11392,7 @@ var ProtectionSignalStatus = Object.freeze({
   UNKNOWN: "unknown"
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoBase64URL.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoBase64URL.js
 var isoBase64URL_exports = {};
 __export(isoBase64URL_exports, {
   fromBuffer: () => fromBuffer,
@@ -11405,7 +11405,7 @@ __export(isoBase64URL_exports, {
   trimPadding: () => trimPadding
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/@hexagon/base64/src/base64.js
+// node_modules/@hexagon/base64/src/base64.js
 var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 var charsUrl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 var genLookup = (target) => {
@@ -11479,7 +11479,7 @@ base64.validate = (encoded, urlMode) => {
 base64.base64 = base64;
 var base64_default = base64;
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoBase64URL.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoBase64URL.js
 function toBuffer(base64urlString, from = "base64url") {
   const _buffer = base64_default.toArrayBuffer(base64urlString, from === "base64url");
   return new Uint8Array(_buffer);
@@ -11510,14 +11510,14 @@ function trimPadding(input) {
   return input.replace(/=/g, "");
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCBOR.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCBOR.js
 var isoCBOR_exports = {};
 __export(isoCBOR_exports, {
   decodeFirst: () => decodeFirst,
   encode: () => encode
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/@levischuck/tiny-cbor/esm/cbor/cbor_internal.js
+// node_modules/@levischuck/tiny-cbor/esm/cbor/cbor_internal.js
 function decodeLength(data, argument, index) {
   if (argument < 24) {
     return [argument, 1];
@@ -11616,7 +11616,7 @@ function encodeLength(major, argument) {
   }
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@levischuck/tiny-cbor/esm/cbor/cbor.js
+// node_modules/@levischuck/tiny-cbor/esm/cbor/cbor.js
 var CBORTag = class {
   /**
    * Wrap a value with a tag number.
@@ -11943,7 +11943,7 @@ function encodeCBOR(data) {
   return output;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCBOR.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCBOR.js
 function decodeFirst(input) {
   const _input = new Uint8Array(input);
   const decoded = decodePartialCBOR(_input, 0);
@@ -11954,7 +11954,7 @@ function encode(input) {
   return encodeCBOR(input);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/index.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/index.js
 var isoCrypto_exports = {};
 __export(isoCrypto_exports, {
   digest: () => digest,
@@ -11962,7 +11962,7 @@ __export(isoCrypto_exports, {
   verify: () => verify
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/cose.js
+// node_modules/@simplewebauthn/server/esm/helpers/cose.js
 function isCOSEPublicKeyOKP(cosePublicKey) {
   const kty = cosePublicKey.get(COSEKEYS.kty);
   return isCOSEKty(kty) && kty === COSEKTY.OKP;
@@ -12024,7 +12024,7 @@ function isCOSEAlg(alg) {
   return Object.values(COSEALG).indexOf(alg) >= 0;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/mapCoseAlgToWebCryptoAlg.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/mapCoseAlgToWebCryptoAlg.js
 function mapCoseAlgToWebCryptoAlg(alg) {
   if ([COSEALG.RS1].indexOf(alg) >= 0) {
     return "SHA-1";
@@ -12038,7 +12038,7 @@ function mapCoseAlgToWebCryptoAlg(alg) {
   throw new Error(`Could not map COSE alg value of ${alg} to a WebCrypto alg`);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getWebCrypto.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getWebCrypto.js
 var webCrypto = void 0;
 function getWebCrypto() {
   const toResolve = new Promise((resolve, reject) => {
@@ -12069,7 +12069,7 @@ var _getWebCryptoInternals = {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/digest.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/digest.js
 async function digest(data, algorithm) {
   const WebCrypto = await getWebCrypto();
   const subtleAlgorithm = mapCoseAlgToWebCryptoAlg(algorithm);
@@ -12077,14 +12077,14 @@ async function digest(data, algorithm) {
   return new Uint8Array(hashed);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getRandomValues.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getRandomValues.js
 async function getRandomValues(array2) {
   const WebCrypto = await getWebCrypto();
   WebCrypto.getRandomValues(array2);
   return array2;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/importKey.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/importKey.js
 async function importKey(opts) {
   const WebCrypto = await getWebCrypto();
   const { keyData, algorithm } = opts;
@@ -12093,7 +12093,7 @@ async function importKey(opts) {
   ]);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyEC2.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyEC2.js
 async function verifyEC2(opts) {
   const { cosePublicKey, signature, data, shaHashOverride } = opts;
   const WebCrypto = await getWebCrypto();
@@ -12155,7 +12155,7 @@ async function verifyEC2(opts) {
   return WebCrypto.subtle.verify(verifyAlgorithm, key, signature, data);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/mapCoseAlgToWebCryptoKeyAlgName.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/mapCoseAlgToWebCryptoKeyAlgName.js
 function mapCoseAlgToWebCryptoKeyAlgName(alg) {
   if ([COSEALG.EdDSA].indexOf(alg) >= 0) {
     return "Ed25519";
@@ -12169,7 +12169,7 @@ function mapCoseAlgToWebCryptoKeyAlgName(alg) {
   throw new Error(`Could not map COSE alg value of ${alg} to a WebCrypto key alg name`);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyRSA.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyRSA.js
 async function verifyRSA(opts) {
   const { cosePublicKey, signature, data, shaHashOverride } = opts;
   const WebCrypto = await getWebCrypto();
@@ -12238,7 +12238,7 @@ async function verifyRSA(opts) {
   return WebCrypto.subtle.verify(verifyAlgorithm, key, signature, data);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertAAGUIDToString.js
+// node_modules/@simplewebauthn/server/esm/helpers/convertAAGUIDToString.js
 function convertAAGUIDToString(aaguid) {
   const hex = isoUint8Array_exports.toHex(aaguid);
   const segments = [
@@ -12256,7 +12256,7 @@ function convertAAGUIDToString(aaguid) {
   return segments.join("-");
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertCertBufferToPEM.js
+// node_modules/@simplewebauthn/server/esm/helpers/convertCertBufferToPEM.js
 function convertCertBufferToPEM(certBuffer) {
   let b64cert;
   if (typeof certBuffer === "string") {
@@ -12282,7 +12282,7 @@ ${PEMKey}-----END CERTIFICATE-----
   return PEMKey;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertCOSEtoPKCS.js
+// node_modules/@simplewebauthn/server/esm/helpers/convertCOSEtoPKCS.js
 function convertCOSEtoPKCS(cosePublicKey) {
   const struct = isoCBOR_exports.decodeFirst(cosePublicKey);
   const tag = Uint8Array.from([4]);
@@ -12297,7 +12297,7 @@ function convertCOSEtoPKCS(cosePublicKey) {
   return isoUint8Array_exports.concat([tag, x]);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/decodeAttestationObject.js
+// node_modules/@simplewebauthn/server/esm/helpers/decodeAttestationObject.js
 function decodeAttestationObject(attestationObject) {
   return _decodeAttestationObjectInternals.stubThis(isoCBOR_exports.decodeFirst(attestationObject));
 }
@@ -12305,7 +12305,7 @@ var _decodeAttestationObjectInternals = {
   stubThis: (value) => value
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/decodeClientDataJSON.js
+// node_modules/@simplewebauthn/server/esm/helpers/decodeClientDataJSON.js
 function decodeClientDataJSON(data) {
   const toString = isoBase64URL_exports.toUTF8String(data);
   const clientData = JSON.parse(toString);
@@ -12315,7 +12315,7 @@ var _decodeClientDataJSONInternals = {
   stubThis: (value) => value
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/decodeCredentialPublicKey.js
+// node_modules/@simplewebauthn/server/esm/helpers/decodeCredentialPublicKey.js
 function decodeCredentialPublicKey(publicKey) {
   return _decodeCredentialPublicKeyInternals.stubThis(isoCBOR_exports.decodeFirst(publicKey));
 }
@@ -12323,7 +12323,7 @@ var _decodeCredentialPublicKeyInternals = {
   stubThis: (value) => value
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/generateUserID.js
+// node_modules/@simplewebauthn/server/esm/helpers/generateUserID.js
 async function generateUserID() {
   const newUserID = new Uint8Array(32);
   await isoCrypto_exports.getRandomValues(newUserID);
@@ -12333,7 +12333,7 @@ var _generateUserIDInternals = {
   stubThis: (value) => value
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/asn1js/build/index.es.js
+// node_modules/asn1js/build/index.es.js
 var index_es_exports = {};
 __export(index_es_exports, {
   Any: () => Any,
@@ -12386,7 +12386,7 @@ __export(index_es_exports, {
 });
 var pvtsutils = __toESM(require_build());
 
-// ../../../repos/vtdd-v2-p/node_modules/pvutils/build/utils.es.js
+// node_modules/pvutils/build/utils.es.js
 function utilFromBase(inputBuffer, inputBase) {
   let result = 0;
   if (inputBuffer.length === 1) {
@@ -12524,7 +12524,7 @@ function padNumber(inputNumber, fullLength) {
 }
 var log2 = Math.log(2);
 
-// ../../../repos/vtdd-v2-p/node_modules/asn1js/build/index.es.js
+// node_modules/asn1js/build/index.es.js
 function assertBigInt() {
   if (typeof BigInt === "undefined") {
     throw new Error("BigInt is not defined. Your environment doesn't implement BigInt.");
@@ -15565,7 +15565,7 @@ function verifySchema(inputBuffer, inputSchema) {
   return compareSchema(asn1.result, asn1.result, inputSchema);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/enums.js
+// node_modules/@peculiar/asn1-schema/build/es2015/enums.js
 var AsnTypeTypes;
 (function(AsnTypeTypes2) {
   AsnTypeTypes2[AsnTypeTypes2["Sequence"] = 0] = "Sequence";
@@ -15603,7 +15603,7 @@ var AsnPropTypes;
   AsnPropTypes2[AsnPropTypes2["Null"] = 27] = "Null";
 })(AsnPropTypes || (AsnPropTypes = {}));
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/types/bit_string.js
+// node_modules/@peculiar/asn1-schema/build/es2015/types/bit_string.js
 var import_pvtsutils = __toESM(require_build());
 var BitString2 = class {
   constructor(params, unusedBits = 0) {
@@ -15661,7 +15661,7 @@ var BitString2 = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/types/octet_string.js
+// node_modules/@peculiar/asn1-schema/build/es2015/types/octet_string.js
 var import_pvtsutils2 = __toESM(require_build());
 var OctetString2 = class {
   get byteLength() {
@@ -15698,7 +15698,7 @@ var OctetString2 = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/converters.js
+// node_modules/@peculiar/asn1-schema/build/es2015/converters.js
 var AsnAnyConverter = {
   fromASN: (value) => value instanceof Null ? null : value.valueBeforeDecodeView,
   toASN: (value) => {
@@ -15827,7 +15827,7 @@ function defaultConverter(type) {
   }
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/helper.js
+// node_modules/@peculiar/asn1-schema/build/es2015/helper.js
 function isConvertible(target) {
   if (typeof target === "function" && target.prototype) {
     if (target.prototype.toASN && target.prototype.fromASN) {
@@ -15867,7 +15867,7 @@ function isArrayEqual(bytes1, bytes2) {
   return true;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/schema.js
+// node_modules/@peculiar/asn1-schema/build/es2015/schema.js
 var AsnSchemaStorage = class {
   constructor() {
     this.items = /* @__PURE__ */ new WeakMap();
@@ -15991,10 +15991,10 @@ var AsnSchemaStorage = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/storage.js
+// node_modules/@peculiar/asn1-schema/build/es2015/storage.js
 var schemaStorage = new AsnSchemaStorage();
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/decorators.js
+// node_modules/@peculiar/asn1-schema/build/es2015/decorators.js
 var AsnType = (options) => (target) => {
   let schema;
   if (!schemaStorage.has(target)) {
@@ -16025,7 +16025,7 @@ var AsnProp = (options) => (target, propertyKey) => {
   schema.items[propertyKey] = copyOptions;
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/errors/schema_validation.js
+// node_modules/@peculiar/asn1-schema/build/es2015/errors/schema_validation.js
 var AsnSchemaValidationError = class extends Error {
   constructor() {
     super(...arguments);
@@ -16033,7 +16033,7 @@ var AsnSchemaValidationError = class extends Error {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/parser.js
+// node_modules/@peculiar/asn1-schema/build/es2015/parser.js
 var AsnParser = class {
   static parse(data, target) {
     const asn1Parsed = fromBER(data);
@@ -16308,7 +16308,7 @@ var AsnParser = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/serializer.js
+// node_modules/@peculiar/asn1-schema/build/es2015/serializer.js
 var AsnSerializer = class _AsnSerializer {
   static serialize(obj) {
     if (obj instanceof BaseBlock) {
@@ -16442,7 +16442,7 @@ var AsnSerializer = class _AsnSerializer {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/objects.js
+// node_modules/@peculiar/asn1-schema/build/es2015/objects.js
 var AsnArray = class extends Array {
   constructor(items = []) {
     if (typeof items === "number") {
@@ -16456,7 +16456,7 @@ var AsnArray = class extends Array {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/convert.js
+// node_modules/@peculiar/asn1-schema/build/es2015/convert.js
 var import_pvtsutils3 = __toESM(require_build());
 var AsnConvert = class _AsnConvert {
   static serialize(obj) {
@@ -16475,7 +16475,7 @@ var AsnConvert = class _AsnConvert {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/tslib/tslib.es6.mjs
+// node_modules/tslib/tslib.es6.mjs
 function __decorate(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -16494,7 +16494,7 @@ function __classPrivateFieldSet(receiver, state, value, kind, f) {
   return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/ip_converter.js
+// node_modules/@peculiar/asn1-x509/build/es2015/ip_converter.js
 var import_pvtsutils4 = __toESM(require_build());
 var IpConverter = class {
   static isIPv4(ip) {
@@ -16662,7 +16662,7 @@ var IpConverter = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/name.js
+// node_modules/@peculiar/asn1-x509/build/es2015/name.js
 var import_pvtsutils5 = __toESM(require_build());
 var RelativeDistinguishedName_1;
 var RDNSequence_1;
@@ -16752,7 +16752,7 @@ Name = Name_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], Name);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/general_name.js
+// node_modules/@peculiar/asn1-x509/build/es2015/general_name.js
 var AsnIpConverter = {
   fromASN: (value) => IpConverter.toString(AsnOctetStringConverter.fromASN(value)),
   toASN: (value) => AsnOctetStringConverter.toASN(IpConverter.fromString(value))
@@ -16823,7 +16823,7 @@ GeneralName = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], GeneralName);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/object_identifiers.js
+// node_modules/@peculiar/asn1-x509/build/es2015/object_identifiers.js
 var id_pkix = "1.3.6.1.5.5.7";
 var id_pe = `${id_pkix}.1`;
 var id_qt = `${id_pkix}.2`;
@@ -16837,7 +16837,7 @@ var id_ad_timeStamping = `${id_ad}.3`;
 var id_ad_caRepository = `${id_ad}.5`;
 var id_ce = "2.5.29";
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/authority_information_access.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/authority_information_access.js
 var AuthorityInfoAccessSyntax_1;
 var id_pe_authorityInfoAccess = `${id_pe}.1`;
 var AccessDescription = class {
@@ -16863,7 +16863,7 @@ AuthorityInfoAccessSyntax = AuthorityInfoAccessSyntax_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: AccessDescription })
 ], AuthorityInfoAccessSyntax);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/authority_key_identifier.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/authority_key_identifier.js
 var id_ce_authorityKeyIdentifier = `${id_ce}.35`;
 var KeyIdentifier = class extends OctetString2 {
 };
@@ -16890,7 +16890,7 @@ __decorate([
   })
 ], AuthorityKeyIdentifier.prototype, "authorityCertSerialNumber", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/basic_constraints.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/basic_constraints.js
 var id_ce_basicConstraints = `${id_ce}.19`;
 var BasicConstraints = class {
   constructor(params = {}) {
@@ -16905,7 +16905,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, optional: true })
 ], BasicConstraints.prototype, "pathLenConstraint", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/general_names.js
+// node_modules/@peculiar/asn1-x509/build/es2015/general_names.js
 var GeneralNames_1;
 var GeneralNames = GeneralNames_1 = class GeneralNames2 extends AsnArray {
   constructor(items) {
@@ -16917,7 +16917,7 @@ GeneralNames = GeneralNames_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: GeneralName })
 ], GeneralNames);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/certificate_issuer.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/certificate_issuer.js
 var CertificateIssuer_1;
 var id_ce_certificateIssuer = `${id_ce}.29`;
 var CertificateIssuer = CertificateIssuer_1 = class CertificateIssuer2 extends GeneralNames {
@@ -16930,7 +16930,7 @@ CertificateIssuer = CertificateIssuer_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], CertificateIssuer);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/certificate_policies.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/certificate_policies.js
 var CertificatePolicies_1;
 var id_ce_certificatePolicies = `${id_ce}.32`;
 var id_ce_certificatePolicies_anyPolicy = `${id_ce_certificatePolicies}.0`;
@@ -17030,7 +17030,7 @@ CertificatePolicies = CertificatePolicies_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: PolicyInformation })
 ], CertificatePolicies);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_number.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_number.js
 var id_ce_cRLNumber = `${id_ce}.20`;
 var CRLNumber = class CRLNumber2 {
   constructor(value = 0) {
@@ -17044,7 +17044,7 @@ CRLNumber = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], CRLNumber);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_delta_indicator.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_delta_indicator.js
 var id_ce_deltaCRLIndicator = `${id_ce}.27`;
 var BaseCRLNumber = class BaseCRLNumber2 extends CRLNumber {
 };
@@ -17052,7 +17052,7 @@ BaseCRLNumber = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], BaseCRLNumber);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_distribution_points.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_distribution_points.js
 var CRLDistributionPoints_1;
 var id_ce_cRLDistributionPoints = `${id_ce}.31`;
 var ReasonFlags;
@@ -17142,7 +17142,7 @@ CRLDistributionPoints = CRLDistributionPoints_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: DistributionPoint })
 ], CRLDistributionPoints);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_freshest.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_freshest.js
 var FreshestCRL_1;
 var id_ce_freshestCRL = `${id_ce}.46`;
 var FreshestCRL = FreshestCRL_1 = class FreshestCRL2 extends CRLDistributionPoints {
@@ -17155,7 +17155,7 @@ FreshestCRL = FreshestCRL_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: DistributionPoint })
 ], FreshestCRL);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_issuing_distribution_point.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_issuing_distribution_point.js
 var id_ce_issuingDistributionPoint = `${id_ce}.28`;
 var IssuingDistributionPoint = class _IssuingDistributionPoint {
   constructor(params = {}) {
@@ -17206,7 +17206,7 @@ __decorate([
   })
 ], IssuingDistributionPoint.prototype, "onlyContainsAttributeCerts", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_reason.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_reason.js
 var id_ce_cRLReasons = `${id_ce}.21`;
 var CRLReasons;
 (function(CRLReasons2) {
@@ -17240,7 +17240,7 @@ CRLReason = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], CRLReason);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/extended_key_usage.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/extended_key_usage.js
 var ExtendedKeyUsage_1;
 var id_ce_extKeyUsage = `${id_ce}.37`;
 var ExtendedKeyUsage = ExtendedKeyUsage_1 = class ExtendedKeyUsage2 extends AsnArray {
@@ -17260,7 +17260,7 @@ var id_kp_emailProtection = `${id_kp}.4`;
 var id_kp_timeStamping = `${id_kp}.8`;
 var id_kp_OCSPSigning = `${id_kp}.9`;
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/inhibit_any_policy.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/inhibit_any_policy.js
 var id_ce_inhibitAnyPolicy = `${id_ce}.54`;
 var InhibitAnyPolicy = class InhibitAnyPolicy2 {
   constructor(value = new ArrayBuffer(0)) {
@@ -17274,7 +17274,7 @@ InhibitAnyPolicy = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], InhibitAnyPolicy);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/invalidity_date.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/invalidity_date.js
 var id_ce_invalidityDate = `${id_ce}.24`;
 var InvalidityDate = class InvalidityDate2 {
   constructor(value) {
@@ -17291,7 +17291,7 @@ InvalidityDate = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], InvalidityDate);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/issuer_alternative_name.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/issuer_alternative_name.js
 var IssueAlternativeName_1;
 var id_ce_issuerAltName = `${id_ce}.18`;
 var IssueAlternativeName = IssueAlternativeName_1 = class IssueAlternativeName2 extends GeneralNames {
@@ -17304,7 +17304,7 @@ IssueAlternativeName = IssueAlternativeName_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], IssueAlternativeName);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/key_usage.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/key_usage.js
 var id_ce_keyUsage = `${id_ce}.15`;
 var KeyUsageFlags;
 (function(KeyUsageFlags3) {
@@ -17356,7 +17356,7 @@ var KeyUsage = class extends BitString2 {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/name_constraints.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/name_constraints.js
 var GeneralSubtrees_1;
 var id_ce_nameConstraints = `${id_ce}.30`;
 var GeneralSubtree = class {
@@ -17396,7 +17396,7 @@ __decorate([
   AsnProp({ type: GeneralSubtrees, context: 1, optional: true, implicit: true })
 ], NameConstraints.prototype, "excludedSubtrees", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/policy_constraints.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/policy_constraints.js
 var id_ce_policyConstraints = `${id_ce}.36`;
 var PolicyConstraints = class {
   constructor(params = {}) {
@@ -17422,7 +17422,7 @@ __decorate([
   })
 ], PolicyConstraints.prototype, "inhibitPolicyMapping", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/policy_mappings.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/policy_mappings.js
 var PolicyMappings_1;
 var id_ce_policyMappings = `${id_ce}.33`;
 var PolicyMapping = class {
@@ -17448,7 +17448,7 @@ PolicyMappings = PolicyMappings_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: PolicyMapping })
 ], PolicyMappings);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_alternative_name.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_alternative_name.js
 var SubjectAlternativeName_1;
 var id_ce_subjectAltName = `${id_ce}.17`;
 var SubjectAlternativeName = SubjectAlternativeName_1 = class SubjectAlternativeName2 extends GeneralNames {
@@ -17461,7 +17461,7 @@ SubjectAlternativeName = SubjectAlternativeName_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], SubjectAlternativeName);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/attribute.js
+// node_modules/@peculiar/asn1-x509/build/es2015/attribute.js
 var Attribute = class {
   constructor(params = {}) {
     this.type = "";
@@ -17476,7 +17476,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, repeated: "set" })
 ], Attribute.prototype, "values", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_directory_attributes.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_directory_attributes.js
 var SubjectDirectoryAttributes_1;
 var id_ce_subjectDirectoryAttributes = `${id_ce}.9`;
 var SubjectDirectoryAttributes = SubjectDirectoryAttributes_1 = class SubjectDirectoryAttributes2 extends AsnArray {
@@ -17489,12 +17489,12 @@ SubjectDirectoryAttributes = SubjectDirectoryAttributes_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Attribute })
 ], SubjectDirectoryAttributes);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_key_identifier.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_key_identifier.js
 var id_ce_subjectKeyIdentifier = `${id_ce}.14`;
 var SubjectKeyIdentifier = class extends KeyIdentifier {
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/private_key_usage_period.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/private_key_usage_period.js
 var id_ce_privateKeyUsagePeriod = `${id_ce}.16`;
 var PrivateKeyUsagePeriod = class {
   constructor(params = {}) {
@@ -17508,7 +17508,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.GeneralizedTime, context: 1, implicit: true, optional: true })
 ], PrivateKeyUsagePeriod.prototype, "notAfter", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/entrust_version_info.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/entrust_version_info.js
 var EntrustInfoFlags;
 (function(EntrustInfoFlags2) {
   EntrustInfoFlags2[EntrustInfoFlags2["keyUpdateAllowed"] = 1] = "keyUpdateAllowed";
@@ -17548,7 +17548,7 @@ __decorate([
   AsnProp({ type: EntrustInfo })
 ], EntrustVersionInfo.prototype, "entrustInfoFlags", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_info_access.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_info_access.js
 var SubjectInfoAccessSyntax_1;
 var id_pe_subjectInfoAccess = `${id_pe}.11`;
 var SubjectInfoAccessSyntax = SubjectInfoAccessSyntax_1 = class SubjectInfoAccessSyntax2 extends AsnArray {
@@ -17561,7 +17561,7 @@ SubjectInfoAccessSyntax = SubjectInfoAccessSyntax_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: AccessDescription })
 ], SubjectInfoAccessSyntax);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/algorithm_identifier.js
+// node_modules/@peculiar/asn1-x509/build/es2015/algorithm_identifier.js
 var pvtsutils2 = __toESM(require_build());
 var AlgorithmIdentifier = class _AlgorithmIdentifier {
   constructor(params = {}) {
@@ -17584,7 +17584,7 @@ __decorate([
   })
 ], AlgorithmIdentifier.prototype, "parameters", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/subject_public_key_info.js
+// node_modules/@peculiar/asn1-x509/build/es2015/subject_public_key_info.js
 var SubjectPublicKeyInfo = class {
   constructor(params = {}) {
     this.algorithm = new AlgorithmIdentifier();
@@ -17599,7 +17599,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], SubjectPublicKeyInfo.prototype, "subjectPublicKey", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/time.js
+// node_modules/@peculiar/asn1-x509/build/es2015/time.js
 var Time = class Time2 {
   constructor(time3) {
     if (time3) {
@@ -17638,7 +17638,7 @@ Time = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], Time);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/validity.js
+// node_modules/@peculiar/asn1-x509/build/es2015/validity.js
 var Validity = class {
   constructor(params) {
     this.notBefore = new Time(/* @__PURE__ */ new Date());
@@ -17656,7 +17656,7 @@ __decorate([
   AsnProp({ type: Time })
 ], Validity.prototype, "notAfter", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extension.js
+// node_modules/@peculiar/asn1-x509/build/es2015/extension.js
 var Extensions_1;
 var Extension = class _Extension {
   constructor(params = {}) {
@@ -17689,7 +17689,7 @@ Extensions = Extensions_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Extension })
 ], Extensions);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/types.js
+// node_modules/@peculiar/asn1-x509/build/es2015/types.js
 var Version;
 (function(Version4) {
   Version4[Version4["v1"] = 0] = "v1";
@@ -17697,7 +17697,7 @@ var Version;
   Version4[Version4["v3"] = 2] = "v3";
 })(Version || (Version = {}));
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/tbs_certificate.js
+// node_modules/@peculiar/asn1-x509/build/es2015/tbs_certificate.js
 var TBSCertificate = class {
   constructor(params = {}) {
     this.version = Version.v1;
@@ -17753,7 +17753,7 @@ __decorate([
   AsnProp({ type: Extensions, context: 3, optional: true })
 ], TBSCertificate.prototype, "extensions", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/certificate.js
+// node_modules/@peculiar/asn1-x509/build/es2015/certificate.js
 var Certificate = class {
   constructor(params = {}) {
     this.tbsCertificate = new TBSCertificate();
@@ -17772,7 +17772,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], Certificate.prototype, "signatureValue", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/tbs_cert_list.js
+// node_modules/@peculiar/asn1-x509/build/es2015/tbs_cert_list.js
 var RevokedCertificate = class {
   constructor(params = {}) {
     this.userCertificate = new ArrayBuffer(0);
@@ -17819,7 +17819,7 @@ __decorate([
   AsnProp({ type: Extension, optional: true, context: 0, repeated: "sequence" })
 ], TBSCertList.prototype, "crlExtensions", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/certificate_list.js
+// node_modules/@peculiar/asn1-x509/build/es2015/certificate_list.js
 var CertificateList = class {
   constructor(params = {}) {
     this.tbsCertList = new TBSCertList();
@@ -17838,7 +17838,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], CertificateList.prototype, "signature", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/getCertificateInfo.js
+// node_modules/@simplewebauthn/server/esm/helpers/getCertificateInfo.js
 var issuerSubjectIDKey = {
   "2.5.4.6": "C",
   "2.5.4.10": "O",
@@ -17900,11 +17900,11 @@ function issuerSubjectToString(input) {
   return parts.join(" : ");
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/x509/build/x509.es.js
+// node_modules/@peculiar/x509/build/x509.es.js
 var import_reflect_metadata = __toESM(require_Reflect());
 var import_pvtsutils6 = __toESM(require_build());
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/issuer_and_serial_number.js
+// node_modules/@peculiar/asn1-cms/build/es2015/issuer_and_serial_number.js
 var IssuerAndSerialNumber = class {
   constructor(params = {}) {
     this.issuer = new Name();
@@ -17919,7 +17919,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter })
 ], IssuerAndSerialNumber.prototype, "serialNumber", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/signer_identifier.js
+// node_modules/@peculiar/asn1-cms/build/es2015/signer_identifier.js
 var SignerIdentifier = class SignerIdentifier2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -17935,7 +17935,7 @@ SignerIdentifier = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], SignerIdentifier);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/types.js
+// node_modules/@peculiar/asn1-cms/build/es2015/types.js
 var CMSVersion;
 (function(CMSVersion2) {
   CMSVersion2[CMSVersion2["v0"] = 0] = "v0";
@@ -17976,7 +17976,7 @@ KeyDerivationAlgorithmIdentifier = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], KeyDerivationAlgorithmIdentifier);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/attribute.js
+// node_modules/@peculiar/asn1-cms/build/es2015/attribute.js
 var Attribute2 = class {
   constructor(params = {}) {
     this.attrType = "";
@@ -17991,7 +17991,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, repeated: "set" })
 ], Attribute2.prototype, "attrValues", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/signer_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/signer_info.js
 var SignerInfos_1;
 var SignerInfo = class {
   constructor(params = {}) {
@@ -18041,21 +18041,21 @@ SignerInfos = SignerInfos_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Set, itemType: SignerInfo })
 ], SignerInfos);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/attributes/counter_signature.js
+// node_modules/@peculiar/asn1-cms/build/es2015/attributes/counter_signature.js
 var CounterSignature = class CounterSignature2 extends SignerInfo {
 };
 CounterSignature = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], CounterSignature);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/attributes/signing_time.js
+// node_modules/@peculiar/asn1-cms/build/es2015/attributes/signing_time.js
 var SigningTime = class SigningTime2 extends Time {
 };
 SigningTime = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], SigningTime);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/aa_clear_attrs.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/aa_clear_attrs.js
 var ACClearAttrs = class {
   constructor(params = {}) {
     this.acIssuer = new GeneralName();
@@ -18074,7 +18074,7 @@ __decorate([
   AsnProp({ type: Attribute, repeated: "sequence" })
 ], ACClearAttrs.prototype, "attrs", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_spec.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_spec.js
 var AttrSpec_1;
 var AttrSpec = AttrSpec_1 = class AttrSpec2 extends AsnArray {
   constructor(items) {
@@ -18086,7 +18086,7 @@ AttrSpec = AttrSpec_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: AsnPropTypes.ObjectIdentifier })
 ], AttrSpec);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/aa_controls.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/aa_controls.js
 var AAControls = class {
   constructor(params = {}) {
     this.permitUnSpecified = true;
@@ -18106,7 +18106,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Boolean, defaultValue: true })
 ], AAControls.prototype, "permitUnSpecified", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/issuer_serial.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/issuer_serial.js
 var IssuerSerial = class {
   constructor(params = {}) {
     this.issuer = new GeneralNames();
@@ -18125,7 +18125,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString, optional: true })
 ], IssuerSerial.prototype, "issuerUID", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/object_digest_info.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/object_digest_info.js
 var DigestedObjectType;
 (function(DigestedObjectType2) {
   DigestedObjectType2[DigestedObjectType2["publicKey"] = 0] = "publicKey";
@@ -18153,7 +18153,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], ObjectDigestInfo.prototype, "objectDigest", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/v2_form.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/v2_form.js
 var V2Form = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18169,7 +18169,7 @@ __decorate([
   AsnProp({ type: ObjectDigestInfo, context: 1, implicit: true, optional: true })
 ], V2Form.prototype, "objectDigestInfo", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_cert_issuer.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_cert_issuer.js
 var AttCertIssuer = class AttCertIssuer2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18185,7 +18185,7 @@ AttCertIssuer = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], AttCertIssuer);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_cert_validity_period.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_cert_validity_period.js
 var AttCertValidityPeriod = class {
   constructor(params = {}) {
     this.notBeforeTime = /* @__PURE__ */ new Date();
@@ -18200,7 +18200,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.GeneralizedTime })
 ], AttCertValidityPeriod.prototype, "notAfterTime", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/holder.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/holder.js
 var Holder = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18216,7 +18216,7 @@ __decorate([
   AsnProp({ type: ObjectDigestInfo, implicit: true, context: 2, optional: true })
 ], Holder.prototype, "objectDigestInfo", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attribute_certificate_info.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/attribute_certificate_info.js
 var AttCertVersion;
 (function(AttCertVersion2) {
   AttCertVersion2[AttCertVersion2["v2"] = 1] = "v2";
@@ -18261,7 +18261,7 @@ __decorate([
   AsnProp({ type: Extensions, optional: true })
 ], AttributeCertificateInfo.prototype, "extensions", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attribute_certificate.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/attribute_certificate.js
 var AttributeCertificate = class {
   constructor(params = {}) {
     this.acinfo = new AttributeCertificateInfo();
@@ -18280,7 +18280,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], AttributeCertificate.prototype, "signatureValue", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/class_list.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/class_list.js
 var ClassListFlags;
 (function(ClassListFlags2) {
   ClassListFlags2[ClassListFlags2["unmarked"] = 1] = "unmarked";
@@ -18293,7 +18293,7 @@ var ClassListFlags;
 var ClassList = class extends BitString2 {
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/security_category.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/security_category.js
 var SecurityCategory = class {
   constructor(params = {}) {
     this.type = "";
@@ -18308,7 +18308,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, implicit: true, context: 1 })
 ], SecurityCategory.prototype, "value", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/clearance.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/clearance.js
 var Clearance = class {
   constructor(params = {}) {
     this.policyId = "";
@@ -18326,7 +18326,7 @@ __decorate([
   AsnProp({ type: SecurityCategory, repeated: "set" })
 ], Clearance.prototype, "securityCategories", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/ietf_attr_syntax.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/ietf_attr_syntax.js
 var IetfAttrSyntaxValueChoices = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18354,7 +18354,7 @@ __decorate([
   AsnProp({ type: IetfAttrSyntaxValueChoices, repeated: "sequence" })
 ], IetfAttrSyntax.prototype, "values", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/object_identifiers.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/object_identifiers.js
 var id_pe_ac_auditIdentity = `${id_pe}.4`;
 var id_pe_aaControls = `${id_pe}.6`;
 var id_pe_ac_proxying = `${id_pe}.10`;
@@ -18368,7 +18368,7 @@ var id_aca_encAttrs = `${id_aca}.6`;
 var id_at = "2.5.4";
 var id_at_role = `${id_at}.72`;
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/target.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/target.js
 var Targets_1;
 var TargetCert = class {
   constructor(params = {}) {
@@ -18412,7 +18412,7 @@ Targets = Targets_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Target })
 ], Targets);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/proxy_info.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/proxy_info.js
 var ProxyInfo_1;
 var ProxyInfo = ProxyInfo_1 = class ProxyInfo2 extends AsnArray {
   constructor(items) {
@@ -18424,7 +18424,7 @@ ProxyInfo = ProxyInfo_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Targets })
 ], ProxyInfo);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/role_syntax.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/role_syntax.js
 var RoleSyntax = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18437,7 +18437,7 @@ __decorate([
   AsnProp({ type: GeneralName, implicit: true, context: 1 })
 ], RoleSyntax.prototype, "roleName", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/svce_auth_info.js
+// node_modules/@peculiar/asn1-x509-attr/build/es2015/svce_auth_info.js
 var SvceAuthInfo = class {
   constructor(params = {}) {
     this.service = new GeneralName();
@@ -18455,7 +18455,7 @@ __decorate([
   AsnProp({ type: OctetString2, optional: true })
 ], SvceAuthInfo.prototype, "authInfo", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/certificate_choices.js
+// node_modules/@peculiar/asn1-cms/build/es2015/certificate_choices.js
 var CertificateSet_1;
 var OtherCertificateFormat = class {
   constructor(params = {}) {
@@ -18497,7 +18497,7 @@ CertificateSet = CertificateSet_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Set, itemType: CertificateChoices })
 ], CertificateSet);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/content_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/content_info.js
 var ContentInfo = class {
   constructor(params = {}) {
     this.contentType = "";
@@ -18512,7 +18512,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, context: 0 })
 ], ContentInfo.prototype, "content", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/encapsulated_content_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/encapsulated_content_info.js
 var EncapsulatedContent = class EncapsulatedContent2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18540,7 +18540,7 @@ __decorate([
   AsnProp({ type: EncapsulatedContent, context: 0, optional: true })
 ], EncapsulatedContentInfo.prototype, "eContent", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/encrypted_content_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/encrypted_content_info.js
 var EncryptedContent = class EncryptedContent2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18579,7 +18579,7 @@ __decorate([
   AsnProp({ type: EncryptedContent, optional: true })
 ], EncryptedContentInfo.prototype, "encryptedContent", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/other_key_attribute.js
+// node_modules/@peculiar/asn1-cms/build/es2015/other_key_attribute.js
 var OtherKeyAttribute = class {
   constructor(params = {}) {
     this.keyAttrId = "";
@@ -18593,7 +18593,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, optional: true })
 ], OtherKeyAttribute.prototype, "keyAttr", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/key_agree_recipient_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/key_agree_recipient_info.js
 var RecipientEncryptedKeys_1;
 var RecipientKeyIdentifier = class {
   constructor(params = {}) {
@@ -18701,7 +18701,7 @@ __decorate([
   AsnProp({ type: RecipientEncryptedKeys })
 ], KeyAgreeRecipientInfo.prototype, "recipientEncryptedKeys", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/key_trans_recipient_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/key_trans_recipient_info.js
 var RecipientIdentifier = class RecipientIdentifier2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18738,7 +18738,7 @@ __decorate([
   AsnProp({ type: OctetString2 })
 ], KeyTransRecipientInfo.prototype, "encryptedKey", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/kek_recipient_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/kek_recipient_info.js
 var KEKIdentifier = class {
   constructor(params = {}) {
     this.keyIdentifier = new OctetString2();
@@ -18776,7 +18776,7 @@ __decorate([
   AsnProp({ type: OctetString2 })
 ], KEKRecipientInfo.prototype, "encryptedKey", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/password_recipient_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/password_recipient_info.js
 var PasswordRecipientInfo = class {
   constructor(params = {}) {
     this.version = CMSVersion.v0;
@@ -18798,7 +18798,7 @@ __decorate([
   AsnProp({ type: OctetString2 })
 ], PasswordRecipientInfo.prototype, "encryptedKey", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/recipient_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/recipient_info.js
 var OtherRecipientInfo = class {
   constructor(params = {}) {
     this.oriType = "";
@@ -18836,7 +18836,7 @@ RecipientInfo = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], RecipientInfo);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/recipient_infos.js
+// node_modules/@peculiar/asn1-cms/build/es2015/recipient_infos.js
 var RecipientInfos_1;
 var RecipientInfos = RecipientInfos_1 = class RecipientInfos2 extends AsnArray {
   constructor(items) {
@@ -18848,7 +18848,7 @@ RecipientInfos = RecipientInfos_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Set, itemType: RecipientInfo })
 ], RecipientInfos);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/revocation_info_choice.js
+// node_modules/@peculiar/asn1-cms/build/es2015/revocation_info_choice.js
 var RevocationInfoChoices_1;
 var id_ri = `${id_pkix}.16`;
 var id_ri_ocsp_response = `${id_ri}.2`;
@@ -18888,7 +18888,7 @@ RevocationInfoChoices = RevocationInfoChoices_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Set, itemType: RevocationInfoChoice })
 ], RevocationInfoChoices);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/originator_info.js
+// node_modules/@peculiar/asn1-cms/build/es2015/originator_info.js
 var OriginatorInfo = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18901,7 +18901,7 @@ __decorate([
   AsnProp({ type: RevocationInfoChoices, context: 1, implicit: true, optional: true })
 ], OriginatorInfo.prototype, "crls", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/enveloped_data.js
+// node_modules/@peculiar/asn1-cms/build/es2015/enveloped_data.js
 var UnprotectedAttributes_1;
 var UnprotectedAttributes = UnprotectedAttributes_1 = class UnprotectedAttributes2 extends AsnArray {
   constructor(items) {
@@ -18936,10 +18936,10 @@ __decorate([
   AsnProp({ type: UnprotectedAttributes, context: 1, implicit: true, optional: true })
 ], EnvelopedData.prototype, "unprotectedAttrs", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/object_identifiers.js
+// node_modules/@peculiar/asn1-cms/build/es2015/object_identifiers.js
 var id_signedData = "1.2.840.113549.1.7.2";
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/signed_data.js
+// node_modules/@peculiar/asn1-cms/build/es2015/signed_data.js
 var DigestAlgorithmIdentifiers_1;
 var DigestAlgorithmIdentifiers = DigestAlgorithmIdentifiers_1 = class DigestAlgorithmIdentifiers2 extends AsnArray {
   constructor(items) {
@@ -18978,7 +18978,7 @@ __decorate([
   AsnProp({ type: SignerInfos })
 ], SignedData.prototype, "signerInfos", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/object_identifiers.js
+// node_modules/@peculiar/asn1-ecc/build/es2015/object_identifiers.js
 var id_ecPublicKey = "1.2.840.10045.2.1";
 var id_ecdsaWithSHA1 = "1.2.840.10045.4.1";
 var id_ecdsaWithSHA224 = "1.2.840.10045.4.3.1";
@@ -18989,7 +18989,7 @@ var id_secp256r1 = "1.2.840.10045.3.1.7";
 var id_secp384r1 = "1.3.132.0.34";
 var id_secp521r1 = "1.3.132.0.35";
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/algorithms.js
+// node_modules/@peculiar/asn1-ecc/build/es2015/algorithms.js
 function create(algorithm) {
   return new AlgorithmIdentifier({ algorithm });
 }
@@ -18999,7 +18999,7 @@ var ecdsaWithSHA256 = create(id_ecdsaWithSHA256);
 var ecdsaWithSHA384 = create(id_ecdsaWithSHA384);
 var ecdsaWithSHA512 = create(id_ecdsaWithSHA512);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/rfc3279.js
+// node_modules/@peculiar/asn1-ecc/build/es2015/rfc3279.js
 var FieldID = class FieldID2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -19065,7 +19065,7 @@ SpecifiedECDomain = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], SpecifiedECDomain);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/ec_parameters.js
+// node_modules/@peculiar/asn1-ecc/build/es2015/ec_parameters.js
 var ECParameters = class ECParameters2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -19084,7 +19084,7 @@ ECParameters = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], ECParameters);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/ec_private_key.js
+// node_modules/@peculiar/asn1-ecc/build/es2015/ec_private_key.js
 var ECPrivateKey = class {
   constructor(params = {}) {
     this.version = 1;
@@ -19105,7 +19105,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString, context: 1, optional: true })
 ], ECPrivateKey.prototype, "publicKey", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/ec_signature_value.js
+// node_modules/@peculiar/asn1-ecc/build/es2015/ec_signature_value.js
 var ECDSASigValue = class {
   constructor(params = {}) {
     this.r = new ArrayBuffer(0);
@@ -19120,7 +19120,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter })
 ], ECDSASigValue.prototype, "s", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/object_identifiers.js
+// node_modules/@peculiar/asn1-rsa/build/es2015/object_identifiers.js
 var id_pkcs_1 = "1.2.840.113549.1.1";
 var id_rsaEncryption = `${id_pkcs_1}.1`;
 var id_RSAES_OAEP = `${id_pkcs_1}.7`;
@@ -19146,7 +19146,7 @@ var id_md2 = "1.2.840.113549.2.2";
 var id_md5 = "1.2.840.113549.2.5";
 var id_mgf1 = `${id_pkcs_1}.8`;
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/algorithms.js
+// node_modules/@peculiar/asn1-rsa/build/es2015/algorithms.js
 function create2(algorithm) {
   return new AlgorithmIdentifier({ algorithm, parameters: null });
 }
@@ -19199,7 +19199,7 @@ var sha512WithRSAEncryption = create2(id_sha512WithRSAEncryption);
 var sha512_224WithRSAEncryption = create2(id_sha512_224WithRSAEncryption);
 var sha512_256WithRSAEncryption = create2(id_sha512_256WithRSAEncryption);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsaes_oaep.js
+// node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsaes_oaep.js
 var RsaEsOaepParams = class {
   constructor(params = {}) {
     this.hashAlgorithm = new AlgorithmIdentifier(sha1);
@@ -19225,7 +19225,7 @@ var RSAES_OAEP = new AlgorithmIdentifier({
   parameters: AsnConvert.serialize(new RsaEsOaepParams())
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsassa_pss.js
+// node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsassa_pss.js
 var RsaSaPssParams = class {
   constructor(params = {}) {
     this.hashAlgorithm = new AlgorithmIdentifier(sha1);
@@ -19255,7 +19255,7 @@ var RSASSA_PSS = new AlgorithmIdentifier({
   parameters: AsnConvert.serialize(new RsaSaPssParams())
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsassa_pkcs1_v1_5.js
+// node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsassa_pkcs1_v1_5.js
 var DigestInfo = class {
   constructor(params = {}) {
     this.digestAlgorithm = new AlgorithmIdentifier();
@@ -19270,7 +19270,7 @@ __decorate([
   AsnProp({ type: OctetString2 })
 ], DigestInfo.prototype, "digest", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/other_prime_info.js
+// node_modules/@peculiar/asn1-rsa/build/es2015/other_prime_info.js
 var OtherPrimeInfos_1;
 var OtherPrimeInfo = class {
   constructor(params = {}) {
@@ -19299,7 +19299,7 @@ OtherPrimeInfos = OtherPrimeInfos_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: OtherPrimeInfo })
 ], OtherPrimeInfos);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/rsa_private_key.js
+// node_modules/@peculiar/asn1-rsa/build/es2015/rsa_private_key.js
 var RSAPrivateKey = class {
   constructor(params = {}) {
     this.version = 0;
@@ -19345,7 +19345,7 @@ __decorate([
   AsnProp({ type: OtherPrimeInfos, optional: true })
 ], RSAPrivateKey.prototype, "otherPrimeInfos", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/rsa_public_key.js
+// node_modules/@peculiar/asn1-rsa/build/es2015/rsa_public_key.js
 var RSAPublicKey = class {
   constructor(params = {}) {
     this.modulus = new ArrayBuffer(0);
@@ -19360,7 +19360,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter })
 ], RSAPublicKey.prototype, "publicExponent", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/types/lifecycle.js
+// node_modules/tsyringe/dist/esm5/types/lifecycle.js
 var Lifecycle;
 (function(Lifecycle2) {
   Lifecycle2[Lifecycle2["Transient"] = 0] = "Transient";
@@ -19370,7 +19370,7 @@ var Lifecycle;
 })(Lifecycle || (Lifecycle = {}));
 var lifecycle_default = Lifecycle;
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/node_modules/tslib/tslib.es6.js
+// node_modules/tsyringe/node_modules/tslib/tslib.es6.js
 var extendStatics = function(d, b) {
   extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
     d2.__proto__ = b2;
@@ -19516,7 +19516,7 @@ function __spread() {
   return ar;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/reflection-helpers.js
+// node_modules/tsyringe/dist/esm5/reflection-helpers.js
 var INJECTION_TOKEN_METADATA_KEY = "injectionTokens";
 function getParamInfo(target) {
   var params = Reflect.getMetadata("design:paramtypes", target) || [];
@@ -19527,17 +19527,17 @@ function getParamInfo(target) {
   return params;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/class-provider.js
+// node_modules/tsyringe/dist/esm5/providers/class-provider.js
 function isClassProvider(provider) {
   return !!provider.useClass;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/factory-provider.js
+// node_modules/tsyringe/dist/esm5/providers/factory-provider.js
 function isFactoryProvider(provider) {
   return !!provider.useFactory;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/lazy-helpers.js
+// node_modules/tsyringe/dist/esm5/lazy-helpers.js
 var DelayedConstructor = (function() {
   function DelayedConstructor2(wrap) {
     this.wrap = wrap;
@@ -19588,7 +19588,7 @@ var DelayedConstructor = (function() {
   return DelayedConstructor2;
 })();
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/injection-token.js
+// node_modules/tsyringe/dist/esm5/providers/injection-token.js
 function isNormalToken(token) {
   return typeof token === "string" || typeof token === "symbol";
 }
@@ -19602,22 +19602,22 @@ function isConstructorToken(token) {
   return typeof token === "function" || token instanceof DelayedConstructor;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/token-provider.js
+// node_modules/tsyringe/dist/esm5/providers/token-provider.js
 function isTokenProvider(provider) {
   return !!provider.useToken;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/value-provider.js
+// node_modules/tsyringe/dist/esm5/providers/value-provider.js
 function isValueProvider(provider) {
   return provider.useValue != void 0;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/provider.js
+// node_modules/tsyringe/dist/esm5/providers/provider.js
 function isProvider(provider) {
   return isClassProvider(provider) || isValueProvider(provider) || isTokenProvider(provider) || isFactoryProvider(provider);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/registry-base.js
+// node_modules/tsyringe/dist/esm5/registry-base.js
 var RegistryBase = (function() {
   function RegistryBase2() {
     this._registryMap = /* @__PURE__ */ new Map();
@@ -19657,7 +19657,7 @@ var RegistryBase = (function() {
 })();
 var registry_base_default = RegistryBase;
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/registry.js
+// node_modules/tsyringe/dist/esm5/registry.js
 var Registry = (function(_super) {
   __extends(Registry2, _super);
   function Registry2() {
@@ -19667,7 +19667,7 @@ var Registry = (function(_super) {
 })(registry_base_default);
 var registry_default = Registry;
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/resolution-context.js
+// node_modules/tsyringe/dist/esm5/resolution-context.js
 var ResolutionContext = /* @__PURE__ */ (function() {
   function ResolutionContext2() {
     this.scopedResolutions = /* @__PURE__ */ new Map();
@@ -19676,7 +19676,7 @@ var ResolutionContext = /* @__PURE__ */ (function() {
 })();
 var resolution_context_default = ResolutionContext;
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/error-helpers.js
+// node_modules/tsyringe/dist/esm5/error-helpers.js
 function formatDependency(params, idx) {
   if (params === null) {
     return "at position #" + idx;
@@ -19698,7 +19698,7 @@ function formatErrorCtor(ctor, paramIdx, error2) {
   return composeErrorMessage("Cannot inject the dependency " + dep + ' of "' + ctor.name + '" constructor. Reason:', error2);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/types/disposable.js
+// node_modules/tsyringe/dist/esm5/types/disposable.js
 function isDisposable(value) {
   if (typeof value.dispose !== "function")
     return false;
@@ -19709,7 +19709,7 @@ function isDisposable(value) {
   return true;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/interceptors.js
+// node_modules/tsyringe/dist/esm5/interceptors.js
 var PreResolutionInterceptors = (function(_super) {
   __extends(PreResolutionInterceptors2, _super);
   function PreResolutionInterceptors2() {
@@ -19733,7 +19733,7 @@ var Interceptors = /* @__PURE__ */ (function() {
 })();
 var interceptors_default = Interceptors;
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/dependency-container.js
+// node_modules/tsyringe/dist/esm5/dependency-container.js
 var typeInfo = /* @__PURE__ */ new Map();
 var InternalDependencyContainer = (function() {
   function InternalDependencyContainer2(parent) {
@@ -20127,7 +20127,7 @@ var InternalDependencyContainer = (function() {
 })();
 var instance = new InternalDependencyContainer();
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/decorators/injectable.js
+// node_modules/tsyringe/dist/esm5/decorators/injectable.js
 function injectable(options) {
   return function(target) {
     typeInfo.set(target, getParamInfo(target));
@@ -20144,12 +20144,12 @@ function injectable(options) {
 }
 var injectable_default = injectable;
 
-// ../../../repos/vtdd-v2-p/node_modules/tsyringe/dist/esm5/index.js
+// node_modules/tsyringe/dist/esm5/index.js
 if (typeof Reflect === "undefined" || !Reflect.getMetadata) {
   throw new Error(`tsyringe requires a reflect polyfill. Please add 'import "reflect-metadata"' to the top of your entry point.`);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/attribute.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/attribute.js
 var PKCS12AttrSet_1;
 var PKCS12Attribute = class {
   constructor(params = {}) {
@@ -20174,7 +20174,7 @@ PKCS12AttrSet = PKCS12AttrSet_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: PKCS12Attribute })
 ], PKCS12AttrSet);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/authenticated_safe.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/authenticated_safe.js
 var AuthenticatedSafe_1;
 var AuthenticatedSafe = AuthenticatedSafe_1 = class AuthenticatedSafe2 extends AsnArray {
   constructor(items) {
@@ -20186,7 +20186,7 @@ AuthenticatedSafe = AuthenticatedSafe_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: ContentInfo })
 ], AuthenticatedSafe);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/object_identifiers.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/object_identifiers.js
 var id_rsadsi = "1.2.840.113549";
 var id_pkcs = `${id_rsadsi}.1`;
 var id_pkcs_12 = `${id_pkcs}.12`;
@@ -20199,7 +20199,7 @@ var id_pbeWithSHAAnd128BitRC2_CBC = `${id_pkcs_12PbeIds}.5`;
 var id_pbewithSHAAnd40BitRC2_CBC = `${id_pkcs_12PbeIds}.6`;
 var id_bagtypes = `${id_pkcs_12}.10.1`;
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/types.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/bags/types.js
 var id_keyBag = `${id_bagtypes}.1`;
 var id_pkcs8ShroudedKeyBag = `${id_bagtypes}.2`;
 var id_certBag = `${id_bagtypes}.3`;
@@ -20208,7 +20208,7 @@ var id_SecretBag = `${id_bagtypes}.5`;
 var id_SafeContents = `${id_bagtypes}.6`;
 var id_pkcs_9 = "1.2.840.113549.1.9";
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/cert_bag.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/bags/cert_bag.js
 var CertBag = class {
   constructor(params = {}) {
     this.certId = "";
@@ -20226,7 +20226,7 @@ var id_certTypes = `${id_pkcs_9}.22`;
 var id_x509Certificate = `${id_certTypes}.1`;
 var id_sdsiCertificate = `${id_certTypes}.2`;
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/crl_bag.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/bags/crl_bag.js
 var CRLBag = class {
   constructor(params = {}) {
     this.crlId = "";
@@ -20243,7 +20243,7 @@ __decorate([
 var id_crlTypes = `${id_pkcs_9}.23`;
 var id_x509CRL = `${id_crlTypes}.1`;
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pkcs8/build/es2015/encrypted_private_key_info.js
+// node_modules/@peculiar/asn1-pkcs8/build/es2015/encrypted_private_key_info.js
 var EncryptedData = class extends OctetString2 {
 };
 var EncryptedPrivateKeyInfo = class {
@@ -20260,7 +20260,7 @@ __decorate([
   AsnProp({ type: EncryptedData })
 ], EncryptedPrivateKeyInfo.prototype, "encryptedData", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pkcs8/build/es2015/private_key_info.js
+// node_modules/@peculiar/asn1-pkcs8/build/es2015/private_key_info.js
 var Attributes_1;
 var Version2;
 (function(Version4) {
@@ -20298,21 +20298,21 @@ __decorate([
   AsnProp({ type: Attributes, implicit: true, context: 0, optional: true })
 ], PrivateKeyInfo.prototype, "attributes", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/key_bag.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/bags/key_bag.js
 var KeyBag = class KeyBag2 extends PrivateKeyInfo {
 };
 KeyBag = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], KeyBag);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/pkcs8_shrouded_key_bag.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/bags/pkcs8_shrouded_key_bag.js
 var PKCS8ShroudedKeyBag = class PKCS8ShroudedKeyBag2 extends EncryptedPrivateKeyInfo {
 };
 PKCS8ShroudedKeyBag = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], PKCS8ShroudedKeyBag);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/secret_bag.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/bags/secret_bag.js
 var SecretBag = class {
   constructor(params = {}) {
     this.secretTypeId = "";
@@ -20327,7 +20327,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, context: 0 })
 ], SecretBag.prototype, "secretValue", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/mac_data.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/mac_data.js
 var MacData = class {
   constructor(params = {}) {
     this.mac = new DigestInfo();
@@ -20346,7 +20346,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, defaultValue: 1 })
 ], MacData.prototype, "iterations", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/pfx.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/pfx.js
 var PFX = class {
   constructor(params = {}) {
     this.version = 3;
@@ -20365,7 +20365,7 @@ __decorate([
   AsnProp({ type: MacData, optional: true })
 ], PFX.prototype, "macData", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/safe_bag.js
+// node_modules/@peculiar/asn1-pfx/build/es2015/safe_bag.js
 var SafeContents_1;
 var SafeBag = class {
   constructor(params = {}) {
@@ -20393,7 +20393,7 @@ SafeContents = SafeContents_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: SafeBag })
 ], SafeContents);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-pkcs9/build/es2015/index.js
+// node_modules/@peculiar/asn1-pkcs9/build/es2015/index.js
 var ExtensionRequest_1;
 var ExtendedCertificateAttributes_1;
 var SMIMECapabilities_1;
@@ -20637,7 +20637,7 @@ SMIMECapabilities = SMIMECapabilities_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: SMIMECapability })
 ], SMIMECapabilities);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-csr/build/es2015/attributes.js
+// node_modules/@peculiar/asn1-csr/build/es2015/attributes.js
 var Attributes_12;
 var Attributes3 = Attributes_12 = class Attributes4 extends AsnArray {
   constructor(items) {
@@ -20649,7 +20649,7 @@ Attributes3 = Attributes_12 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Attribute })
 ], Attributes3);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-csr/build/es2015/certification_request_info.js
+// node_modules/@peculiar/asn1-csr/build/es2015/certification_request_info.js
 var CertificationRequestInfo = class {
   constructor(params = {}) {
     this.version = 0;
@@ -20672,7 +20672,7 @@ __decorate([
   AsnProp({ type: Attributes3, implicit: true, context: 0, optional: true })
 ], CertificationRequestInfo.prototype, "attributes", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-csr/build/es2015/certification_request.js
+// node_modules/@peculiar/asn1-csr/build/es2015/certification_request.js
 var CertificationRequest = class {
   constructor(params = {}) {
     this.certificationRequestInfo = new CertificationRequestInfo();
@@ -20691,7 +20691,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], CertificationRequest.prototype, "signature", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/x509/build/x509.es.js
+// node_modules/@peculiar/x509/build/x509.es.js
 var diAlgorithm = "crypto.algorithm";
 var AlgorithmProvider = class {
   getAlgorithms() {
@@ -23509,7 +23509,7 @@ AsnEcSignatureFormatter.namedCurveSize.set("K-256", 32);
 AsnEcSignatureFormatter.namedCurveSize.set("P-384", 48);
 AsnEcSignatureFormatter.namedCurveSize.set("P-521", 66);
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/fetch.js
+// node_modules/@simplewebauthn/server/esm/helpers/fetch.js
 function fetch2(url) {
   return _fetchInternals.stubThis(url);
 }
@@ -23517,7 +23517,7 @@ var _fetchInternals = {
   stubThis: (url) => globalThis.fetch(url)
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/isCertRevoked.js
+// node_modules/@simplewebauthn/server/esm/helpers/isCertRevoked.js
 var cacheRevokedCerts = {};
 async function isCertRevoked(cert) {
   const { extensions } = cert;
@@ -23589,7 +23589,7 @@ async function isCertRevoked(cert) {
   return false;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/decodeAuthenticatorExtensions.js
+// node_modules/@simplewebauthn/server/esm/helpers/decodeAuthenticatorExtensions.js
 function decodeAuthenticatorExtensions(extensionData) {
   let toCBOR;
   try {
@@ -23612,7 +23612,7 @@ function convertMapToObjectDeep(input) {
   return mapped;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/parseAuthenticatorData.js
+// node_modules/@simplewebauthn/server/esm/helpers/parseAuthenticatorData.js
 function parseAuthenticatorData(authData) {
   if (authData.byteLength < 37) {
     throw new Error(`Authenticator data was ${authData.byteLength} bytes, expected at least 37 bytes`);
@@ -23701,7 +23701,7 @@ var _parseAuthenticatorDataInternals = {
   stubThis: (value) => value
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/toHash.js
+// node_modules/@simplewebauthn/server/esm/helpers/toHash.js
 function toHash(data, algorithm = -7) {
   if (typeof data === "string") {
     data = isoUint8Array_exports.fromUTF8String(data);
@@ -23710,7 +23710,7 @@ function toHash(data, algorithm = -7) {
   return digest2;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/validateCertificatePath.js
+// node_modules/@simplewebauthn/server/esm/helpers/validateCertificatePath.js
 async function validateCertificatePath(x5cCertsPEM, trustAnchorsPEM = []) {
   if (trustAnchorsPEM.length === 0) {
     return true;
@@ -23817,7 +23817,7 @@ var InvalidSubjectAndIssuer = class extends Error {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/mapX509SignatureAlgToCOSEAlg.js
+// node_modules/@simplewebauthn/server/esm/helpers/mapX509SignatureAlgToCOSEAlg.js
 function mapX509SignatureAlgToCOSEAlg(signatureAlgorithm) {
   let alg;
   if (signatureAlgorithm === "1.2.840.10045.4.3.2") {
@@ -23840,7 +23840,7 @@ function mapX509SignatureAlgToCOSEAlg(signatureAlgorithm) {
   return alg;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertX509PublicKeyToCOSE.js
+// node_modules/@simplewebauthn/server/esm/helpers/convertX509PublicKeyToCOSE.js
 function convertX509PublicKeyToCOSE(x509Certificate) {
   let cosePublicKey = /* @__PURE__ */ new Map();
   const x509 = AsnParser.parse(x509Certificate, Certificate);
@@ -23894,7 +23894,7 @@ function convertX509PublicKeyToCOSE(x509Certificate) {
   return cosePublicKey;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/verifySignature.js
+// node_modules/@simplewebauthn/server/esm/helpers/verifySignature.js
 function verifySignature(opts) {
   const { signature, data, credentialPublicKey, x509Certificate, hashAlgorithm } = opts;
   if (!x509Certificate && !credentialPublicKey) {
@@ -23920,7 +23920,7 @@ var _verifySignatureInternals = {
   stubThis: (value) => value
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/metadata/parseJWT.js
+// node_modules/@simplewebauthn/server/esm/metadata/parseJWT.js
 function parseJWT(jwt) {
   const parts = jwt.split(".");
   return [
@@ -23930,7 +23930,7 @@ function parseJWT(jwt) {
   ];
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/metadata/verifyJWT.js
+// node_modules/@simplewebauthn/server/esm/metadata/verifyJWT.js
 function verifyJWT(jwt, leafCert) {
   const [header, payload, signature] = jwt.split(".");
   const certCOSE = convertX509PublicKeyToCOSE(leafCert);
@@ -23954,13 +23954,13 @@ function verifyJWT(jwt, leafCert) {
   throw new Error(`JWT verification with public key of kty ${kty} is not supported by this method`);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertPEMToBytes.js
+// node_modules/@simplewebauthn/server/esm/helpers/convertPEMToBytes.js
 function convertPEMToBytes(pem) {
   const certBase64 = pem.replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").replace(/[\n ]/g, "");
   return isoBase64URL_exports.toBuffer(certBase64, "base64");
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/android-safetynet.js
+// node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/android-safetynet.js
 var GlobalSign_Root_CA = `-----BEGIN CERTIFICATE-----
 MIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkG
 A1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNVBAsTB1Jv
@@ -23984,7 +23984,7 @@ HMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==
 -----END CERTIFICATE-----
 `;
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/android-key.js
+// node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/android-key.js
 var Google_Hardware_Attestation_Root_1 = `-----BEGIN CERTIFICATE-----
 MIIFYDCCA0igAwIBAgIJAOj6GWMU0voYMA0GCSqGSIb3DQEBCwUAMBsxGTAXBgNV
 BAUTEGY5MjAwOWU4NTNiNmIwNDUwHhcNMTYwNTI2MTYyODUyWhcNMjYwNTI0MTYy
@@ -24113,7 +24113,7 @@ w1IdYIg2Wxg7yHcQZemFQg==
 -----END CERTIFICATE-----
 `;
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/apple.js
+// node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/apple.js
 var Apple_WebAuthn_Root_CA = `-----BEGIN CERTIFICATE-----
 MIICEjCCAZmgAwIBAgIQaB0BbHo84wIlpQGUKEdXcTAKBggqhkjOPQQDAzBLMR8w
 HQYDVQQDDBZBcHBsZSBXZWJBdXRobiBSb290IENBMRMwEQYDVQQKDApBcHBsZSBJ
@@ -24130,7 +24130,7 @@ jAGGiQIwHFj+dJZYUJR786osByBelJYsVZd2GbHQu209b5RCmGQ21gpSAk9QZW4B
 -----END CERTIFICATE-----
 `;
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/mds.js
+// node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/mds.js
 var GlobalSign_Root_CA_R3 = `-----BEGIN CERTIFICATE-----
 MIIDXzCCAkegAwIBAgILBAAAAAABIVhTCKIwDQYJKoZIhvcNAQELBQAwTDEgMB4G
 A1UECxMXR2xvYmFsU2lnbiBSb290IENBIC0gUjMxEzARBgNVBAoTCkdsb2JhbFNp
@@ -24154,7 +24154,7 @@ WD9f
 -----END CERTIFICATE-----
  `;
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/settingsService.js
+// node_modules/@simplewebauthn/server/esm/services/settingsService.js
 var BaseSettingsService = class {
   constructor() {
     Object.defineProperty(this, "pemCertificates", {
@@ -24205,7 +24205,7 @@ SettingsService.setRootCertificates({
   certificates: [GlobalSign_Root_CA_R3]
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/metadata/verifyMDSBlob.js
+// node_modules/@simplewebauthn/server/esm/metadata/verifyMDSBlob.js
 async function verifyMDSBlob(blob) {
   const parsedJWT = parseJWT(blob);
   const header = parsedJWT[0];
@@ -24245,7 +24245,7 @@ async function verifyMDSBlob(blob) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyOKP.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyOKP.js
 async function verifyOKP(opts) {
   const { cosePublicKey, signature, data } = opts;
   const WebCrypto = await getWebCrypto();
@@ -24291,7 +24291,7 @@ async function verifyOKP(opts) {
   return WebCrypto.subtle.verify(verifyAlgorithm, key, signature, data);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/unwrapEC2Signature.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/unwrapEC2Signature.js
 function unwrapEC2Signature(signature, crv) {
   const parsedSignature = AsnParser.parse(signature, ECDSASigValue);
   const rBytes = new Uint8Array(parsedSignature.r);
@@ -24332,7 +24332,7 @@ function toNormalizedBytes(bytes, componentLength) {
   return normalizedBytes;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verify.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verify.js
 function verify(opts) {
   const { cosePublicKey, signature, data, shaHashOverride } = opts;
   if (isCOSEPublicKeyEC2(cosePublicKey)) {
@@ -24356,7 +24356,7 @@ function verify(opts) {
   throw new Error(`Signature verification with public key of kty ${kty} is not supported by this method`);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoUint8Array.js
+// node_modules/@simplewebauthn/server/esm/helpers/iso/isoUint8Array.js
 var isoUint8Array_exports = {};
 __export(isoUint8Array_exports, {
   areEqual: () => areEqual,
@@ -24414,7 +24414,7 @@ function toDataView(array2) {
   return new DataView(array2.buffer, array2.byteOffset, array2.length);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/generateChallenge.js
+// node_modules/@simplewebauthn/server/esm/helpers/generateChallenge.js
 async function generateChallenge() {
   const challenge = new Uint8Array(32);
   await isoCrypto_exports.getRandomValues(challenge);
@@ -24424,7 +24424,7 @@ var _generateChallengeInternals = {
   stubThis: (value) => value
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/generateRegistrationOptions.js
+// node_modules/@simplewebauthn/server/esm/registration/generateRegistrationOptions.js
 var supportedCOSEAlgorithmIdentifiers = [
   // EdDSA (In first position to encourage authenticators to use this over ES256)
   -8,
@@ -24523,7 +24523,7 @@ async function generateRegistrationOptions(options) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/parseBackupFlags.js
+// node_modules/@simplewebauthn/server/esm/helpers/parseBackupFlags.js
 function parseBackupFlags({ be, bs }) {
   const credentialBackedUp = bs;
   let credentialDeviceType = "singleDevice";
@@ -24542,7 +24542,7 @@ var InvalidBackupFlags = class extends Error {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/matchExpectedRPID.js
+// node_modules/@simplewebauthn/server/esm/helpers/matchExpectedRPID.js
 async function matchExpectedRPID(rpIDHash, expectedRPIDs) {
   try {
     const matchedRPID = await Promise.any(expectedRPIDs.map((expected) => {
@@ -24573,7 +24573,7 @@ var UnexpectedRPIDHash = class extends Error {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationFIDOU2F.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationFIDOU2F.js
 async function verifyAttestationFIDOU2F(options) {
   const { attStmt, clientDataHash, rpIdHash, credentialID, credentialPublicKey, aaguid, rootCertificates } = options;
   const reservedByte = Uint8Array.from([0]);
@@ -24611,7 +24611,7 @@ async function verifyAttestationFIDOU2F(options) {
   });
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/validateExtFIDOGenCEAAGUID.js
+// node_modules/@simplewebauthn/server/esm/helpers/validateExtFIDOGenCEAAGUID.js
 var id_fido_gen_ce_aaguid = "1.3.6.1.4.1.45724.1.1.4";
 function validateExtFIDOGenCEAAGUID(certExtensions, aaguid) {
   if (!certExtensions) {
@@ -24632,13 +24632,13 @@ function validateExtFIDOGenCEAAGUID(certExtensions, aaguid) {
   return true;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/logging.js
+// node_modules/@simplewebauthn/server/esm/helpers/logging.js
 function getLogger(_name) {
   return (_message, ..._rest) => {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/metadataService.js
+// node_modules/@simplewebauthn/server/esm/services/metadataService.js
 var NonRefreshingMDS = {
   url: "",
   no: 0,
@@ -24845,7 +24845,7 @@ var BaseMetadataService = class {
 };
 var MetadataService = new BaseMetadataService();
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/metadata/verifyAttestationWithMetadata.js
+// node_modules/@simplewebauthn/server/esm/metadata/verifyAttestationWithMetadata.js
 async function verifyAttestationWithMetadata({ statement, credentialPublicKey, x5c, attestationStatementAlg }) {
   const { authenticationAlgorithms, authenticatorGetInfo, attestationRootCertificates } = statement;
   const keypairCOSEAlgs = /* @__PURE__ */ new Set();
@@ -24941,7 +24941,7 @@ function stringifyCOSEInfo(info) {
   return toReturn;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationPacked.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationPacked.js
 async function verifyAttestationPacked(options) {
   const { attStmt, clientDataHash, authData, credentialPublicKey, aaguid, rootCertificates } = options;
   const sig = attStmt.get("sig");
@@ -25033,7 +25033,7 @@ async function verifyAttestationPacked(options) {
   return verified;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationAndroidSafetyNet.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationAndroidSafetyNet.js
 async function verifyAttestationAndroidSafetyNet(options) {
   const { attStmt, clientDataHash, authData, aaguid, rootCertificates, verifyTimestampMS = true, credentialPublicKey, attestationSafetyNetEnforceCTSCheck } = options;
   const alg = attStmt.get("alg");
@@ -25108,7 +25108,7 @@ async function verifyAttestationAndroidSafetyNet(options) {
   return verified;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/constants.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/constants.js
 var TPM_ST = {
   196: "TPM_ST_RSP_COMMAND",
   32768: "TPM_ST_NULL",
@@ -25226,7 +25226,7 @@ var TPM_ECC_CURVE_COSE_CRV_MAP = {
   // p256
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/parseCertInfo.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/parseCertInfo.js
 function parseCertInfo(certInfo) {
   let pointer = 0;
   const dataView = isoUint8Array_exports.toDataView(certInfo);
@@ -25273,7 +25273,7 @@ function parseCertInfo(certInfo) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/parsePubArea.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/parsePubArea.js
 function parsePubArea(pubArea) {
   let pointer = 0;
   const dataView = isoUint8Array_exports.toDataView(pubArea);
@@ -25344,7 +25344,7 @@ function parsePubArea(pubArea) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/verifyAttestationTPM.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/verifyAttestationTPM.js
 async function verifyAttestationTPM(options) {
   const { aaguid, attStmt, authData, credentialPublicKey, clientDataHash, rootCertificates } = options;
   const ver = attStmt.get("ver");
@@ -25575,7 +25575,7 @@ function attestedNameAlgToCOSEAlg(alg) {
   throw new Error(`Unexpected TPM attested name alg ${alg}`);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-android/build/es2015/key_description.js
+// node_modules/@peculiar/asn1-android/build/es2015/key_description.js
 var IntegerSet_1;
 var id_ce_keyDescription = "1.3.6.1.4.1.11129.2.1.17";
 var VerifiedBootState;
@@ -25864,7 +25864,7 @@ __decorate([
   AsnProp({ type: AuthorizationList })
 ], KeyMintKeyDescription.prototype, "hardwareEnforced", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-android/build/es2015/nonstandard.js
+// node_modules/@peculiar/asn1-android/build/es2015/nonstandard.js
 var NonStandardAuthorizationList_1;
 var NonStandardAuthorization = class NonStandardAuthorization2 extends AuthorizationList {
 };
@@ -25960,7 +25960,7 @@ NonStandardKeyMintKeyDescription = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], NonStandardKeyMintKeyDescription);
 
-// ../../../repos/vtdd-v2-p/node_modules/@peculiar/asn1-android/build/es2015/attestation.js
+// node_modules/@peculiar/asn1-android/build/es2015/attestation.js
 var AttestationPackageInfo = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -25984,7 +25984,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.OctetString, repeated: "set" })
 ], AttestationApplicationId.prototype, "signatureDigests", void 0);
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationAndroidKey.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationAndroidKey.js
 async function verifyAttestationAndroidKey(options) {
   const { authData, clientDataHash, attStmt, credentialPublicKey, aaguid, rootCertificates } = options;
   const x5c = attStmt.get("x5c");
@@ -26058,7 +26058,7 @@ async function verifyAttestationAndroidKey(options) {
   });
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationApple.js
+// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationApple.js
 async function verifyAttestationApple(options) {
   const { attStmt, authData, clientDataHash, credentialPublicKey, rootCertificates } = options;
   const x5c = attStmt.get("x5c");
@@ -26094,7 +26094,7 @@ async function verifyAttestationApple(options) {
   return true;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifyRegistrationResponse.js
+// node_modules/@simplewebauthn/server/esm/registration/verifyRegistrationResponse.js
 async function verifyRegistrationResponse(options) {
   const { response, expectedChallenge, expectedOrigin, expectedRPID, expectedType, requireUserPresence = true, requireUserVerification = true, supportedAlgorithmIDs = supportedCOSEAlgorithmIdentifiers, attestationSafetyNetEnforceCTSCheck = true } = options;
   const { id, rawId, type: credentialType, response: attestationResponse } = response;
@@ -26249,7 +26249,7 @@ async function verifyRegistrationResponse(options) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/authentication/generateAuthenticationOptions.js
+// node_modules/@simplewebauthn/server/esm/authentication/generateAuthenticationOptions.js
 async function generateAuthenticationOptions(options) {
   const { allowCredentials, challenge = await generateChallenge(), timeout = 6e4, userVerification = "preferred", extensions, rpID } = options;
   let _challenge = challenge;
@@ -26275,7 +26275,7 @@ async function generateAuthenticationOptions(options) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/authentication/verifyAuthenticationResponse.js
+// node_modules/@simplewebauthn/server/esm/authentication/verifyAuthenticationResponse.js
 async function verifyAuthenticationResponse(options) {
   const { response, expectedChallenge, expectedOrigin, expectedRPID, expectedType, credential, requireUserVerification = true, advancedFIDOConfig } = options;
   const { id, rawId, type: credentialType, response: assertionResponse } = response;
@@ -42488,7 +42488,7 @@ function errorMessage(error2) {
   return normalizeText32(error2) || "unknown error";
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v3/helpers/util.js
+// node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
   util2.assertEqual = (_) => {
@@ -42622,7 +42622,7 @@ var getParsedType = (data) => {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v3/ZodError.js
+// node_modules/zod/v3/ZodError.js
 var ZodIssueCode = util.arrayToEnum([
   "invalid_type",
   "invalid_literal",
@@ -42736,7 +42736,7 @@ ZodError.create = (issues) => {
   return error2;
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v3/locales/en.js
+// node_modules/zod/v3/locales/en.js
 var errorMap = (issue2, _ctx) => {
   let message;
   switch (issue2.code) {
@@ -42839,13 +42839,13 @@ var errorMap = (issue2, _ctx) => {
 };
 var en_default = errorMap;
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v3/errors.js
+// node_modules/zod/v3/errors.js
 var overrideErrorMap = en_default;
 function getErrorMap() {
   return overrideErrorMap;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v3/helpers/parseUtil.js
+// node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
   const { data, path, errorMaps, issueData } = params;
   const fullPath = [...path, ...issueData.path || []];
@@ -42954,14 +42954,14 @@ var isDirty = (x) => x.status === "dirty";
 var isValid = (x) => x.status === "valid";
 var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v3/helpers/errorUtil.js
+// node_modules/zod/v3/helpers/errorUtil.js
 var errorUtil;
 (function(errorUtil2) {
   errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
   errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
 })(errorUtil || (errorUtil = {}));
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v3/types.js
+// node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
   constructor(parent, value, path, key) {
     this._cachedPath = [];
@@ -46365,7 +46365,7 @@ var nullableType = ZodNullable.create;
 var preprocessType = ZodEffects.createWithPreprocess;
 var pipelineType = ZodPipeline.create;
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/core.js
+// node_modules/zod/v4/core/core.js
 var _a3;
 // @__NO_SIDE_EFFECTS__
 function $constructor(name, initializer3, params) {
@@ -46439,7 +46439,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/util.js
+// node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -47135,7 +47135,7 @@ var Class = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/errors.js
+// node_modules/zod/v4/core/errors.js
 var initializer = (inst, def) => {
   inst.name = "$ZodError";
   Object.defineProperty(inst, "_zod", {
@@ -47204,7 +47204,7 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
   return fieldErrors;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/parse.js
+// node_modules/zod/v4/core/parse.js
 var _parse = (_Err) => (schema, value, _ctx, _params) => {
   const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
   const result = schema._zod.run({ value, issues: [] }, ctx);
@@ -47284,7 +47284,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
   return _safeParseAsync(_Err)(schema, value, _ctx);
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/regexes.js
+// node_modules/zod/v4/core/regexes.js
 var cuid = /^[cC][0-9a-z]{6,}$/;
 var cuid2 = /^[0-9a-z]+$/;
 var ulid = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
@@ -47342,7 +47342,7 @@ var _null = /^null$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/checks.js
+// node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a5;
   inst._zod ?? (inst._zod = {});
@@ -47732,7 +47732,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/doc.js
+// node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = []) {
     this.content = [];
@@ -47768,14 +47768,14 @@ var Doc = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/versions.js
+// node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 4,
   patch: 3
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/schemas.js
+// node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a5;
   inst ?? (inst = {});
@@ -49255,7 +49255,7 @@ function handleRefineResult(result, payload, input, inst) {
   }
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/locales/en.js
+// node_modules/zod/v4/locales/en.js
 var error = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -49368,7 +49368,7 @@ function en_default2() {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/registries.js
+// node_modules/zod/v4/core/registries.js
 var _a4;
 var $output = Symbol("ZodOutput");
 var $input = Symbol("ZodInput");
@@ -49418,7 +49418,7 @@ function registry() {
 (_a4 = globalThis).__zod_globalRegistry ?? (_a4.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/api.js
+// node_modules/zod/v4/core/api.js
 // @__NO_SIDE_EFFECTS__
 function _string(Class2, params) {
   return new Class2({
@@ -49946,7 +49946,7 @@ function _check(fn, params) {
   return ch;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/to-json-schema.js
+// node_modules/zod/v4/core/to-json-schema.js
 function initializeContext(params) {
   let target = params?.target ?? "draft-2020-12";
   if (target === "draft-4")
@@ -50305,7 +50305,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/core/json-schema-processors.js
+// node_modules/zod/v4/core/json-schema-processors.js
 var formatMap = {
   guid: "uuid",
   url: "uri",
@@ -50849,7 +50849,7 @@ function toJSONSchema(input, params) {
   return finalize(ctx, input);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/mini/schemas.js
+// node_modules/zod/v4/mini/schemas.js
 var ZodMiniType = /* @__PURE__ */ $constructor("ZodMiniType", (inst, def) => {
   if (!inst._zod)
     throw new Error("Uninitialized schema in ZodMiniType.");
@@ -50895,7 +50895,7 @@ function object(shape, params) {
   return new ZodMiniObject(def);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s) {
   const schema = s;
   return !!schema._zod;
@@ -51039,7 +51039,7 @@ function getLiteralValue(schema) {
   return void 0;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/classic/iso.js
+// node_modules/zod/v4/classic/iso.js
 var iso_exports2 = {};
 __export(iso_exports2, {
   ZodISODate: () => ZodISODate,
@@ -51080,7 +51080,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/classic/errors.js
+// node_modules/zod/v4/classic/errors.js
 var initializer2 = (inst, issues) => {
   $ZodError.init(inst, issues);
   inst.name = "ZodError";
@@ -51119,7 +51119,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, {
   Parent: Error
 });
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/classic/parse.js
+// node_modules/zod/v4/classic/parse.js
 var parse2 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse4 = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -51133,7 +51133,7 @@ var safeDecode2 = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync2 = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync2 = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/classic/schemas.js
+// node_modules/zod/v4/classic/schemas.js
 var _installedGroups = /* @__PURE__ */ new WeakMap();
 function _installLazyMethods(inst, group, methods) {
   const proto = Object.getPrototypeOf(inst);
@@ -51975,10 +51975,10 @@ function preprocess(fn, schema) {
   });
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod/v4/classic/external.js
+// node_modules/zod/v4/classic/external.js
 config(en_default2());
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var DEFAULT_NEGOTIATED_PROTOCOL_VERSION = "2025-03-26";
 var SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
@@ -53511,12 +53511,12 @@ var UrlElicitationRequiredError = class extends McpError {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
 function isTerminal(status) {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/Options.js
+// node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
 var defaultOptions = {
   name: void 0,
@@ -53550,7 +53550,7 @@ var getDefaultOptions = (options) => typeof options === "string" ? {
   ...options
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/Refs.js
+// node_modules/zod-to-json-schema/dist/esm/Refs.js
 var getRefs = (options) => {
   const _options = getDefaultOptions(options);
   const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
@@ -53571,7 +53571,7 @@ var getRefs = (options) => {
   };
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/errorMessages.js
+// node_modules/zod-to-json-schema/dist/esm/errorMessages.js
 function addErrorMessage(res, key, errorMessage2, refs) {
   if (!refs?.errorMessages)
     return;
@@ -53587,7 +53587,7 @@ function setResponseValueAndErrors(res, key, value, errorMessage2, refs) {
   addErrorMessage(res, key, errorMessage2, refs);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
+// node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
 var getRelativePath = (pathA, pathB) => {
   let i = 0;
   for (; i < pathA.length && i < pathB.length; i++) {
@@ -53597,7 +53597,7 @@ var getRelativePath = (pathA, pathB) => {
   return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/any.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/any.js
 function parseAnyDef(refs) {
   if (refs.target !== "openAi") {
     return {};
@@ -53613,7 +53613,7 @@ function parseAnyDef(refs) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/array.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/array.js
 function parseArrayDef(def, refs) {
   const res = {
     type: "array"
@@ -53637,7 +53637,7 @@ function parseArrayDef(def, refs) {
   return res;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
 function parseBigintDef(def, refs) {
   const res = {
     type: "integer",
@@ -53683,24 +53683,24 @@ function parseBigintDef(def, refs) {
   return res;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
 function parseBooleanDef() {
   return {
     type: "boolean"
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
 function parseBrandedDef(_def, refs) {
   return parseDef(_def.type._def, refs);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
 var parseCatchDef = (def, refs) => {
   return parseDef(def.innerType._def, refs);
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/date.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/date.js
 function parseDateDef(def, refs, overrideDateStrategy) {
   const strategy = overrideDateStrategy ?? refs.dateStrategy;
   if (Array.isArray(strategy)) {
@@ -53759,7 +53759,7 @@ var integerDateParser = (def, refs) => {
   return res;
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/default.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/default.js
 function parseDefaultDef(_def, refs) {
   return {
     ...parseDef(_def.innerType._def, refs),
@@ -53767,12 +53767,12 @@ function parseDefaultDef(_def, refs) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
 function parseEffectsDef(_def, refs) {
   return refs.effectStrategy === "input" ? parseDef(_def.schema._def, refs) : parseAnyDef(refs);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
 function parseEnumDef(def) {
   return {
     type: "string",
@@ -53780,7 +53780,7 @@ function parseEnumDef(def) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
 var isJsonSchema7AllOfType = (type) => {
   if ("type" in type && type.type === "string")
     return false;
@@ -53822,7 +53822,7 @@ function parseIntersectionDef(def, refs) {
   } : void 0;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
 function parseLiteralDef(def, refs) {
   const parsedType2 = typeof def.value;
   if (parsedType2 !== "bigint" && parsedType2 !== "number" && parsedType2 !== "boolean" && parsedType2 !== "string") {
@@ -53842,7 +53842,7 @@ function parseLiteralDef(def, refs) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/string.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/string.js
 var emojiRegex2 = void 0;
 var zodPatterns = {
   /**
@@ -54167,7 +54167,7 @@ function stringifyRegExpWithFlags(regex, refs) {
   return pattern;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/record.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/record.js
 function parseRecordDef(def, refs) {
   if (refs.target === "openAi") {
     console.warn("Warning: OpenAI may not support records in schemas! Try an array of key-value pairs instead.");
@@ -54219,7 +54219,7 @@ function parseRecordDef(def, refs) {
   return schema;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/map.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/map.js
 function parseMapDef(def, refs) {
   if (refs.mapStrategy === "record") {
     return parseRecordDef(def, refs);
@@ -54244,7 +54244,7 @@ function parseMapDef(def, refs) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
 function parseNativeEnumDef(def) {
   const object3 = def.values;
   const actualKeys = Object.keys(def.values).filter((key) => {
@@ -54258,7 +54258,7 @@ function parseNativeEnumDef(def) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/never.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/never.js
 function parseNeverDef(refs) {
   return refs.target === "openAi" ? void 0 : {
     not: parseAnyDef({
@@ -54268,7 +54268,7 @@ function parseNeverDef(refs) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/null.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/null.js
 function parseNullDef(refs) {
   return refs.target === "openApi3" ? {
     enum: ["null"],
@@ -54278,7 +54278,7 @@ function parseNullDef(refs) {
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/union.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/union.js
 var primitiveMappings = {
   ZodString: "string",
   ZodNumber: "number",
@@ -54346,7 +54346,7 @@ var asAnyOf = (def, refs) => {
   return anyOf.length ? { anyOf } : void 0;
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
 function parseNullableDef(def, refs) {
   if (["ZodString", "ZodNumber", "ZodBigInt", "ZodBoolean", "ZodNull"].includes(def.innerType._def.typeName) && (!def.innerType._def.checks || !def.innerType._def.checks.length)) {
     if (refs.target === "openApi3") {
@@ -54378,7 +54378,7 @@ function parseNullableDef(def, refs) {
   return base && { anyOf: [base, { type: "null" }] };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/number.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/number.js
 function parseNumberDef(def, refs) {
   const res = {
     type: "number"
@@ -54427,7 +54427,7 @@ function parseNumberDef(def, refs) {
   return res;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/object.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/object.js
 function parseObjectDef(def, refs) {
   const forceOptionalIntoNullable = refs.target === "openAi";
   const result = {
@@ -54497,7 +54497,7 @@ function safeIsOptional(schema) {
   }
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
 var parseOptionalDef = (def, refs) => {
   if (refs.currentPath.toString() === refs.propertyPath?.toString()) {
     return parseDef(def.innerType._def, refs);
@@ -54516,7 +54516,7 @@ var parseOptionalDef = (def, refs) => {
   } : parseAnyDef(refs);
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
 var parsePipelineDef = (def, refs) => {
   if (refs.pipeStrategy === "input") {
     return parseDef(def.in._def, refs);
@@ -54536,12 +54536,12 @@ var parsePipelineDef = (def, refs) => {
   };
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
 function parsePromiseDef(def, refs) {
   return parseDef(def.type._def, refs);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/set.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/set.js
 function parseSetDef(def, refs) {
   const items = parseDef(def.valueType._def, {
     ...refs,
@@ -54561,7 +54561,7 @@ function parseSetDef(def, refs) {
   return schema;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
 function parseTupleDef(def, refs) {
   if (def.rest) {
     return {
@@ -54589,24 +54589,24 @@ function parseTupleDef(def, refs) {
   }
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
 function parseUndefinedDef(refs) {
   return {
     not: parseAnyDef(refs)
   };
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
 function parseUnknownDef(refs) {
   return parseAnyDef(refs);
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
+// node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
 var parseReadonlyDef = (def, refs) => {
   return parseDef(def.innerType._def, refs);
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/selectParser.js
+// node_modules/zod-to-json-schema/dist/esm/selectParser.js
 var selectParser = (def, typeName, refs) => {
   switch (typeName) {
     case ZodFirstPartyTypeKind.ZodString:
@@ -54682,7 +54682,7 @@ var selectParser = (def, typeName, refs) => {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parseDef.js
+// node_modules/zod-to-json-schema/dist/esm/parseDef.js
 function parseDef(def, refs, forceResolution = false) {
   const seenItem = refs.seen.get(def);
   if (refs.override) {
@@ -54738,7 +54738,7 @@ var addMeta = (def, refs, jsonSchema) => {
   return jsonSchema;
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
+// node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
 var zodToJsonSchema = (schema, options) => {
   const refs = getRefs(options);
   let definitions = typeof options === "object" && options.definitions ? Object.entries(options.definitions).reduce((acc, [name2, schema2]) => ({
@@ -54800,7 +54800,7 @@ var zodToJsonSchema = (schema, options) => {
   return combined;
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
 function mapMiniTarget(t) {
   if (!t)
     return "draft-7";
@@ -54842,7 +54842,7 @@ function parseWithCompat(schema, data) {
   return result.data;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 6e4;
 var Protocol = class {
   constructor(_options) {
@@ -55796,7 +55796,7 @@ function mergeCapabilities(base, additional) {
   return result;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = __toESM(require_ajv(), 1);
 var import_ajv_formats = __toESM(require_dist(), 1);
 function createDefaultAjvInstance() {
@@ -55864,7 +55864,7 @@ var AjvJsonSchemaValidator = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 var ExperimentalServerTasks = class {
   constructor(_server) {
     this._server = _server;
@@ -56077,7 +56077,7 @@ var ExperimentalServerTasks = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
 function assertToolsCallTaskCapability(requests, method, entityName) {
   if (!requests) {
     throw new Error(`${entityName} does not support task creation (required for ${method})`);
@@ -56112,7 +56112,7 @@ function assertClientRequestTaskCapability(requests, method, entityName) {
   }
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
 var Server = class extends Protocol {
   /**
    * Initializes this server with the given name and version information.
@@ -56492,7 +56492,7 @@ var Server = class extends Protocol {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
 var COMPLETABLE_SYMBOL = Symbol.for("mcp.completable");
 function isCompletable(schema) {
   return !!schema && typeof schema === "object" && COMPLETABLE_SYMBOL in schema;
@@ -56506,7 +56506,7 @@ var McpZodTypeKind;
   McpZodTypeKind2["Completable"] = "McpCompletable";
 })(McpZodTypeKind || (McpZodTypeKind = {}));
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
 var TOOL_NAME_REGEX = /^[A-Za-z0-9._-]{1,128}$/;
 function validateToolName(name) {
   const warnings = [];
@@ -56564,7 +56564,7 @@ function validateAndWarnToolName(name) {
   return result.isValid;
 }
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
 var ExperimentalMcpServerTasks = class {
   constructor(_mcpServer) {
     this._mcpServer = _mcpServer;
@@ -56579,7 +56579,7 @@ var ExperimentalMcpServerTasks = class {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
 var McpServer = class {
   constructor(serverInfo, options) {
     this._registeredResources = {};
@@ -57371,7 +57371,7 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// ../../../repos/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js
 var WebStandardStreamableHTTPServerTransport = class {
   constructor(options = {}) {
     this._started = false;
