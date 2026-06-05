@@ -15,13 +15,15 @@
     "textHeight": 42.875,
     "progressTextMaxHeight": "64.3125px",
     "progressTextLineClamp": "2",
-    "bubbleCount": 21,
+    "bubbleCountBeforeProgress": 21,
+    "bubbleCountAfterProgress": 21,
+    "bubbleCountDeltaAfterProgress": 0,
     "transientCount": 1
   },
   "layoutAfterProgressUpdate": {
-    "before": 1411,
-    "afterImmediate": 1411,
-    "afterNextFrames": 1411
+    "before": 0,
+    "afterImmediate": 0,
+    "afterNextFrames": 0
   },
   "scrollPreservation": {
     "before": 64,
