@@ -1017,12 +1017,15 @@ export function buildAppServerReplyDeltaProgressText({ accumulatedText = "", del
   if (!fullText) return "";
   const normalized = formatAppServerProgressNarration(fullText);
   if (normalized.length <= maxLength) return normalized;
-  const tail = normalized.slice(-maxLength);
-  const paragraphStart = tail.indexOf("\n\n");
-  if (paragraphStart >= 0 && paragraphStart < Math.floor(maxLength / 2)) {
-    return `…\n\n${tail.slice(paragraphStart + 2).trim()}`;
+  const head = normalized.slice(0, maxLength);
+  const paragraphEnd = head.lastIndexOf("\n\n");
+  const readableHead = paragraphEnd >= Math.floor(maxLength / 2)
+    ? head.slice(0, paragraphEnd).trim()
+    : head.trimEnd();
+  if (readableHead) {
+    return `${readableHead}\n\n（続き生成中）`;
   }
-  return `…${tail.trimStart()}`;
+  return `${head.trimEnd()}\n\n（続き生成中）`;
 }
 
 export function buildAppServerConcreteProgressText({
