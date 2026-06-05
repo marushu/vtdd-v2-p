@@ -72599,6 +72599,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let transientProgressState = null;
       let threadProgressCheckpointCard = null;
       let transientProgressSnapshotState = null;
+      let pacedProgressCheckpointTimer = null;
+      let pacedProgressCheckpointState = {
+        activeText: "",
+        pendingText: "",
+        renderedLength: 0,
+        activeSince: 0
+      };
       let latestOwnerReplySource = null;
       let lastMediaLightboxTrigger = null;
       let pendingOwnerSend = null;
@@ -72932,6 +72939,86 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return Boolean(latestProgressCheckpointText(snapshot));
       }
 
+      function shouldBypassPacedProgressRendering() {
+        try {
+          return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        } catch {
+          return false;
+        }
+      }
+
+      function progressCheckpointStepSize(text) {
+        const length = String(text || "").length;
+        if (length <= 24) return 3;
+        if (length <= 80) return 4;
+        return 6;
+      }
+
+      function progressCheckpointFrameDelay(text) {
+        const length = String(text || "").length;
+        if (length <= 24) return 95;
+        if (length <= 80) return 70;
+        return 55;
+      }
+
+      function schedulePacedProgressCheckpointText(paragraph, nextText) {
+        const normalized = String(nextText || "").trim();
+        if (!paragraph || !normalized) return;
+        if (shouldBypassPacedProgressRendering()) {
+          if (pacedProgressCheckpointTimer) {
+            window.clearTimeout(pacedProgressCheckpointTimer);
+            pacedProgressCheckpointTimer = null;
+          }
+          pacedProgressCheckpointState = {
+            activeText: normalized,
+            pendingText: "",
+            renderedLength: normalized.length,
+            activeSince: Date.now()
+          };
+          paragraph.textContent = normalized;
+          return;
+        }
+        if (normalized === pacedProgressCheckpointState.activeText && pacedProgressCheckpointState.renderedLength >= normalized.length) {
+          return;
+        }
+        pacedProgressCheckpointState.pendingText = normalized;
+        if (!pacedProgressCheckpointTimer) {
+          pacedProgressCheckpointTimer = window.setTimeout(() => stepPacedProgressCheckpointText(paragraph), 0);
+        }
+      }
+
+      function stepPacedProgressCheckpointText(paragraph) {
+        pacedProgressCheckpointTimer = null;
+        if (!paragraph || !paragraph.isConnected) return;
+        const now = Date.now();
+        const minimumDisplayMs = 1800;
+        const pendingText = pacedProgressCheckpointState.pendingText;
+        const activeText = pacedProgressCheckpointState.activeText;
+        const activeComplete = activeText && pacedProgressCheckpointState.renderedLength >= activeText.length;
+        if (pendingText && pendingText !== activeText && (!activeComplete || now - pacedProgressCheckpointState.activeSince >= minimumDisplayMs)) {
+          pacedProgressCheckpointState = {
+            activeText: pendingText,
+            pendingText: "",
+            renderedLength: 0,
+            activeSince: now
+          };
+        }
+        const text = pacedProgressCheckpointState.activeText || pendingText;
+        if (!text) return;
+        const nextLength = Math.min(text.length, pacedProgressCheckpointState.renderedLength + progressCheckpointStepSize(text));
+        pacedProgressCheckpointState.renderedLength = nextLength;
+        paragraph.textContent = text.slice(0, nextLength);
+        if (
+          pacedProgressCheckpointState.renderedLength < text.length ||
+          (pacedProgressCheckpointState.pendingText && pacedProgressCheckpointState.pendingText !== text)
+        ) {
+          pacedProgressCheckpointTimer = window.setTimeout(
+            () => stepPacedProgressCheckpointText(paragraph),
+            progressCheckpointFrameDelay(text)
+          );
+        }
+      }
+
       function ensureThreadProgressCheckpointCard() {
         if (threadProgressCheckpointCard && threadProgressCheckpointCard.isConnected) {
           return threadProgressCheckpointCard;
@@ -72971,7 +73058,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const card = ensureThreadProgressCheckpointCard();
         const paragraph = card.querySelector(".message-body p");
         if (paragraph) {
-          paragraph.textContent = text;
+          schedulePacedProgressCheckpointText(paragraph, text);
         }
         scrollToLatestIfFollowing(shouldFollow);
         return true;
@@ -72983,6 +73070,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           threadProgressCheckpointCard.remove();
           threadProgressCheckpointCard = null;
         }
+        if (pacedProgressCheckpointTimer) {
+          window.clearTimeout(pacedProgressCheckpointTimer);
+          pacedProgressCheckpointTimer = null;
+        }
+        pacedProgressCheckpointState = {
+          activeText: "",
+          pendingText: "",
+          renderedLength: 0,
+          activeSince: 0
+        };
         scrollToLatestIfFollowing(shouldFollow);
       }
 
