@@ -70,7 +70,7 @@ export function buildAppServerThreadStartRequest({ id, cwd = process.cwd(), deve
           "High-risk work requires explicit GO or passkey approval through VTDD runtime boundaries.",
           "Reply in Japanese by default."
         ].join("\n"),
-      threadSource: "app_server",
+      threadSource: "user",
       ...(sandbox.threadSandbox ? { sandbox: sandbox.threadSandbox } : {}),
       experimentalRawEvents: false,
       persistExtendedHistory: false
