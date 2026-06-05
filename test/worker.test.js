@@ -1330,13 +1330,11 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("const entries = progressCheckpointEntries(transientProgressSnapshotState);"), true);
   assert.equal(body.includes("snapshot: body.transientProgressSnapshot || null"), true);
   assert.equal(body.includes("function isNearLatest()"), true);
-  assert.equal(body.includes("function markHumanScrollInteraction()"), true);
-  assert.equal(body.includes("function isHumanScrollInteractionActive()"), true);
-  assert.equal(body.includes("function scheduleGentleScrollFollow(shouldFollow)"), true);
-  assert.equal(body.includes("log.addEventListener(\"wheel\", markHumanScrollInteraction"), true);
-  assert.equal(body.includes("log.addEventListener(\"touchmove\", markHumanScrollInteraction"), true);
-  assert.equal(body.includes("function scrollToLatestIfFollowing(shouldFollow, options = {})"), true);
-  assert.equal(body.includes("scrollToLatestIfFollowing(shouldFollow, { gentle: options.gentle !== false })"), true);
+  assert.equal(body.includes("function scheduleGentleScrollFollow(shouldFollow)"), false);
+  assert.equal(body.includes("scrollBy({ top:"), false);
+  assert.equal(body.includes("scrollBy({ top: nextStep, behavior: \"smooth\" })"), false);
+  assert.equal(body.includes("function scrollToLatestIfFollowing(shouldFollow)"), true);
+  assert.equal(body.includes("scrollToLatestIfFollowing(shouldFollow, { gentle:"), false);
   assert.equal(body.includes("renderThreadProgressCheckpoint(snapshotForCheckpoint, { follow: shouldFollow })"), true);
   const renderTransientProgressSource = body.match(/function renderTransientProgress\(\) \{[\s\S]*?\n      \}/)?.[0] || "";
   assert.equal(renderTransientProgressSource.includes("scrollToLatest()"), false);

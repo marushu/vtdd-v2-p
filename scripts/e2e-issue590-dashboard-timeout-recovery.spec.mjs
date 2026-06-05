@@ -284,25 +284,23 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   expect(scrollPreservation.afterImmediate).toBe(scrollPreservation.before);
   expect(scrollPreservation.afterNextFrames).toBe(scrollPreservation.before);
 
-  const gentleFollowSource = await page.evaluate(() => {
+  const progressScrollSource = await page.evaluate(() => {
     const html = document.documentElement.outerHTML;
     return {
       hasGentleFollow: html.includes("function scheduleGentleScrollFollow(shouldFollow)"),
-      hasHumanInteractionGuard: html.includes("function markHumanScrollInteraction()"),
-      hasWheelGuard: html.includes('log.addEventListener("wheel", markHumanScrollInteraction'),
-      hasTouchGuard: html.includes('log.addEventListener("touchmove", markHumanScrollInteraction'),
-      usesGentleCheckpointFollow: html.includes("scrollToLatestIfFollowing(shouldFollow, { gentle: options.gentle !== false })")
+      usesSmoothScrollBy: html.includes("scrollBy({ top: nextStep, behavior: \"smooth\" })"),
+      usesGentleCheckpointFollow: html.includes("scrollToLatestIfFollowing(shouldFollow, { gentle:"),
+      hasImmediateFollowHelper: html.includes("function scrollToLatestIfFollowing(shouldFollow)")
     };
   });
-  expect(gentleFollowSource.hasGentleFollow).toBe(true);
-  expect(gentleFollowSource.hasHumanInteractionGuard).toBe(true);
-  expect(gentleFollowSource.hasWheelGuard).toBe(true);
-  expect(gentleFollowSource.hasTouchGuard).toBe(true);
-  expect(gentleFollowSource.usesGentleCheckpointFollow).toBe(true);
+  expect(progressScrollSource.hasGentleFollow).toBe(false);
+  expect(progressScrollSource.usesSmoothScrollBy).toBe(false);
+  expect(progressScrollSource.usesGentleCheckpointFollow).toBe(false);
+  expect(progressScrollSource.hasImmediateFollowHelper).toBe(true);
 
   const statePath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-state.json`);
   const screenshotPath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-390x844.png`);
-  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout, layoutAfterProgressUpdate, scrollPreservation, gentleFollowSource }, null, 2));
+  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout, layoutAfterProgressUpdate, scrollPreservation, progressScrollSource }, null, 2));
   await page.screenshot({ path: screenshotPath, fullPage: true });
   console.log(JSON.stringify({
     ok: true,
@@ -312,7 +310,7 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
       "inline transient progress does not append durable chat bubbles",
       "progress text wraps without horizontal overflow",
       "transient progress updates preserve the owner's chat scroll position",
-      "Dashboard page includes gentle progress follow with human scroll interaction guard"
+      "Dashboard page does not include gentle progress auto-scroll"
     ],
     evidence: { statePath, screenshotPath }
   }));
