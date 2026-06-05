@@ -12,7 +12,7 @@ const evidenceDir = path.join(repoRoot, "docs/mvp/e2e/assets/issue-590/local");
 const port = Number(process.env.PORT || 8819);
 const origin = `http://127.0.0.1:${port}`;
 const repository = "marushu/vtdd-v2-p";
-const threadId = "dashboard-main-marushu-vtdd-v2-p";
+const threadId = "dashboard-main-unresolved";
 const dashboardUrl = `${origin}/dashboard?repository=${encodeURIComponent(repository)}`;
 
 if (process.env.PW_CHANNEL) {
@@ -169,9 +169,10 @@ test("Dashboard Butler shows app-server timeout as recoverable and keeps compose
     timeoutBubbleTexts: Array.from(document.querySelectorAll(".bubble")).map((node) => node.textContent?.trim() || ""),
     userAgent: navigator.userAgent
   }));
+  const seededThreadMessages = await chatStore.listThread(threadId, { limit: 80 });
   const statePath = path.join(evidenceDir, `issue590-dashboard-timeout-recovery-${browserName}-state.json`);
   const screenshotPath = path.join(evidenceDir, `issue590-dashboard-timeout-recovery-${browserName}-390x844.png`);
-  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, state }, null, 2));
+  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, state, seededThreadMessages }, null, 2));
   await page.screenshot({ path: screenshotPath, fullPage: true });
   console.log(JSON.stringify({
     ok: true,
@@ -206,25 +207,27 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   });
 
   const beforeBubbleCount = await page.locator(".bubble").count();
-  await page.evaluate(() => {
+  const layoutAfterProgressUpdate = await page.evaluate(() => {
+    const log = document.querySelector("#butler-chat-log");
     const pane = document.querySelector("#butler-transient-progress");
-    if (!pane) return;
+    const before = log?.scrollTop ?? -1;
+    if (!pane || !log) return { before, after: log?.scrollTop ?? -1 };
     pane.hidden = false;
     pane.classList.add("thinking");
     pane.setAttribute("data-transient-progress", "true");
     const title = pane.querySelector(".progress-title");
     if (title) title.textContent = "進行中";
     const text = pane.querySelector(".progress-text");
-    if (!text) return;
+    if (!text) return { before, after: log.scrollTop };
     text.textContent =
       "Issue #590 の production evidence、reviewer 指摘、deploy 後 E2E の残リスクを確認しています。通常チャット履歴には保存しません。";
+    return { before };
   });
-
-  const layoutAfterProgressUpdate = await page.evaluate(() => {
-    const log = document.querySelector("#butler-chat-log");
-    return { logScrollTop: log?.scrollTop ?? 0 };
-  });
-  expect(layoutAfterProgressUpdate.logScrollTop).toBe(0);
+  layoutAfterProgressUpdate.afterImmediate = await page.evaluate(() => document.querySelector("#butler-chat-log")?.scrollTop ?? -1);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  layoutAfterProgressUpdate.afterNextFrames = await page.evaluate(() => document.querySelector("#butler-chat-log")?.scrollTop ?? -1);
+  expect(layoutAfterProgressUpdate.afterImmediate).toBe(layoutAfterProgressUpdate.before);
+  expect(layoutAfterProgressUpdate.afterNextFrames).toBe(layoutAfterProgressUpdate.before);
 
   const pane = page.locator("[data-transient-progress='true']");
   await expect(pane).toBeVisible();
@@ -247,6 +250,10 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
       logClientWidth: log?.clientWidth ?? 0,
       textScrollWidth: text?.scrollWidth ?? 0,
       textClientWidth: text?.clientWidth ?? 0,
+      paneHeight: paneRect?.height ?? 0,
+      textHeight: text?.getBoundingClientRect().height ?? 0,
+      progressTextMaxHeight: text ? window.getComputedStyle(text).maxHeight : "",
+      progressTextLineClamp: text ? window.getComputedStyle(text).webkitLineClamp : "",
       bubbleCount: document.querySelectorAll(".bubble").length,
       transientCount: document.querySelectorAll("[data-transient-progress='true']").length
     };
@@ -258,6 +265,9 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   expect(layout.paneWidth).toBeLessThanOrEqual(layout.logWidth);
   expect(layout.logScrollWidth).toBeLessThanOrEqual(layout.logClientWidth + 1);
   expect(layout.textScrollWidth).toBeLessThanOrEqual(layout.textClientWidth + 1);
+  expect(layout.progressTextLineClamp).toBe("2");
+  expect(layout.textHeight).toBeLessThanOrEqual(48);
+  expect(layout.paneHeight).toBeLessThanOrEqual(96);
 
   const scrollPreservation = await page.evaluate(() => {
     const log = document.querySelector("#butler-chat-log");
@@ -267,9 +277,12 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
     const before = log.scrollTop;
     text.textContent =
       "ファイルの修正・変更が完了しました。現在コミット中です。\nPR を作成しています。このままレビュアーを待ちます。";
-    return { before, after: log.scrollTop };
+    return { before, afterImmediate: log.scrollTop };
   });
-  expect(scrollPreservation.after).toBe(scrollPreservation.before);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  scrollPreservation.afterNextFrames = await page.evaluate(() => document.querySelector("#butler-chat-log")?.scrollTop ?? -1);
+  expect(scrollPreservation.afterImmediate).toBe(scrollPreservation.before);
+  expect(scrollPreservation.afterNextFrames).toBe(scrollPreservation.before);
 
   const statePath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-state.json`);
   const screenshotPath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-390x844.png`);
