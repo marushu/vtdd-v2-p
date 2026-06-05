@@ -9,7 +9,7 @@ This file is not a scope reducer. Active Issues remain in scope unless the owner
 explicitly narrows the implementation window. This file records execution order,
 preemption decisions, blockers, and evidence gaps.
 
-Last rebuilt from GitHub runtime truth: 2026-06-02
+Last rebuilt from GitHub runtime truth: 2026-06-05
 
 ## Queue Policy
 
@@ -33,13 +33,17 @@ Last rebuilt from GitHub runtime truth: 2026-06-02
   Issue #582, Issue #585, Issue #587, Issue #589, Issue #590, Issue #594,
   Issue #595, Issue #599, Issue #604, Issue #605, Issue #606, Issue #613,
   Issue #620, Issue #634, Issue #637, Issue #651, Issue #654, Issue #657,
-  Issue #667, Issue #670, Issue #689.
+  Issue #667, Issue #670, Issue #689, Issue #698, Issue #703, Issue #716,
+  Issue #717, Issue #722, Issue #723, Issue #741, Issue #744, Issue #745,
+  Issue #748, Issue #793.
 - Recently closed as completed with evidence and owner approval: Issue #573,
   Issue #565, Issue #577, Issue #580, Issue #601, Issue #609.
 - Open PRs read before this queue refresh PR was opened: none.
 - Recent queue-changing merged PRs read: PR #591, PR #597, PR #598, PR #600,
   PR #602, PR #603, PR #607, PR #608, PR #610, PR #611, PR #612, PR #685,
-  PR #686, PR #688, PR #690.
+  PR #686, PR #688, PR #690, PR #774, PR #775, PR #776, PR #777, PR #778,
+  PR #779, PR #780, PR #781, PR #782, PR #783, PR #784, PR #785, PR #786,
+  PR #787, PR #788, PR #789, PR #790, PR #791, PR #792.
 - Current queue rebuild scope: classify all open Issues without closing,
   downscoping, or treating any unverified Issue as done.
 - 2026-05-29 owner input classified Issue #606 as `ROOT`: the 2-minute
@@ -123,14 +127,40 @@ Last rebuilt from GitHub runtime truth: 2026-06-02
   because the owner-facing long-turn experience is still incomplete: transient
   progress must be visible without chat-history spam, and completion should
   leave a readable final summary instead of a trail of low-value progress.
+- 2026-06-04 production evidence showed Issue #590 remained incomplete after
+  multiple live-progress slices: owner-facing progress appeared late,
+  low-value transport status leaked into the wrong lane, scroll position could
+  be stolen, and final summaries lacked important queue / PR / runtime links.
+  Follow-up PRs #774 through #783 improved final progress summary, realtime
+  checkpoint stream, scroll guard, fallback checkpoint, reply-delta progress,
+  media-aware recovery, context-window reset, and related bridge behavior, but
+  mapped production completion evidence is still missing.
+- 2026-06-05 PR #789 and PR #790 repaired Issue #455 app-server regressions
+  exposed while continuing Issue #590: unsupported-model backend thread recovery
+  and Codex CLI threadSource protocol drift. These are partial runtime recovery
+  slices, not Issue #455 completion.
+- 2026-06-05 PR #791 merged Issue #590 app-server request stall recovery. It
+  prevents a `thread/start` / `turn/start` request stall from leaving no
+  final/failed Dashboard event, but production deploy and iPhone/PWA live E2E
+  remain required before Issue #590 can advance out of `Now`.
+- 2026-06-05 PR #792 merged Issue #613 single main Dashboard chat thread
+  runtime routing. It stops Worker runtime paths from generating repo-derived
+  main chat threads, but production deploy, PWA E2E, VPS env cleanup, and
+  historical thread migration remain incomplete.
+- 2026-06-05 Issue #793 was created from owner agreement on deploy notification
+  driven stale-client refresh. It is a follow-up to Issue #723 and related to
+  Issue #590 / Issue #654 / Issue #514, but it is classified as `QUEUE` and
+  does not preempt the current root blocker.
 
 ## Now
 
 - Issue #590: app-server turn timeout / silent wait recovery. Fixed 2-minute
   conversation death and durable low-information progress spam are mitigated in
-  production, but the remaining root blocker is owner-facing observability:
-  longer Dashboard Butler work must show transient progress without polluting
-  chat history, then leave a concise final summary.
+  production. PR #791 adds request-stall recovery, but the current root blocker
+  remains owner-facing observability and recovery evidence: longer Dashboard
+  Butler work must show readable live progress, avoid low-value transport spam,
+  keep scroll/draft/thread state stable, preserve important evidence links in
+  final summaries, and prove the recovery path in production PWA after deploy.
 
 ## Next
 
@@ -166,7 +196,12 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
   single-thread cross-repo work-control surface, not a repo-selected admin
   panel. It gates the product direction for Issue #528, Issue #450, Issue #413,
   Issue #415, Issue #498, Issue #514, Issue #590, Issue #594, Issue #604,
-  Issue #605, and Issue #606.
+  Issue #605, and Issue #606. PR #792 merged the first runtime thread-routing
+  slice, but production PWA E2E and VPS cleanup are still incomplete.
+- Issue #748: presence / voice / progress must be cost-aware before broader
+  voice-ready or high-frequency progress work. It gates Issue #613 voice work,
+  Issue #590 progress lane design, and Issue #455 cost discipline by requiring
+  presence to stay distinct from persistence.
 - Issue #606: ordinary Dashboard read sessions must not reuse the same
   short-lived approval grant used for high-risk operations. It gates practical
   iPhone/PWA recovery for Issue #579, timeout recovery acceptance for Issue
@@ -236,6 +271,17 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
 - Issue #565, Issue #577, and Issue #580 were closed on 2026-05-31 with
   evidence comments after merged PRs and current production setup truth were
   re-read.
+- PR #774 through PR #783 / Issue #590 merged live-progress, final-summary,
+  scroll, fallback, media-aware recovery, and context-reset slices. These PRs are
+  progress evidence only; owner production evidence still reports incomplete
+  realtime progress and lane separation.
+- PR #785 through PR #791 repaired Issue #590 / Issue #455 app-server context,
+  unsupported-model, protocol drift, and request-stall failure modes. They keep
+  Dashboard Butler usable but do not close Issue #590 or Issue #455 without
+  production deploy/live E2E evidence.
+- PR #792 / Issue #613 merged single main Dashboard chat runtime normalization.
+  It is partial #613 progress and does not perform production deploy, VPS env
+  cleanup, or historical thread migration.
 
 ## Evidence Gaps
 
@@ -256,7 +302,9 @@ Evidence gaps are active. They are not deferred out of scope.
   progress no longer pollutes durable chat history. Closure still needs mapped
   production owner-facing evidence for the remaining long-turn UX: transient
   progress visibility, final summary replacement, same-thread follow-up /
-  cancel / interrupt handling, and clear late-completion behavior.
+  cancel / interrupt handling, clear late-completion behavior, request-stall
+  recovery after PR #791, evidence-link preservation, and scroll-safe live
+  progress lane behavior.
 - Issue #651: PR #652 merged a same-head conflicting reviewer evidence gate, but
   live/mapped E2E close-readiness evidence is still missing, so the Issue remains
   open.
@@ -298,6 +346,15 @@ Evidence gaps are active. They are not deferred out of scope.
 - Issue #657: chief-butler interpretation confirmation is a process / traffic
   control gap and remains open until the protocol is repo/runtime-backed with
   mapped evidence.
+- Issue #613: PR #792 merged runtime thread normalization for single main chat,
+  but production PWA evidence, repo context ambiguity handling, voice-ready
+  operation lane, and VPS/env cleanup remain incomplete.
+- Issue #723: manual freshness / force cache reload controls exist, but close
+  readiness still needs evidence posting and stale-client recovery judgment. The
+  automatic deploy-notification-driven refresh follow-up is Issue #793.
+- Issue #741: deploy後 bridge checkout sync / restart lifecycle has
+  implementation slices, but production evidence and authority-bound cleanup
+  remain incomplete.
 
 ## Blocked
 
@@ -311,6 +368,9 @@ Evidence gaps are active. They are not deferred out of scope.
   truth; do not rely on chat alone as the intended VTDD product path.
 - Production iPhone/PWA live evidence remains blocked unless the relevant PR
   scope explicitly authorizes live verification.
+- Production deploy and app-server bridge restart after PR #791 / PR #792 remain
+  blocked on scoped passkey approval. Do not claim those merged PRs are
+  production-complete from local tests or GitHub merge truth alone.
 - Issue #354: VPS maintenance apply/reboot paths are blocked on explicit GO and
   careful authority design even if status/check paths can be designed first.
 - Issue #355 / Issue #412: live secret sync verification is blocked on safe
@@ -353,6 +413,31 @@ These Issues remain active and required, but they do not preempt the current
 - Issue #689: LINE-like reply target preview / tap-to-scroll context for
   fast multi-message Dashboard Butler chat. This is required owner-facing UX, but
   it remains `QUEUE` and must not preempt the current Now item.
+- Issue #698: notification policy and delayed notification settings should move
+  onto the shared notification system.
+- Issue #703: pre-development strategy guard. The 開発前作戦図 gate is active as a
+  process guardrail; remaining automation/guard enforcement stays queued unless
+  it becomes a root blocker.
+- Issue #716: Butler thought buffer and repo-specific execution lanes for
+  capturing ideas without replacing the current `Now`.
+- Issue #717: immediate VPS runner wakeup after queue comment, with the one
+  minute timer as fallback.
+- Issue #722: Dashboard Butler completion events should append thread state and
+  drive next action.
+- Issue #723: stale PWA/client self-refresh and manual force reload remains an
+  evidence gap / support slice for Issue #590.
+- Issue #741: app-server bridge lifecycle guard for main and repo-less chat.
+- Issue #744: Dashboard chat long replies must remain readable and avoid tail
+  clipping.
+- Issue #745: reviewer fallback must not keep calling a ChatGPT-account
+  unsupported model.
+- Issue #748: cost-aware presence / voice / progress redesign. Treat as a root
+  design constraint for Issue #590 / Issue #613 work, but do not let it become a
+  broad implementation detour without a bounded slice.
+- Issue #793: deploy notification driven stale-client refresh. This is the
+  agreed follow-up to Issue #723: deploy notifications should trigger stale
+  client detection and conditional auto/one-tap refresh without writing chat
+  spam or losing draft/thread/pending turn state.
 
 ## Questions
 
@@ -365,8 +450,8 @@ These Issues remain active and required, but they do not preempt the current
 
 ## Discovered
 
-- None recorded in this rebuild. New owner inputs and implementation discoveries
-  should be classified here before they become new Issues or preempt current work.
+- Issue #793 was discovered from owner discussion and authored on 2026-06-05. It
+  is now classified as `QUEUE`, not as an untracked discovery.
 
 ## Required PR Delta
 

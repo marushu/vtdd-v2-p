@@ -4,10 +4,11 @@ import fs from "node:fs";
 
 const doc = fs.readFileSync("docs/mvp/active-issue-execution-queue.md", "utf8");
 
-const OPEN_ISSUES_ON_2026_05_31 = [
+const OPEN_ISSUES_ON_2026_06_05 = [
   354, 355, 356, 358, 412, 413, 415, 417, 421, 444, 448, 450, 455, 491, 492,
   495, 497, 498, 501, 514, 528, 574, 579, 582, 585, 587, 589, 590, 594, 595,
-  599, 604, 605, 606, 613, 620, 634, 637, 651, 654, 657, 667, 670, 689
+  599, 604, 605, 606, 613, 620, 634, 637, 651, 654, 657, 667, 670, 689, 698,
+  703, 716, 717, 722, 723, 741, 744, 745, 748, 793
 ];
 
 const CLASSIFICATION_SECTIONS = [
@@ -35,7 +36,7 @@ function sectionBody(sectionName) {
 const classifiedIssueText = CLASSIFICATION_SECTIONS.map(sectionBody).join("\n");
 
 test("active issue execution queue records every open issue from the rebuild snapshot", () => {
-  for (const issueNumber of OPEN_ISSUES_ON_2026_05_31) {
+  for (const issueNumber of OPEN_ISSUES_ON_2026_06_05) {
     assert.equal(
       doc.includes(`Issue #${issueNumber}`),
       true,
@@ -45,7 +46,7 @@ test("active issue execution queue records every open issue from the rebuild sna
 });
 
 test("active issue execution queue classifies every open issue outside the runtime snapshot", () => {
-  for (const issueNumber of OPEN_ISSUES_ON_2026_05_31) {
+  for (const issueNumber of OPEN_ISSUES_ON_2026_06_05) {
     assert.equal(
       new RegExp(`^- Issue #${issueNumber}:`, "m").test(classifiedIssueText),
       true,
