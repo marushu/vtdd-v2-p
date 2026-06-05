@@ -284,9 +284,25 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   expect(scrollPreservation.afterImmediate).toBe(scrollPreservation.before);
   expect(scrollPreservation.afterNextFrames).toBe(scrollPreservation.before);
 
+  const gentleFollowSource = await page.evaluate(() => {
+    const html = document.documentElement.outerHTML;
+    return {
+      hasGentleFollow: html.includes("function scheduleGentleScrollFollow(shouldFollow)"),
+      hasHumanInteractionGuard: html.includes("function markHumanScrollInteraction()"),
+      hasWheelGuard: html.includes('log.addEventListener("wheel", markHumanScrollInteraction'),
+      hasTouchGuard: html.includes('log.addEventListener("touchmove", markHumanScrollInteraction'),
+      usesGentleCheckpointFollow: html.includes("scrollToLatestIfFollowing(shouldFollow, { gentle: options.gentle !== false })")
+    };
+  });
+  expect(gentleFollowSource.hasGentleFollow).toBe(true);
+  expect(gentleFollowSource.hasHumanInteractionGuard).toBe(true);
+  expect(gentleFollowSource.hasWheelGuard).toBe(true);
+  expect(gentleFollowSource.hasTouchGuard).toBe(true);
+  expect(gentleFollowSource.usesGentleCheckpointFollow).toBe(true);
+
   const statePath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-state.json`);
   const screenshotPath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-390x844.png`);
-  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout, layoutAfterProgressUpdate, scrollPreservation }, null, 2));
+  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout, layoutAfterProgressUpdate, scrollPreservation, gentleFollowSource }, null, 2));
   await page.screenshot({ path: screenshotPath, fullPage: true });
   console.log(JSON.stringify({
     ok: true,
@@ -295,7 +311,8 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
       "inline transient progress is visible above the composer in 390x844 mobile viewport",
       "inline transient progress does not append durable chat bubbles",
       "progress text wraps without horizontal overflow",
-      "transient progress updates preserve the owner's chat scroll position"
+      "transient progress updates preserve the owner's chat scroll position",
+      "Dashboard page includes gentle progress follow with human scroll interaction guard"
     ],
     evidence: { statePath, screenshotPath }
   }));

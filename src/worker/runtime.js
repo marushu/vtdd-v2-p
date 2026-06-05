@@ -16494,6 +16494,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let transientProgressSnapshotState = null;
       const pacedProgressCheckpointTimers = new Map();
       const pacedProgressCheckpointStates = new Map();
+      let gentleScrollFollowTimer = null;
+      let lastHumanScrollInteractionAt = 0;
+      let programmaticScrollUntil = 0;
       let latestOwnerReplySource = null;
       let lastMediaLightboxTrigger = null;
       let pendingOwnerSend = null;
@@ -16684,8 +16687,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function scrollToLatest() {
         updateComposerReserve();
+        markProgrammaticScroll();
         log.scrollTop = log.scrollHeight;
         requestAnimationFrame(() => {
+          markProgrammaticScroll();
           log.scrollTop = log.scrollHeight;
         });
       }
@@ -16695,11 +16700,60 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return distance < 96;
       }
 
-      function scrollToLatestIfFollowing(shouldFollow) {
+      function markProgrammaticScroll() {
+        programmaticScrollUntil = Date.now() + 220;
+      }
+
+      function markHumanScrollInteraction() {
+        if (Date.now() < programmaticScrollUntil) return;
+        lastHumanScrollInteractionAt = Date.now();
+      }
+
+      function isHumanScrollInteractionActive() {
+        return Date.now() - lastHumanScrollInteractionAt < 900;
+      }
+
+      function cancelGentleScrollFollow() {
+        if (!gentleScrollFollowTimer) return;
+        window.clearTimeout(gentleScrollFollowTimer);
+        gentleScrollFollowTimer = null;
+      }
+
+      function scheduleGentleScrollFollow(shouldFollow) {
         updateComposerReserve();
-        if (shouldFollow) {
-          scrollToLatest();
+        if (!shouldFollow) {
+          cancelGentleScrollFollow();
+          return;
         }
+        cancelGentleScrollFollow();
+        const step = () => {
+          gentleScrollFollowTimer = null;
+          updateComposerReserve();
+          if (isHumanScrollInteractionActive()) {
+            gentleScrollFollowTimer = window.setTimeout(step, 360);
+            return;
+          }
+          const distance = log.scrollHeight - log.scrollTop - log.clientHeight;
+          if (distance <= 2) return;
+          const nextStep = Math.max(12, Math.min(44, Math.ceil(distance / 4)));
+          markProgrammaticScroll();
+          log.scrollBy({ top: nextStep, behavior: "smooth" });
+          gentleScrollFollowTimer = window.setTimeout(step, 130);
+        };
+        gentleScrollFollowTimer = window.setTimeout(step, 180);
+      }
+
+      function scrollToLatestIfFollowing(shouldFollow, options = {}) {
+        updateComposerReserve();
+        if (!shouldFollow) {
+          cancelGentleScrollFollow();
+          return;
+        }
+        if (options.gentle === true) {
+          scheduleGentleScrollFollow(true);
+          return;
+        }
+        scrollToLatest();
       }
 
       function setStatus(text, options = {}) {
@@ -16987,7 +17041,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             schedulePacedProgressCheckpointText(paragraph, entry.text);
           }
         }
-        scrollToLatestIfFollowing(shouldFollow);
+        scrollToLatestIfFollowing(shouldFollow, { gentle: options.gentle !== false });
         return true;
       }
 
@@ -18519,6 +18573,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       });
+      log.addEventListener("scroll", markHumanScrollInteraction, { passive: true });
+      log.addEventListener("wheel", markHumanScrollInteraction, { passive: true });
+      log.addEventListener("touchstart", markHumanScrollInteraction, { passive: true });
+      log.addEventListener("touchmove", markHumanScrollInteraction, { passive: true });
+      log.addEventListener("pointerdown", markHumanScrollInteraction, { passive: true });
+      log.addEventListener("keydown", markHumanScrollInteraction);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", async () => {
         if (await resumeDashboardSessionAfterAuthReturn("ネットワーク復帰後、再ログイン状態を確認しています。入力は保持しています。")) return;
