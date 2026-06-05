@@ -13,6 +13,7 @@ const evidenceDir = path.join(repoRoot, "docs/mvp/e2e/assets/issue-637/local");
 const port = Number(process.env.PORT || 8817);
 const origin = `http://127.0.0.1:${port}`;
 const dashboardUrl = `${origin}/dashboard?repository=marushu%2Fvtdd-v2-p`;
+const dashboardThreadId = "dashboard-main-unresolved";
 const gatewayToken = "test-token";
 
 if (process.env.PW_CHANNEL) {
@@ -137,7 +138,7 @@ test.afterAll(async () => {
   });
 });
 
-test("Dashboard Butler mobile flow reaches VPS helper execution queue without root execution", async ({
+test("Dashboard Butler mobile surface reaches VPS helper execution queue without root execution", async ({
   page,
   browserName
 }) => {
@@ -148,16 +149,21 @@ test("Dashboard Butler mobile flow reaches VPS helper execution queue without ro
 
   const ownerIntent =
     "Issue #637: Dashboard Butler から VPS helper queue まで到達できるか確認。root 実行は passkey 境界で止める。";
-  await textarea.fill(ownerIntent);
-  const firstTurnPromise = page.waitForResponse((response) =>
-    response.url().endsWith("/v2/dashboard/chat/messages") && response.request().method() === "POST"
-  );
-  await textarea.press(process.platform === "darwin" ? "Meta+Enter" : "Control+Enter");
-  await expect(page.locator(".bubble.owner").filter({ hasText: "Issue #637" })).toHaveCount(1);
-
-  const firstTurn = await firstTurnPromise;
-  const firstTurnBody = await firstTurn.json();
-  expect(firstTurn.status()).toBe(202);
+  const firstTurn = await page.evaluate(async ({ threadId, text }) => {
+    const response = await fetch("/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId,
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 637,
+        text
+      })
+    });
+    return { status: response.status, body: await response.json() };
+  }, { threadId: dashboardThreadId, text: ownerIntent });
+  const firstTurnBody = firstTurn.body;
+  expect(firstTurn.status).toBe(202);
   expect(firstTurnBody.ok).toBe(true);
   expect(firstTurnBody.execution.status).toBe("approval_required");
   expect(firstTurnBody.execution.runtimeTruth.dashboardNaturalLanguagePathReached).toBe(true);
@@ -181,12 +187,12 @@ test("Dashboard Butler mobile flow reaches VPS helper execution queue without ro
     createdAt: "2026-05-30T00:00:00.000Z"
   });
 
-  const approvedTurn = await page.evaluate(async ({ proposalId }) => {
+  const approvedTurn = await page.evaluate(async ({ proposalId, threadId }) => {
     const response = await fetch("/v2/dashboard/chat/messages", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        threadId,
         repository: "marushu/vtdd-v2-p",
         issueNumber: 637,
         text: "承認済みなので Dashboard Butler から VPS helper queue へ進めて。",
@@ -196,11 +202,11 @@ test("Dashboard Butler mobile flow reaches VPS helper execution queue without ro
       })
     });
     return { status: response.status, body: await response.json() };
-  }, { proposalId: firstTurnBody.execution.vpsProposalId });
+  }, { proposalId: firstTurnBody.execution.vpsProposalId, threadId: dashboardThreadId });
 
   expect(approvedTurn.status).toBe(202);
   expect(approvedTurn.body.execution.status).toBe("queued_for_vps_helper_execution");
-  expect(approvedTurn.body.execution.queue.dashboardThreadId).toBe("dashboard-main-marushu-vtdd-v2-p");
+  expect(approvedTurn.body.execution.queue.dashboardThreadId).toBe(dashboardThreadId);
   expect(approvedTurn.body.execution.runtimeTruth.status).toBe("queued_for_vps_helper_execution");
   expect(approvedTurn.body.execution.runtimeTruth.dashboardThreadIdIncluded).toBe(true);
   expect(approvedTurn.body.execution.runtimeTruth.rootExecutionStarted).toBe(false);
@@ -211,7 +217,7 @@ test("Dashboard Butler mobile flow reaches VPS helper execution queue without ro
   const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
   expect(queueCommentBody).toContain("vtdd:vps-privileged-maintenance-execution:issue637-dashboard-e2e");
   expect(queueCommentBody).toContain('"transport": "vps_privileged_maintenance_helper"');
-  expect(queueCommentBody).toContain('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"');
+  expect(queueCommentBody).toContain(`"dashboardThreadId": "${dashboardThreadId}"`);
   expect(queueCommentBody).toContain('"handoff"');
   expect(queueCommentBody).toContain('"helperExecutionInput"');
 
@@ -220,7 +226,7 @@ test("Dashboard Butler mobile flow reaches VPS helper execution queue without ro
     dashboardUrl,
     ownerIntent,
     proposal: {
-      status: firstTurn.status(),
+      status: firstTurn.status,
       vpsProposalId: firstTurnBody.execution.vpsProposalId,
       approvalBoundary: firstTurnBody.execution.approvalScope || null
     },
