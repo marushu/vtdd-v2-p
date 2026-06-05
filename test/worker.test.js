@@ -5354,6 +5354,57 @@ test("DashboardChatRoom keeps app-server reply deltas out of durable chat while 
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
 });
 
+test("DashboardChatRoom preserves readable checkpoint when low-information file status follows reply delta", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply_delta",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-590",
+      delta: "Issue #590 の表示レーンを確認しています。"
+    })
+  );
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "file_change",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-590",
+      text: "raw diff detail"
+    })
+  );
+
+  const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
+  assert.equal(snapshot.text, "ファイル変更を確認しています。");
+  assert.deepEqual(
+    snapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
+    [["Issue #590 の表示レーンを確認しています。", "app_server_reply_delta"]]
+  );
+  const transientPayloads = dashboardSocket.sent.map((message) => JSON.parse(message)).filter((message) => message.type === "transient_status");
+  assert.equal(transientPayloads.at(-1).text, "ファイル変更を確認しています。");
+  assert.deepEqual(
+    transientPayloads.at(-1).transientProgressSnapshot.progressSummary.entries.map((entry) => entry.text),
+    ["Issue #590 の表示レーンを確認しています。"]
+  );
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+});
+
 test("DashboardChatRoom dedupes unchanged transient progress snapshot writes", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");

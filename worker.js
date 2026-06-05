@@ -67024,7 +67024,9 @@ var DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = /* @__PURE__ */ new Set([
 ]);
 var DASHBOARD_LOW_INFORMATION_PROGRESS_TEXT = /* @__PURE__ */ new Set([
   "\u8003\u3048\u3066\u3044\u307E\u3059\u3002",
+  "codex app-server \u304C\u5FDC\u7B54\u3092\u751F\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
   "\u30B3\u30DE\u30F3\u30C9\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
+  "\u30D5\u30A1\u30A4\u30EB\u5909\u66F4\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
   "\u5916\u90E8\u30C4\u30FC\u30EB\u306E\u7D50\u679C\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
   "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u614B\u3092\u78BA\u8A8D\u4E2D\u3067\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"
 ]);
@@ -72888,7 +72890,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           snapshot: options.snapshot || null
         };
         renderTransientProgress();
-        renderThreadProgressCheckpoint(options.snapshot || null);
+        if (hasProgressCheckpointSnapshot(options.snapshot)) {
+          renderThreadProgressCheckpoint(options.snapshot);
+        }
       }
 
       function clearTransientProgress() {
@@ -72916,6 +72920,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           .reverse()
           .map((entry) => String(entry && entry.text || entry || "").trim())
           .find(Boolean) || "";
+      }
+
+      function hasProgressCheckpointSnapshot(snapshot) {
+        return Boolean(latestProgressCheckpointText(snapshot));
       }
 
       function ensureThreadProgressCheckpointCard() {
@@ -72946,7 +72954,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function renderThreadProgressCheckpoint(snapshot, options = {}) {
         const shouldFollow = options.follow === true || (options.follow !== false && isNearLatest());
-        if (snapshot && typeof snapshot === "object") {
+        if (hasProgressCheckpointSnapshot(snapshot)) {
           transientProgressSnapshotState = snapshot;
         }
         const text = latestProgressCheckpointText(transientProgressSnapshotState);

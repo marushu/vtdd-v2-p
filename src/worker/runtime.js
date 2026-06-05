@@ -10309,7 +10309,9 @@ const DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = new Set([
 
 const DASHBOARD_LOW_INFORMATION_PROGRESS_TEXT = new Set([
   "考えています。",
+  "codex app-server が応答を生成しています。",
   "コマンドを実行しています。",
+  "ファイル変更を確認しています。",
   "外部ツールの結果を待っています。",
   "接続と実行状態を確認中です。入力と文脈は保持しています。"
 ]);
@@ -16764,7 +16766,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           snapshot: options.snapshot || null
         };
         renderTransientProgress();
-        renderThreadProgressCheckpoint(options.snapshot || null);
+        if (hasProgressCheckpointSnapshot(options.snapshot)) {
+          renderThreadProgressCheckpoint(options.snapshot);
+        }
       }
 
       function clearTransientProgress() {
@@ -16792,6 +16796,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           .reverse()
           .map((entry) => String(entry && entry.text || entry || "").trim())
           .find(Boolean) || "";
+      }
+
+      function hasProgressCheckpointSnapshot(snapshot) {
+        return Boolean(latestProgressCheckpointText(snapshot));
       }
 
       function ensureThreadProgressCheckpointCard() {
@@ -16822,7 +16830,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function renderThreadProgressCheckpoint(snapshot, options = {}) {
         const shouldFollow = options.follow === true || (options.follow !== false && isNearLatest());
-        if (snapshot && typeof snapshot === "object") {
+        if (hasProgressCheckpointSnapshot(snapshot)) {
           transientProgressSnapshotState = snapshot;
         }
         const text = latestProgressCheckpointText(transientProgressSnapshotState);
