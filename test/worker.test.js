@@ -930,6 +930,22 @@ test("worker preserves dashboard repository context across auth fallback links",
   assert.equal(body.includes("repositoryInput="), false);
 });
 
+test("worker does not use incomplete github.com owner path as dashboard composer repository scope", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard?repository=github.com%2Fmarushu", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes("この作業: github.com/marushu"), true);
+  assert.equal(body.includes('data-repository-input="github.com/marushu"'), false);
+  assert.equal(body.includes('data-repository-input=""'), true);
+  assert.equal(body.includes("/dashboard/progress?repository=github.com%2Fmarushu"), false);
+});
+
 test("worker preserves dashboard thread context across auth fallback links", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/dashboard?threadId=dashboard-main-unresolved&runId=private-run")
@@ -2730,6 +2746,47 @@ test("worker stores dashboard media references in chat without raw binary", asyn
   assert.equal(body.messages[0].mediaReferences[0].contentType, "image/png");
   assert.equal(body.messages[0].mediaReferences[0].downloadUrl, "/v2/media/med_testmedia1234/download");
   assert.equal(JSON.stringify(body).includes("fake image bytes"), false);
+});
+
+test("worker accepts repo-less private chat media when dashboard url carried incomplete github owner path", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const mediaStore = createInMemoryMediaObjectStore();
+  await mediaStore.put({
+    id: "med_repolessgithubpath",
+    repository: null,
+    relatedIssue: null,
+    sourceSurface: "dashboard_butler",
+    objectKey: "media/_dashboard/unscoped/2026/06/05/med_repolessgithubpath/dashboard.png",
+    filename: "dashboard.png",
+    contentType: "image/png",
+    byteSize: 16,
+    sha256: "0123456789abcdef",
+    visibility: "private",
+    createdAt: "2026-06-05T00:00:00.000Z",
+    updatedAt: "2026-06-05T00:00:00.000Z",
+    expiresAt: "2999-01-01T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        repository: "github.com/marushu",
+        text: "画像添付で確認",
+        mediaReferences: [{ mediaId: "med_repolessgithubpath" }]
+      })
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store, MEDIA_OBJECT_STORE: mediaStore }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.messages[0].repository || "", "");
+  assert.equal(body.messages[0].mediaReferences.length, 1);
+  assert.equal(body.messages[0].mediaReferences[0].mediaId, "med_repolessgithubpath");
+  assert.equal(JSON.stringify(body).includes("does not belong to github.com/marushu"), false);
 });
 
 test("worker rejects chat media references outside the repository or issue context", async () => {
