@@ -72358,7 +72358,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-progress[hidden] { display: none; }
     .composer-progress .progress-title { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 850; }
     .composer-progress .progress-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--link); box-shadow: 0 0 0 4px rgba(11, 107, 101, .12); }
-    .composer-progress .progress-text { margin: 0; max-height: min(9lh, 24dvh); overflow: auto; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+    .composer-progress .progress-text { display: -webkit-box; margin: 0; max-height: 3lh; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: var(--muted); white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
     .composer-progress.thinking .progress-title::before { animation: pulseProgress 1.25s ease-in-out infinite; }
     .media-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 76px; height: 76px; min-width: 76px; border: 1px solid var(--border); border-radius: 8px; padding: 0; color: var(--text); background: var(--soft); font: inherit; font-size: 12px; text-decoration: none; overflow: hidden; cursor: pointer; }
     .media-chip:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
@@ -72877,6 +72877,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateComposerReserve();
       }
 
+      function compactComposerProgressText(text) {
+        const normalized = String(text || "").replace(new RegExp("\\\\s+", "g"), " ").trim();
+        if (normalized.length <= 96) return normalized;
+        return normalized.slice(0, 93).trimEnd() + "...";
+      }
+
       function updateTransientProgress(text, options = {}) {
         const normalized = String(text || "").trim();
         if (!normalized || !isLongRunningTransientStatus(options.status)) {
@@ -72884,7 +72890,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         transientProgressState = {
           title: options.title || "\u9032\u884C\u4E2D",
-          text: normalized,
+          text: compactComposerProgressText(normalized),
           status: String(options.status || ""),
           thinking: options.thinking === true,
           snapshot: options.snapshot || null
