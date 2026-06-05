@@ -1301,6 +1301,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("const pacedProgressCheckpointStates = new Map()"), true);
   assert.equal(body.includes("function progressCheckpointEntries(snapshot)"), true);
   assert.equal(body.includes("function progressCheckpointEntryKey(entry)"), true);
+  assert.equal(body.includes("function isBridgeLifecycleCheckpointEntry(entry)"), true);
+  assert.equal(body.includes("bridge-lifecycle-checkpoint"), true);
+  assert.equal(body.includes("app_server_bridge_lifecycle"), true);
   assert.equal(body.includes("function schedulePacedProgressCheckpointText(paragraph, nextText)"), true);
   assert.equal(body.includes("function stepPacedProgressCheckpointText(paragraph)"), true);
   assert.equal(body.includes("const minimumDisplayMs = 1800"), true);
@@ -1309,8 +1312,6 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("schedulePacedProgressCheckpointText(paragraph, entry.text)"), true);
   assert.equal(body.includes("paragraph.textContent = text;"), false);
   assert.equal(body.includes("const entries = progressCheckpointEntries(transientProgressSnapshotState);"), true);
-  assert.equal(body.includes("threadProgressCheckpointCards.set(entryKey, entry);"), true);
-  assert.equal(body.includes("threadProgressCheckpointCards.clear();"), true);
   assert.equal(body.includes("snapshot: body.transientProgressSnapshot || null"), true);
   assert.equal(body.includes("function isNearLatest()"), true);
   assert.equal(body.includes("function markHumanScrollInteraction()"), true);
@@ -5383,6 +5384,53 @@ test("DashboardChatRoom exposes last app-server status snapshot on thread reconn
   assert.equal(payload.type, "thread");
   assert.equal(payload.messages.length, 0);
   assert.deepEqual(payload.transientProgressSnapshot, snapshot);
+});
+
+test("DashboardChatRoom marks bridge lifecycle status as muted progress checkpoint truth", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "thread_resume",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "既存 Codex thread を resume しました。deploy 後 restart でも前の文脈から続けられます。"
+    })
+  );
+
+  const snapshot = storage.values.get("transient_progress_snapshot:dashboard-main-unresolved");
+  assert.equal(snapshot.status, "thinking");
+  assert.equal(snapshot.text, "既存 thread 復帰。");
+  assert.equal(snapshot.source, "app_server_bridge_lifecycle");
+  assert.deepEqual(
+    snapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
+    [["既存 thread 復帰。", "app_server_bridge_lifecycle"]]
+  );
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+
+  const statusPayload = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(statusPayload.type, "transient_status");
+  assert.equal(statusPayload.text, "既存 thread 復帰。");
+  assert.equal(statusPayload.transientProgressSnapshot.source, "app_server_bridge_lifecycle");
+  assert.deepEqual(
+    statusPayload.transientProgressSnapshot.progressSummary.entries.map((entry) => [entry.text, entry.source]),
+    [["既存 thread 復帰。", "app_server_bridge_lifecycle"]]
+  );
 });
 
 test("DashboardChatRoom keeps app-server reply deltas out of durable chat while exposing live checkpoints", async () => {
