@@ -258,6 +258,14 @@ test("dashboard chat message text safely decodes command-like percent encoded li
     "go:\ndeploy production\nissue #524"
   );
   assert.equal(
+    normalizeDashboardChatMessageText("repository:%20marushu/vtdd-v2-p%0ArelatedIssue:%20590%0A%0Aread-only%20確認"),
+    "repository: marushu/vtdd-v2-p\nrelatedIssue: 590\n\nread-only 確認"
+  );
+  assert.equal(
+    normalizeDashboardChatMessageText("%20marushu%2Fvtdd-v2-p%20%23590"),
+    " marushu/vtdd-v2-p #590"
+  );
+  assert.equal(
     normalizeDashboardChatMessageText("https://example.com/path%20with%20encoded?x=1"),
     "https://example.com/path%20with%20encoded?x=1"
   );
@@ -1572,8 +1580,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function normalizeMessageDisplayText("), true);
   assert.equal(body.includes("function normalizeMessageCopyText("), true);
   assert.equal(body.includes("function decodeSafeChatCommandText("), true);
-  assert.equal(body.includes("decodeURIComponent(line)"), true);
-  assert.equal(body.includes('if (/^https?:/i.test(line))'), true);
+  assert.equal(body.includes("const decodeSegment = (segment) =>"), true);
+  assert.equal(body.includes("decodeURIComponent(value)"), true);
+  assert.equal(body.includes("repository|repo|relatedIssue|issueNumber"), true);
+  assert.equal(body.includes("if (/^https?:") && body.includes("test(value)) return value;"), true);
   assert.equal(body.includes("function shouldWrapCodeBlock("), true);
   assert.equal(body.includes("function isSummarySectionTitle("), true);
   assert.equal(body.includes("function parseSummaryKeyValueLine("), true);
@@ -1659,7 +1669,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes(".chat-scroll { align-items: center; }"), false);
   assert.equal(body.includes("overscroll-behavior-x: none"), true);
   assert.equal(body.includes("touch-action: pan-y"), true);
-  assert.equal(body.includes(".bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }"), true);
+  assert.equal(body.includes(".bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; overflow-y: auto;"), true);
+  assert.equal(body.includes("max-height: min(58dvh, 620px);"), true);
   assert.equal(body.includes(".bubble.owner .message-body pre { background: var(--owner-code-bg); border-color: var(--owner-code-border); color: var(--owner-code-text); }"), true);
   assert.equal(body.includes(".bubble.owner .message-body pre code { color: var(--owner-code-text); }"), true);
   assert.equal(body.includes("tokenPattern"), true);
@@ -1968,6 +1979,36 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(retrieveBody.messages[0].messageId, "dashboard_owner_message:http-fallback-1");
   assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
   assert.equal(retrieveBody.summary, null);
+});
+
+test("worker decodes dashboard encoded repository and issue text before traffic control", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        clientMessageId: "dashboard_owner_message:encoded-repo-issue",
+        repository: "decode/trim",
+        text:
+          "repository:%20marushu/vtdd-v2-p%0ArelatedIssue:%20590%0A%0ADashboard%20Butler%20read-only%20確認"
+      })
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.messages[0].repository, "marushu/vtdd-v2-p");
+  assert.equal(body.messages[0].relatedIssue, 590);
+  assert.equal(
+    body.messages[0].text,
+    "repository: marushu/vtdd-v2-p\nrelatedIssue: 590\n\nDashboard Butler read-only 確認"
+  );
+  assert.equal(JSON.stringify(body).includes("20marushu/vtdd-v2-p"), false);
+  assert.equal(JSON.stringify(body).includes("decode/trim"), false);
 });
 
 test("worker serves dashboard media add controls for iPhone-first upload", async () => {
@@ -2342,6 +2383,61 @@ test("worker uploads private dashboard media without repository for ordinary cha
   const [objectKey, stored] = [...r2.objects.entries()][0];
   assert.match(objectKey, /^media\/_dashboard\/unscoped\//);
   assert.equal(stored.options.customMetadata.repository, "unscoped");
+});
+
+test("worker allows private unscoped dashboard media when owner text supplies repository context", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const chatStore = createInMemoryDashboardChatStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "");
+  form.append("sourceSurface", "dashboard_butler");
+  form.append("file", createPngBlob(), "scroll-lock.png");
+
+  const uploadResponse = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+  assert.equal(uploadResponse.status, 201);
+  const uploadBody = await uploadResponse.json();
+  assert.equal(uploadBody.media.repository, null);
+  assert.equal(uploadBody.media.relatedIssue, null);
+
+  const chatResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        clientMessageId: "dashboard_owner_message:private-unscoped-media",
+        repository: "decode/trim",
+        text: "marushu/vtdd-v2-p #590\n添付スクショで iPad scroll lock を確認して。",
+        mediaReferences: [uploadBody.media]
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_CHAT_STORE: chatStore,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(chatResponse.status, 202);
+  const chatBody = await chatResponse.json();
+  assert.equal(chatBody.ok, true);
+  assert.equal(chatBody.messages[0].repository, "marushu/vtdd-v2-p");
+  assert.equal(chatBody.messages[0].relatedIssue, 590);
+  assert.equal(chatBody.messages[0].mediaReferences.length, 1);
+  assert.equal(chatBody.messages[0].mediaReferences[0].repository, null);
 });
 
 test("worker creates media D1 schema without multiline exec truncation", async () => {

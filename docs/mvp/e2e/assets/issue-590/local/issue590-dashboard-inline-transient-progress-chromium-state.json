@@ -45,5 +45,24 @@
     "usesSmoothScrollBy": false,
     "usesGentleCheckpointFollow": false,
     "hasImmediateFollowHelper": true
+  },
+  "encodedCommandInput": {
+    "value": "repository: marushu/vtdd-v2-p\nrelatedIssue: 590\n\nDashboard Butler read-only 確認"
+  },
+  "longCodeScrollState": {
+    "ok": true,
+    "before": 1923,
+    "after": 2003,
+    "logScrollHeight": 2547,
+    "logClientHeight": 504,
+    "logScrollWidth": 370,
+    "logClientWidth": 370,
+    "preScrollHeight": 7864,
+    "preClientHeight": 488,
+    "preOverflowY": "auto",
+    "preTouchAction": "pan-y",
+    "logTouchAction": "pan-y",
+    "logWebkitOverflowScrolling": "",
+    "scrollPaddingBottom": "288px"
   }
 }

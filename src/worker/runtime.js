@@ -8587,6 +8587,36 @@ function normalizeCanonicalRepositoryInput(value) {
   return `${owner}/${repository}`;
 }
 
+function shouldDecodeDashboardCommandText(source) {
+  const text = String(source || "").trim();
+  if (!/%[0-9a-f]{2}/i.test(text)) return false;
+  if (/^https?:\/\//i.test(text)) return false;
+  if (/^go:%[0-9a-f]{2}/i.test(text)) return true;
+  if (/^(?:repository|repo|relatedIssue|issueNumber)\s*[:=]/i.test(text)) return true;
+  if (/^(?:%[0-9a-f]{2})+[A-Za-z0-9_.~-]*%2f[A-Za-z0-9_.~-]+/i.test(text)) return true;
+  if (/%0a/i.test(text) && /(?:repository|repo|relatedIssue|issueNumber|%23|#)/i.test(text)) return true;
+  return false;
+}
+
+function decodeDashboardCommandTextSegment(source) {
+  const text = String(source || "");
+  if (!shouldDecodeDashboardCommandText(text)) return text;
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+function decodeSafeDashboardChatCommandText(text) {
+  const source = String(text || "");
+  const wholeDecoded = decodeDashboardCommandTextSegment(source);
+  return wholeDecoded
+    .split("\n")
+    .map((line) => decodeDashboardCommandTextSegment(line))
+    .join("\n");
+}
+
 async function handlePasskeyRegistrationOptionsRequest(request, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
@@ -9766,7 +9796,9 @@ async function requestDashboardVpsRunnerWakeup({ env, request, execution } = {})
 async function resolveDashboardChatRepository({ payload, env }) {
   const input = normalizeObject(payload);
   const text = input.text || input.message || input.body;
+  const explicitTextRepository = extractCanonicalRepositoryTokenFromDashboardChatText(text);
   const rawRepositoryInput =
+    explicitTextRepository ||
     normalizeDashboardEventText(input.repository || input.repositoryInput || input.repository_input) ||
     extractRepositoryTokenFromDashboardChatText(text);
   const canonicalRepository = normalizeCanonicalRepositoryInput(rawRepositoryInput);
@@ -10454,7 +10486,7 @@ async function notifyDashboardChatRoom({ env, threadId, messages }) {
   }
 }
 
-function extractRepositoryTokenFromDashboardChatText(value) {
+function extractCanonicalRepositoryTokenFromDashboardChatText(value) {
   const text = sanitizeDashboardChatText(value);
   if (!text) {
     return "";
@@ -10473,13 +10505,26 @@ function extractRepositoryTokenFromDashboardChatText(value) {
   if (inlineCanonicalMatch) {
     return inlineCanonicalMatch[2];
   }
+  return "";
+}
+
+function extractRepositoryTokenFromDashboardChatText(value) {
+  const text = sanitizeDashboardChatText(value);
+  if (!text) {
+    return "";
+  }
+  const canonicalToken = extractCanonicalRepositoryTokenFromDashboardChatText(text);
+  if (canonicalToken) {
+    return canonicalToken;
+  }
   const nicknameMatch = text.match(/^[\s　]*([^\s　#「『【\\/:]+?)(?:\s+|[　]*の|[　]*を|[　]*で|[　]*に)/u);
   return normalizeDashboardEventText(nicknameMatch?.[1]);
 }
 
 function extractIssueNumberFromDashboardChatText(value) {
   const text = sanitizeDashboardChatText(value);
-  const match = text.match(/#([1-9][0-9]*)/);
+  const labeledMatch = text.match(/(?:relatedIssue|issueNumber|関連\s*Issue|Issue)\s*(?:は|:|：|=)?\s*#?\s*([1-9][0-9]*)/iu);
+  const match = labeledMatch || text.match(/#([1-9][0-9]*)/);
   return normalizePositiveInteger(match?.[1]);
 }
 
@@ -12066,14 +12111,19 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
         reason: `media reference ${reference.mediaId} is malformed`
       };
     }
-    if (resolvedRepository && media.repository !== resolvedRepository) {
+    const privateUnscopedDashboardMedia =
+      !media.repository &&
+      !media.relatedIssue &&
+      media.visibility === "private" &&
+      media.sourceSurface === "dashboard_butler";
+    if (resolvedRepository && media.repository !== resolvedRepository && !privateUnscopedDashboardMedia) {
       return {
         ok: false,
         error: "media_reference_repository_mismatch",
         reason: `media reference ${reference.mediaId} does not belong to ${resolvedRepository}`
       };
     }
-    if (resolvedIssue && media.relatedIssue !== resolvedIssue) {
+    if (resolvedIssue && media.relatedIssue !== resolvedIssue && !privateUnscopedDashboardMedia) {
       return {
         ok: false,
         error: "media_reference_issue_mismatch",
@@ -12087,7 +12137,6 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
 
 async function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject(payload);
-  const repository = normalizeCanonicalRepositoryInput(input.repository);
   const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
   const clientMessageId = sanitizeDashboardChatText(input.clientMessageId || input.client_message_id);
   const text =
@@ -12102,6 +12151,10 @@ async function buildDashboardChatTurn(payload, options = {}) {
   }
 
   const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
+  const explicitTextRepository = extractCanonicalRepositoryTokenFromDashboardChatText(text);
+  const repository =
+    normalizeCanonicalRepositoryInput(explicitTextRepository) ||
+    normalizeCanonicalRepositoryInput(input.repository || input.repositoryInput || input.repository_input);
   const relatedIssue =
     normalizePositiveInteger(input.relatedIssue || input.issueNumber) || extractIssueNumberFromDashboardChatText(text);
   const mediaValidation = await resolveDashboardChatMediaReferences({
@@ -13019,7 +13072,7 @@ function normalizeDashboardThreadId(value) {
 }
 
 function sanitizeDashboardChatText(value) {
-  const text = normalizeText(value)
+  const text = decodeSafeDashboardChatCommandText(normalizeText(value))
     .replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]")
     .replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]")
     .replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]")
@@ -15993,26 +16046,6 @@ export function shouldSubmitDashboardComposerShortcut(event) {
   );
 }
 
-function decodeSafeDashboardChatCommandText(text) {
-  const source = String(text || "");
-  return source
-    .split("\n")
-    .map((line) => {
-      if (!/^go:%[0-9a-f]{2}/i.test(line)) {
-        return line;
-      }
-      if (/^https?:/i.test(line)) {
-        return line;
-      }
-      try {
-        return decodeURIComponent(line);
-      } catch {
-        return line;
-      }
-    })
-    .join("\n");
-}
-
 async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore } = {}) {
   const origin = normalize(runtimeOrigin);
   const repositoryInput = normalizeDashboardRepositoryInput(
@@ -16233,7 +16266,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .thread-title { min-width: 0; max-width: 100%; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; padding: 8px clamp(18px, 5vw, 96px) 28px; scroll-padding-bottom: 28px; scrollbar-gutter: stable both-edges; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 8px clamp(18px, 5vw, 96px) 28px; scroll-padding-bottom: calc(var(--composer-reserve, 112px) + 28px); scrollbar-gutter: stable both-edges; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
     .bubble { max-width: 100%; min-width: 0; color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -16254,7 +16287,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body a, .bubble .message-body code { overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body code { color: var(--code-text); font-size: .94em; }
-    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }
+    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; overflow-y: auto; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; white-space: pre-wrap; max-width: 100%; max-height: min(58dvh, 620px); }
     .bubble .message-body pre.wrap-code { overflow-x: hidden; white-space: pre-wrap; }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
@@ -16305,9 +16338,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @keyframes pulseProgress { 0%, 100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
-    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); overflow: hidden; overscroll-behavior-x: none; }
-    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; }
-    textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
+    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); overflow: visible; overscroll-behavior-x: none; touch-action: pan-y; }
+    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
+    textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; touch-action: pan-y; }
     textarea::placeholder { color: var(--muted); }
     .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
@@ -17801,21 +17834,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function decodeSafeChatCommandText(text) {
         const source = String(text || "");
-        return source
+        const decodeSegment = (segment) => {
+          const value = String(segment || "");
+          if (!/%[0-9a-f]{2}/i.test(value)) return value;
+          if (/^https?:\\/\\//i.test(value)) return value;
+          if (
+            !/^go:%[0-9a-f]{2}/i.test(value) &&
+            !/^(?:repository|repo|relatedIssue|issueNumber)\\s*[:=]/i.test(value) &&
+            !/^(?:%[0-9a-f]{2})+[A-Za-z0-9_.~-]*%2f[A-Za-z0-9_.~-]+/i.test(value) &&
+            !(/%0a/i.test(value) && /(?:repository|repo|relatedIssue|issueNumber|%23|#)/i.test(value))
+          ) {
+            return value;
+          }
+          try {
+            return decodeURIComponent(value);
+          } catch {
+            return value;
+          }
+        };
+        return decodeSegment(source)
           .split("\\n")
-          .map((line) => {
-            if (!/^go:%[0-9a-f]{2}/i.test(line)) {
-              return line;
-            }
-            if (/^https?:/i.test(line)) {
-              return line;
-            }
-            try {
-              return decodeURIComponent(line);
-            } catch {
-              return line;
-            }
-          })
+          .map((line) => decodeSegment(line))
           .join("\\n");
       }
 
