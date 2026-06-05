@@ -65512,10 +65512,24 @@ async function handleRepositoryNicknameDeleteRequest(request, env) {
 }
 function normalizeCanonicalRepositoryInput(value) {
   const text = normalizeText33(value).toLowerCase();
-  if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(text)) {
+  if (!text) {
     return "";
   }
-  return text;
+  const githubPathMatch = text.match(/^(?:https?:\/\/)?github\.com\/([^/\s?#]+)\/([^/\s?#]+)/);
+  if (githubPathMatch) {
+    return normalizeCanonicalRepositoryInput(`${githubPathMatch[1]}/${githubPathMatch[2]}`);
+  }
+  if (/^(?:https?:\/\/)?github\.com\/[^/\s?#]+\/?$/.test(text)) {
+    return "";
+  }
+  if (!/^[a-z0-9-]+\/[a-z0-9_.-]+$/.test(text)) {
+    return "";
+  }
+  const [owner, repository] = text.split("/");
+  if (owner === "github.com" || owner.startsWith("github.") || owner.startsWith("-") || owner.endsWith("-") || owner.length > 39 || repository === "." || repository === "..") {
+    return "";
+  }
+  return `${owner}/${repository}`;
 }
 async function handlePasskeyRegistrationOptionsRequest(request, env) {
   const provider = resolveMemoryProvider(env);
@@ -72116,11 +72130,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   );
   const dashboardIssueNumber = normalizePositiveInteger10(url?.searchParams?.get("issueNumber"));
   const requestedChatThreadId = normalizeDashboardSingleMainChatThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
+  const canonicalRepositoryInput = normalizeCanonicalRepositoryInput(repositoryInput);
   const dashboardTargetLabel = repositoryInput ? `\u3053\u306E\u4F5C\u696D: ${repositoryInput}` : "repo-less main chat";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">\u56FA\u5B9A\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u3053\u306E\u4F1A\u8A71\u3067 Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u4F5C\u696D\u3092\u3059\u308B\u9593\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002deploy \u5148\u3068\u627F\u8A8D\u5883\u754C\u306F repo \u3054\u3068\u306B\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>` : `<p><strong>repo-less main chat</strong></p>
           <p class="muted">\u3053\u3053\u304C\u901A\u5E38\u306E\u30E1\u30A4\u30F3\u30C1\u30E3\u30C3\u30C8\u3067\u3059\u3002repo \u306F\u5E38\u8A2D\u8A2D\u5B9A\u3067\u306F\u306A\u304F\u3001Issue / PR / deploy \u306A\u3069 repo \u5883\u754C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051 Butler \u304C\u4F1A\u8A71\u306E\u4E2D\u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002VTDD \u3068 TOMIO \u3067\u306F deploy \u5148\u3082\u627F\u8A8D\u5883\u754C\u3082\u5225\u7269\u3068\u3057\u3066\u6271\u3044\u307E\u3059\u3002</p>`;
-  const encodedRepository = encodeURIComponent(repositoryInput);
+  const encodedRepository = encodeURIComponent(canonicalRepositoryInput);
   const chatThreadId = requestedChatThreadId;
   const socketOrigin = origin.replace(/^http/i, "ws");
   const currentDashboardReturnPath = withDashboardReturnThreadId(
@@ -72131,7 +72146,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
-    repository: normalizeCanonicalRepositoryInput(repositoryInput),
+    repository: canonicalRepositoryInput,
     workflowName: "deploy-production"
   });
   const surfaces = [
@@ -72143,25 +72158,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Startup preflight",
       body: "AGENTS.md\u3001thread-independent startup\u3001runtime truth\u3001RAG\u3001self parity \u3092\u6700\u521D\u306B\u8AAD\u3080\u5165\u53E3\u3002",
-      href: repositoryInput ? `${origin}/dashboard/preflight?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/preflight?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Execution progress",
       body: "VPS Codex CLI / remote Codex execution \u306E\u9032\u6357\u78BA\u8A8D\u3002",
-      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "VPS runner status",
       body: "runner health\u3001queue\u3001\u5BFE\u8C61 execution \u306E\u72B6\u614B\u78BA\u8A8D\u3002",
-      href: repositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "GitHub runtime truth",
       body: "Issues\u3001PRs\u3001checks\u3001workflow runs\u3001reviewer comments \u3092\u8AAD\u3080\u5165\u53E3\u3002",
-      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
@@ -72177,25 +72192,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Operational RAG",
       body: "decision / proposal / working memory \u306E compact retrieval\u3002runtime truth \u306E\u4EE3\u66FF\u3067\u306F\u306A\u3044\u3002",
-      href: repositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Self parity",
       body: "Action Schema\u3001Instructions\u3001Cloudflare deploy freshness\u3001operator URL \u3092\u78BA\u8A8D\u3002",
-      href: repositoryInput ? `${origin}/dashboard/self-parity?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/self-parity?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Setup diagnostics",
       body: "Butler / Custom GPT / deploy drift \u306E\u8A3A\u65AD\u30DA\u30FC\u30B8\u3002",
-      href: repositoryInput ? `${origin}/setup/diagnostics?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/setup/diagnostics?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "\u672C\u756A\u53CD\u6620 / Passkey \u627F\u8A8D",
       body: "production deploy \u306F\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo \u3068 deploy \u5148\u3092\u78BA\u8A8D\u3057\u3066\u304B\u3089\u3001scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3067\u958B\u304D\u307E\u3059\u3002",
-      href: repositoryInput ? `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production` : "",
+      href: canonicalRepositoryInput ? `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     }
   ];
@@ -72216,12 +72231,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     },
     {
       label: "\u9032\u6357\u3092\u898B\u308B",
-      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C"
     },
     {
       label: "GitHub\u72B6\u6CC1",
-      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C"
     }
   ];
@@ -72568,7 +72583,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(canonicalRepositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-progress" id="butler-transient-progress" aria-live="polite" hidden>
           <span class="progress-title">\u9032\u884C\u4E2D</span>

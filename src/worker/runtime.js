@@ -8559,10 +8559,32 @@ async function handleRepositoryNicknameDeleteRequest(request, env) {
 
 function normalizeCanonicalRepositoryInput(value) {
   const text = normalizeText(value).toLowerCase();
-  if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(text)) {
+  if (!text) {
     return "";
   }
-  return text;
+  const githubPathMatch = text.match(/^(?:https?:\/\/)?github\.com\/([^/\s?#]+)\/([^/\s?#]+)/);
+  if (githubPathMatch) {
+    return normalizeCanonicalRepositoryInput(`${githubPathMatch[1]}/${githubPathMatch[2]}`);
+  }
+  if (/^(?:https?:\/\/)?github\.com\/[^/\s?#]+\/?$/.test(text)) {
+    return "";
+  }
+  if (!/^[a-z0-9-]+\/[a-z0-9_.-]+$/.test(text)) {
+    return "";
+  }
+  const [owner, repository] = text.split("/");
+  if (
+    owner === "github.com" ||
+    owner.startsWith("github.") ||
+    owner.startsWith("-") ||
+    owner.endsWith("-") ||
+    owner.length > 39 ||
+    repository === "." ||
+    repository === ".."
+  ) {
+    return "";
+  }
+  return `${owner}/${repository}`;
 }
 
 async function handlePasskeyRegistrationOptionsRequest(request, env) {
@@ -15985,13 +16007,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   );
   const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
   const requestedChatThreadId = normalizeDashboardSingleMainChatThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
+  const canonicalRepositoryInput = normalizeCanonicalRepositoryInput(repositoryInput);
   const dashboardTargetLabel = repositoryInput ? `この作業: ${repositoryInput}` : "repo-less main chat";
   const targetStatusMarkup = repositoryInput
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">固定ではありません。この会話で Issue / PR / deploy など repo が必要な作業をする間だけ対象にします。deploy 先と承認境界は repo ごとに確認します。</p>`
     : `<p><strong>repo-less main chat</strong></p>
           <p class="muted">ここが通常のメインチャットです。repo は常設設定ではなく、Issue / PR / deploy など repo 境界が必要になった時だけ Butler が会話の中で確認します。VTDD と TOMIO では deploy 先も承認境界も別物として扱います。</p>`;
-  const encodedRepository = encodeURIComponent(repositoryInput);
+  const encodedRepository = encodeURIComponent(canonicalRepositoryInput);
   const chatThreadId = requestedChatThreadId;
   const socketOrigin = origin.replace(/^http/i, "ws");
   const currentDashboardReturnPath = withDashboardReturnThreadId(
@@ -16002,7 +16025,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
-    repository: normalizeCanonicalRepositoryInput(repositoryInput),
+    repository: canonicalRepositoryInput,
     workflowName: "deploy-production"
   });
   const surfaces = [
@@ -16014,25 +16037,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Startup preflight",
       body: "AGENTS.md、thread-independent startup、runtime truth、RAG、self parity を最初に読む入口。",
-      href: repositoryInput ? `${origin}/dashboard/preflight?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/preflight?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Execution progress",
       body: "VPS Codex CLI / remote Codex execution の進捗確認。",
-      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後に開けます"
     },
     {
       title: "VPS runner status",
       body: "runner health、queue、対象 execution の状態確認。",
-      href: repositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後に開けます"
     },
     {
       title: "GitHub runtime truth",
       body: "Issues、PRs、checks、workflow runs、reviewer comments を読む入口。",
-      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後に開けます"
     },
     {
@@ -16048,25 +16071,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Operational RAG",
       body: "decision / proposal / working memory の compact retrieval。runtime truth の代替ではない。",
-      href: repositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Self parity",
       body: "Action Schema、Instructions、Cloudflare deploy freshness、operator URL を確認。",
-      href: repositoryInput ? `${origin}/dashboard/self-parity?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/self-parity?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Setup diagnostics",
       body: "Butler / Custom GPT / deploy drift の診断ページ。",
-      href: repositoryInput ? `${origin}/setup/diagnostics?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/setup/diagnostics?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後に開けます"
     },
     {
       title: "本番反映 / Passkey 承認",
       body: "production deploy はこの作業の対象 repo と deploy 先を確認してから、scope 明示済み passkey approval の後ろで開きます。",
-      href: repositoryInput
+      href: canonicalRepositoryInput
         ? `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
         : "",
       disabledReason: "repo 設定後に開けます"
@@ -16089,12 +16112,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     },
     {
       label: "進捗を見る",
-      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後"
     },
     {
       label: "GitHub状況",
-      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      href: canonicalRepositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後"
     }
   ];
@@ -16454,7 +16477,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(canonicalRepositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-progress" id="butler-transient-progress" aria-live="polite" hidden>
           <span class="progress-title">進行中</span>
