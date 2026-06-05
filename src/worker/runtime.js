@@ -5032,7 +5032,7 @@ async function handleGitHubActionsEventRequest(request, env) {
   });
   await store.put(acceptedEvent);
 
-  const threadId = event.threadId || buildDashboardEventDefaultThreadId(baseEvent);
+  const threadId = normalizeDashboardSingleMainChatThreadId(event.threadId);
   const chatMessage = buildGitHubActionsDashboardChatMessage({
     event: baseEvent,
     threadId
@@ -6448,7 +6448,7 @@ async function authorizeDashboardVpsApprovalContinuation({ payload, env } = {}) 
   const input = normalizeObject(payload);
   const vpsProposalId = normalizeText(input.vpsProposalId || input.vps_proposal_id);
   const approvalGrantId = normalizeText(input.approvalGrantId || input.approval_grant_id);
-  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id);
+  const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
   if (!vpsProposalId || !approvalGrantId || !threadId) {
     return {
       ok: false,
@@ -12039,9 +12039,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
     };
   }
 
-  const threadId =
-    normalizeDashboardThreadId(input.threadId || input.thread_id) ||
-    (repository ? `dashboard-main-${repository.replace("/", "-")}` : "dashboard-main-unresolved");
+  const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
   const relatedIssue =
     normalizePositiveInteger(input.relatedIssue || input.issueNumber) || extractIssueNumberFromDashboardChatText(text);
   const mediaValidation = await resolveDashboardChatMediaReferences({
@@ -12188,7 +12186,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
     const proposal = await createVpsPrivilegedMaintenanceProposal({
       payload: {
         ...proposalPayload,
-        dashboardThreadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
+        dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
         executionId: normalizeText(payload?.executionId || payload?.execution_id)
       },
       provider,
@@ -12316,7 +12314,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
       executionId:
         normalizeText(payload?.executionId || payload?.execution_id) ||
         `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helper.body.helperRequest.requestId)}`,
-      dashboardThreadId: normalizeText(payload?.threadId || payload?.thread_id),
+      dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
       approvalActor: "Dashboard Butler",
       executionEnvelope: execution.body.executionEnvelope
     },
@@ -12451,7 +12449,7 @@ async function queueDashboardVpsMaintenanceLowRiskRead({
       executionId:
         normalizeText(payload?.executionId || payload?.execution_id) ||
         `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helperRequest.requestId)}`,
-      dashboardThreadId: normalizeText(payload?.threadId || payload?.thread_id),
+      dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
       approvalActor: "Dashboard Butler low-risk read",
       executionEnvelope: execution.body.executionEnvelope
     },
@@ -14186,18 +14184,28 @@ function normalizeGitHubActionsEvent(payload) {
   };
 }
 
-function buildDashboardEventDefaultThreadId(event) {
-  const record = normalizeDashboardEventRecord(event);
-  const repository = normalizeCanonicalRepositoryInput(record.repository);
-  if (repository) {
-    return normalizeDashboardThreadId(`dashboard-main-${repository.replace("/", "-")}`);
+const DASHBOARD_SINGLE_MAIN_CHAT_THREAD_ID = "dashboard-main-unresolved";
+
+function normalizeDashboardSingleMainChatThreadId(value = "") {
+  const normalized = normalizeDashboardThreadId(value);
+  if (!normalized || isRepositoryDerivedDashboardMainThreadId(normalized)) {
+    return DASHBOARD_SINGLE_MAIN_CHAT_THREAD_ID;
   }
-  return "dashboard-main-unresolved";
+  return normalized;
+}
+
+function isRepositoryDerivedDashboardMainThreadId(value = "") {
+  const normalized = normalizeDashboardThreadId(value);
+  return /^dashboard-main-(?!unresolved$)[a-z0-9_.-]+-[a-z0-9_.-]+$/i.test(normalized);
+}
+
+function buildDashboardEventDefaultThreadId() {
+  return DASHBOARD_SINGLE_MAIN_CHAT_THREAD_ID;
 }
 
 function buildGitHubActionsDashboardChatMessage({ event, threadId } = {}) {
   const record = normalizeDashboardEventRecord(event);
-  const resolvedThreadId = normalizeDashboardThreadId(threadId) || buildDashboardEventDefaultThreadId(record);
+  const resolvedThreadId = normalizeDashboardSingleMainChatThreadId(threadId);
   if (!resolvedThreadId || record.kind !== "github_actions_workflow_run") {
     return null;
   }
@@ -14279,9 +14287,7 @@ function normalizeVpsRunnerDashboardEvent(payload) {
   const issueNumber = normalizePositiveInteger(input.issueNumber || input.issue_number || input.relatedIssue);
   const branch = sanitizeDashboardChatText(input.branch || input.headBranch || input.head_branch);
   const progressUrl = normalizeDashboardUrl(input.progressUrl || input.progress_url || input.runUrl || input.run_url || input.url);
-  const threadId =
-    normalizeDashboardThreadId(input.threadId || input.thread_id) ||
-    normalizeDashboardThreadId(`execution-${executionId}`);
+  const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
   const title = buildVpsRunnerDashboardTitle({ status, currentStep, lastEvent, message });
 
   if (!repository) {
@@ -15942,7 +15948,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
-  const requestedChatThreadId = normalizeDashboardThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
+  const requestedChatThreadId = normalizeDashboardSingleMainChatThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
   const dashboardTargetLabel = repositoryInput ? `この作業: ${repositoryInput}` : "repo-less main chat";
   const targetStatusMarkup = repositoryInput
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
@@ -15950,7 +15956,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     : `<p><strong>repo-less main chat</strong></p>
           <p class="muted">ここが通常のメインチャットです。repo は常設設定ではなく、Issue / PR / deploy など repo 境界が必要になった時だけ Butler が会話の中で確認します。VTDD と TOMIO では deploy 先も承認境界も別物として扱います。</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
-  const chatThreadId = requestedChatThreadId || `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
+  const chatThreadId = requestedChatThreadId;
   const socketOrigin = origin.replace(/^http/i, "ws");
   const currentDashboardReturnPath = withDashboardReturnThreadId(
     sanitizeDashboardPreAuthReturnPath(`${url?.pathname || "/dashboard"}${url?.search || ""}`),

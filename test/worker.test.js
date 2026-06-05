@@ -1874,7 +1874,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(body.threadId, "dashboard-main-unresolved");
   assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0].role, "owner");
   assert.equal(body.messages[0].messageId, "dashboard_owner_message:http-fallback-1");
@@ -1882,7 +1882,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(JSON.stringify(body.messages).includes("Custom GPT Butler"), false);
 
   const retrieveResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved", {
       headers: dashboardAccessHeaders
     }),
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
@@ -2712,7 +2712,7 @@ test("worker rejects chat media references outside the repository or issue conte
 
 test("worker stores dashboard Butler thread summaries and searches archived context", async () => {
   const store = createInMemoryDashboardChatStore();
-  await store.appendMany("dashboard-main-marushu-vtdd-v2-p", [
+  await store.appendMany("dashboard-main-unresolved", [
     {
       role: "owner",
       repository: "marushu/vtdd-v2-p",
@@ -2734,7 +2734,7 @@ test("worker stores dashboard Butler thread summaries and searches archived cont
   ]);
 
   const summaryResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p/summary", {
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved/summary", {
       method: "POST",
       headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
       body: JSON.stringify({
@@ -2753,7 +2753,7 @@ test("worker stores dashboard Butler thread summaries and searches archived cont
   assert.equal(summaryBody.summary.relatedIssue, 450);
 
   const threadResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved", {
       headers: dashboardAccessHeaders
     }),
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
@@ -2773,7 +2773,7 @@ test("worker stores dashboard Butler thread summaries and searches archived cont
   const searchBody = await searchResponse.json();
   assert.equal(searchBody.ok, true);
   assert.equal(searchBody.results.some((result) => result.kind === "summary"), true);
-  assert.equal(searchBody.results.every((result) => result.threadId === "dashboard-main-marushu-vtdd-v2-p"), true);
+  assert.equal(searchBody.results.every((result) => result.threadId === "dashboard-main-unresolved"), true);
 });
 
 test("worker appends dashboard Butler chat turn with dashboard passkey session cookie", async () => {
@@ -2877,7 +2877,7 @@ test("worker does not dispatch dashboard chat to the VPS runner queue", async ()
   assert.equal(calls.length, 0);
 
   const retrieveResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved", {
       headers: dashboardAccessHeaders
     }),
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
@@ -2928,7 +2928,7 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.match(body.messages[1].text, /rootExecutionStarted=false, helperExecutionStarted=false/);
   assert.match(body.messages[1].text, /approval URL/);
   const approvalUrl = new URL(body.execution.approvalOperatorUrl);
-  assert.equal(approvalUrl.searchParams.get("dashboardThreadId"), "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(approvalUrl.searchParams.get("dashboardThreadId"), "dashboard-main-unresolved");
   assert.equal(approvalUrl.searchParams.get("vpsProposalId"), body.execution.vpsProposalId);
   assert.doesNotMatch(body.messages[1].text, /app-server 接続 PR/);
 
@@ -2988,7 +2988,7 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   const approvedBody = await approvedResponse.json();
   assert.equal(approvedBody.ok, true);
   assert.equal(approvedBody.execution.status, "queued_for_vps_helper_execution");
-  assert.equal(approvedBody.execution.queue.dashboardThreadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(approvedBody.execution.queue.dashboardThreadId, "dashboard-main-unresolved");
   assert.equal(approvedBody.execution.runtimeTruth.helperQueueReached, true);
   assert.equal(approvedBody.execution.runtimeTruth.dashboardThreadIdIncluded, true);
   assert.equal(approvedBody.execution.runtimeTruth.rootExecutionStarted, false);
@@ -3002,7 +3002,7 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
   assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:issue637-dashboard-natural-chat"), true);
   assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
-  assert.equal(queueCommentBody.includes('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"'), true);
+  assert.equal(queueCommentBody.includes('"dashboardThreadId": "dashboard-main-unresolved"'), true);
   assert.equal(queueCommentBody.includes('"handoff"'), true);
 });
 
@@ -5858,7 +5858,7 @@ test("worker redacts dashboard Butler chat sensitive material before returning a
   assert.equal(body.messages[0].text.includes("Bearer [redacted]"), true);
 
   const retrieveResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved", {
       headers: dashboardAccessHeaders
     }),
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
@@ -6983,7 +6983,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(eventBody.event.pwaNotificationStatus, "sent");
   assert.equal(eventBody.event.pwaNotificationAttempted, 1);
   assert.equal(eventBody.event.pwaNotificationDelivered, 1);
-  assert.equal(eventBody.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(eventBody.threadId, "dashboard-main-unresolved");
   assert.equal(eventBody.chatAppendStatus, "appended");
   assert.equal(eventBody.chatAppendError, null);
   assert.equal(eventBody.chatAppendReason, null);
@@ -7024,7 +7024,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(JSON.stringify(eventBody.messages).includes("secret-must-not-persist"), false);
   assert.equal(eventBody.webSocketBroadcast, true);
   assert.equal(rooms.calls.length, 1);
-  assert.equal(rooms.calls[0].name, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(rooms.calls[0].name, "dashboard-main-unresolved");
   assert.equal(pushCalls.length, 1);
   assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
   assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
@@ -7055,7 +7055,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(storedDeployEvent.pwaNotificationDelivered, 1);
 
   const chatResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved", {
       headers: dashboardAccessHeaders
     }),
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: chatStore }
@@ -7108,7 +7108,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(duplicateBody.webPush.delivered, 0);
   assert.equal(pushCalls.length, 1);
   const duplicateChat = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved", {
       headers: dashboardAccessHeaders
     }),
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: chatStore }
@@ -7548,7 +7548,7 @@ test("worker ingests VPS runner event into notifications and Butler chat thread"
   assert.equal(eventBody.event.runUrl.includes("secret-must-not-persist"), false);
   assert.equal(JSON.stringify(eventBody).includes("approval:15b6f20d"), false);
   assert.equal(JSON.stringify(eventBody).includes("secret-must-not-persist"), false);
-  assert.equal(eventBody.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(eventBody.threadId, "dashboard-main-unresolved");
   assert.equal(eventBody.webSocketBroadcast, true);
   assert.equal(eventBody.webPush.ok, false);
   assert.equal(eventBody.webPush.error, "dashboard_push_subscription_store_unavailable");
@@ -7567,14 +7567,14 @@ test("worker ingests VPS runner event into notifications and Butler chat thread"
   assert.equal(eventBody.messages[0].text.includes("\n本文:\nVPS Codex CLI が作業を開始しました。"), true);
   assert.equal(eventBody.messages[0].text.includes("codex_subprocess"), true);
   assert.equal(rooms.calls.length, 1);
-  assert.equal(rooms.calls[0].name, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(rooms.calls[0].name, "dashboard-main-unresolved");
   assert.equal(String(rooms.calls[0].input), "https://dashboard-chat-room.internal/broadcast");
   const broadcastBody = JSON.parse(rooms.calls[0].init.body);
-  assert.equal(broadcastBody.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(broadcastBody.threadId, "dashboard-main-unresolved");
   assert.equal(broadcastBody.messages[0].role, "runner");
 
   const chatResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-unresolved", {
       headers: dashboardAccessHeaders
     }),
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: chatStore }

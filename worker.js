@@ -62322,7 +62322,7 @@ async function handleGitHubActionsEventRequest(request, env) {
     pwaNotificationCleaned: existingEvent?.pwaNotificationCleaned || 0
   });
   await store.put(acceptedEvent);
-  const threadId = event.threadId || buildDashboardEventDefaultThreadId(baseEvent);
+  const threadId = normalizeDashboardSingleMainChatThreadId(event.threadId);
   const chatMessage = buildGitHubActionsDashboardChatMessage({
     event: baseEvent,
     threadId
@@ -63645,7 +63645,7 @@ async function authorizeDashboardVpsApprovalContinuation({ payload, env } = {}) 
   const input = normalizeObject12(payload);
   const vpsProposalId = normalizeText33(input.vpsProposalId || input.vps_proposal_id);
   const approvalGrantId = normalizeText33(input.approvalGrantId || input.approval_grant_id);
-  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id);
+  const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
   if (!vpsProposalId || !approvalGrantId || !threadId) {
     return {
       ok: false,
@@ -68585,7 +68585,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
       reason: "message text is required"
     };
   }
-  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || (repository ? `dashboard-main-${repository.replace("/", "-")}` : "dashboard-main-unresolved");
+  const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
   const relatedIssue = normalizePositiveInteger10(input.relatedIssue || input.issueNumber) || extractIssueNumberFromDashboardChatText(text);
   const mediaValidation = await resolveDashboardChatMediaReferences({
     env: options.env,
@@ -68723,7 +68723,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
     const proposal = await createVpsPrivilegedMaintenanceProposal({
       payload: {
         ...proposalPayload,
-        dashboardThreadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
+        dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
         executionId: normalizeText33(payload?.executionId || payload?.execution_id)
       },
       provider,
@@ -68846,7 +68846,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
       repository,
       issueNumber: relatedIssue,
       executionId: normalizeText33(payload?.executionId || payload?.execution_id) || `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helper.body.helperRequest.requestId)}`,
-      dashboardThreadId: normalizeText33(payload?.threadId || payload?.thread_id),
+      dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
       approvalActor: "Dashboard Butler",
       executionEnvelope: execution.body.executionEnvelope
     },
@@ -68973,7 +68973,7 @@ async function queueDashboardVpsMaintenanceLowRiskRead({
       repository,
       issueNumber: relatedIssue,
       executionId: normalizeText33(payload?.executionId || payload?.execution_id) || `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helperRequest.requestId)}`,
-      dashboardThreadId: normalizeText33(payload?.threadId || payload?.thread_id),
+      dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
       approvalActor: "Dashboard Butler low-risk read",
       executionEnvelope: execution.body.executionEnvelope
     },
@@ -70447,17 +70447,21 @@ function normalizeGitHubActionsEvent(payload) {
     threadId
   };
 }
-function buildDashboardEventDefaultThreadId(event) {
-  const record2 = normalizeDashboardEventRecord(event);
-  const repository = normalizeCanonicalRepositoryInput(record2.repository);
-  if (repository) {
-    return normalizeDashboardThreadId(`dashboard-main-${repository.replace("/", "-")}`);
+var DASHBOARD_SINGLE_MAIN_CHAT_THREAD_ID = "dashboard-main-unresolved";
+function normalizeDashboardSingleMainChatThreadId(value = "") {
+  const normalized = normalizeDashboardThreadId(value);
+  if (!normalized || isRepositoryDerivedDashboardMainThreadId(normalized)) {
+    return DASHBOARD_SINGLE_MAIN_CHAT_THREAD_ID;
   }
-  return "dashboard-main-unresolved";
+  return normalized;
+}
+function isRepositoryDerivedDashboardMainThreadId(value = "") {
+  const normalized = normalizeDashboardThreadId(value);
+  return /^dashboard-main-(?!unresolved$)[a-z0-9_.-]+-[a-z0-9_.-]+$/i.test(normalized);
 }
 function buildGitHubActionsDashboardChatMessage({ event, threadId } = {}) {
   const record2 = normalizeDashboardEventRecord(event);
-  const resolvedThreadId = normalizeDashboardThreadId(threadId) || buildDashboardEventDefaultThreadId(record2);
+  const resolvedThreadId = normalizeDashboardSingleMainChatThreadId(threadId);
   if (!resolvedThreadId || record2.kind !== "github_actions_workflow_run") {
     return null;
   }
@@ -70537,7 +70541,7 @@ function normalizeVpsRunnerDashboardEvent(payload) {
   const issueNumber = normalizePositiveInteger10(input.issueNumber || input.issue_number || input.relatedIssue);
   const branch = sanitizeDashboardChatText(input.branch || input.headBranch || input.head_branch);
   const progressUrl = normalizeDashboardUrl(input.progressUrl || input.progress_url || input.runUrl || input.run_url || input.url);
-  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || normalizeDashboardThreadId(`execution-${executionId}`);
+  const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
   const title = buildVpsRunnerDashboardTitle({ status, currentStep, lastEvent, message });
   if (!repository) {
     return {
@@ -72085,13 +72089,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger10(url?.searchParams?.get("issueNumber"));
-  const requestedChatThreadId = normalizeDashboardThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
+  const requestedChatThreadId = normalizeDashboardSingleMainChatThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
   const dashboardTargetLabel = repositoryInput ? `\u3053\u306E\u4F5C\u696D: ${repositoryInput}` : "repo-less main chat";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">\u56FA\u5B9A\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u3053\u306E\u4F1A\u8A71\u3067 Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u4F5C\u696D\u3092\u3059\u308B\u9593\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002deploy \u5148\u3068\u627F\u8A8D\u5883\u754C\u306F repo \u3054\u3068\u306B\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>` : `<p><strong>repo-less main chat</strong></p>
           <p class="muted">\u3053\u3053\u304C\u901A\u5E38\u306E\u30E1\u30A4\u30F3\u30C1\u30E3\u30C3\u30C8\u3067\u3059\u3002repo \u306F\u5E38\u8A2D\u8A2D\u5B9A\u3067\u306F\u306A\u304F\u3001Issue / PR / deploy \u306A\u3069 repo \u5883\u754C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051 Butler \u304C\u4F1A\u8A71\u306E\u4E2D\u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002VTDD \u3068 TOMIO \u3067\u306F deploy \u5148\u3082\u627F\u8A8D\u5883\u754C\u3082\u5225\u7269\u3068\u3057\u3066\u6271\u3044\u307E\u3059\u3002</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
-  const chatThreadId = requestedChatThreadId || `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
+  const chatThreadId = requestedChatThreadId;
   const socketOrigin = origin.replace(/^http/i, "ws");
   const currentDashboardReturnPath = withDashboardReturnThreadId(
     sanitizeDashboardPreAuthReturnPath(`${url?.pathname || "/dashboard"}${url?.search || ""}`),
