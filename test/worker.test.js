@@ -1283,6 +1283,14 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("data-thread-progress-checkpoint"), true);
   assert.equal(body.includes("function renderThreadProgressCheckpoint(snapshot, options = {})"), true);
   assert.equal(body.includes("function clearThreadProgressCheckpoint()"), true);
+  assert.equal(body.includes("let pacedProgressCheckpointTimer = null"), true);
+  assert.equal(body.includes("function schedulePacedProgressCheckpointText(paragraph, nextText)"), true);
+  assert.equal(body.includes("function stepPacedProgressCheckpointText(paragraph)"), true);
+  assert.equal(body.includes("const minimumDisplayMs = 1800"), true);
+  assert.equal(body.includes("progressCheckpointFrameDelay(text)"), true);
+  assert.equal(body.includes('window.matchMedia("(prefers-reduced-motion: reduce)")'), true);
+  assert.equal(body.includes("schedulePacedProgressCheckpointText(paragraph, text)"), true);
+  assert.equal(body.includes("paragraph.textContent = text;"), false);
   assert.equal(body.includes("latestProgressCheckpointText(transientProgressSnapshotState)"), true);
   assert.equal(body.includes("snapshot: body.transientProgressSnapshot || null"), true);
   assert.equal(body.includes("function isNearLatest()"), true);
