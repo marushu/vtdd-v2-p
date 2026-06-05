@@ -973,6 +973,25 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
     ].join("\n")
   );
 
+  const longProgress = mapAppServerNotificationToDashboardEvent(
+    {
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-1",
+        turnId: "turn-1",
+        delta: "生成変更、deploy 実行。\n\n" + "検証を継続しています。".repeat(160)
+      }
+    },
+    {
+      dashboardThreadId: "dashboard-main",
+      codexThreadId: "codex-thread-1",
+      accumulatedText: "作業の前提を確認しています。\n\n"
+    }
+  );
+  assert.match(longProgress.progressText, /^作業の前提を確認しています/);
+  assert.doesNotMatch(longProgress.progressText, /^…/);
+  assert.match(longProgress.progressText, /続き生成中/);
+
   const completed = mapAppServerNotificationToDashboardEvent(
     { method: "turn/completed", params: { threadId: "codex-thread-1" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1", accumulatedText: "最終返答" }
