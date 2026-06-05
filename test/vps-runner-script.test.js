@@ -31,6 +31,7 @@ import {
   parseVpsPrivilegedMaintenanceQueueComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
+  resolveVpsRunnerExecutionWorkspace,
   runVpsRunnerOnce,
   resolveRoleGitHubAppInstallationToken,
   summarizeDiagnosticText,
@@ -1244,10 +1245,43 @@ test("VPS runner repo sync preflight allows clean in-sync main with known artifa
   });
 
   assert.equal(status.ok, true);
+  assert.equal(status.checkoutRole, "control_plane");
+  assert.match(status.invariant, /control-plane checkout must stay on origin\/main/);
   assert.equal(status.developmentAllowed, true);
   assert.equal(status.inSyncWithOrigin, true);
   assert.deepEqual(status.knownUntrackedArtifacts, [".tmp/runtime.json", "test-results/runner/output.log"]);
   assert.deepEqual(status.unknownUntrackedPaths, []);
+});
+
+test("VPS runner execution workspace must stay outside the control-plane checkout", () => {
+  const allowed = resolveVpsRunnerExecutionWorkspace({
+    repoRoot: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+    workRoot: "/home/vtdd-runner/vtdd-runner/workspaces",
+    repository: "marushu/vtdd-v2-p",
+    executionId: "issue806-exec"
+  });
+  const blockedInside = resolveVpsRunnerExecutionWorkspace({
+    repoRoot: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+    workRoot: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p/workspaces",
+    repository: "marushu/vtdd-v2-p",
+    executionId: "issue806-exec"
+  });
+  const blockedSame = resolveVpsRunnerExecutionWorkspace({
+    repoRoot: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+    workRoot: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+    repository: "marushu/vtdd-v2-p",
+    executionId: "issue806-exec"
+  });
+
+  assert.equal(allowed.ok, true);
+  assert.equal(allowed.checkoutRole, "development_workspace");
+  assert.equal(allowed.controlPlaneCheckoutRole, "control_plane");
+  assert.equal(allowed.workspace, "/home/vtdd-runner/vtdd-runner/workspaces/marushu_vtdd-v2-p/issue806-exec");
+  assert.equal(blockedInside.ok, false);
+  assert.equal(blockedInside.workspaceInsideControlPlane, true);
+  assert.match(blockedInside.reason, /workspace isolation blocked/);
+  assert.equal(blockedSame.ok, false);
+  assert.equal(blockedSame.workRootInsideControlPlane, true);
 });
 
 test("VPS runner repo sync preflight fast-forwards clean behind-only main", async () => {
@@ -1345,6 +1379,58 @@ test("VPS runner repo sync preflight blocks queue pickup before GitHub reads", a
   assert.equal(result.message.includes("preflight blocked queue pickup"), true);
   assert.equal(result.repoSync.developmentAllowed, false);
   assert.equal(githubRead, false);
+});
+
+test("VPS runner blocks execution when workRoot is inside the control-plane checkout", async () => {
+  const posted = [];
+  const result = await runVpsRunnerOnce({
+    token: "ghs_test",
+    allowedRepositories: ["sample-org/vtdd-v2"],
+    workRoot: "/tmp/vtdd-control-plane/workspaces",
+    repoRoot: "/tmp/vtdd-control-plane",
+    dryRun: false,
+    repoSyncPreflight: true,
+    run: mockRepoSyncRun({
+      branch: "main",
+      headSha: "abc123",
+      originHeadSha: "abc123",
+      ahead: 0,
+      behind: 0,
+      status: ""
+    }),
+    githubFetch: async (url, init = {}) => {
+      if (init.method === "POST") {
+        const body = typeof init.body === "string" ? JSON.parse(init.body) : init.body;
+        posted.push({ url, body });
+        return { id: posted.length, html_url: `https://github.com/sample-org/vtdd-v2/issues/157#posted-${posted.length}` };
+      }
+      if (url.includes("/issues?")) {
+        return [{ number: 157 }];
+      }
+      if (url.includes("/issues/157/comments")) {
+        return [
+          {
+            id: 1,
+            html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-1",
+            created_at: "2026-05-07T10:00:00Z",
+            user: { login: "alice" },
+            body: queueComment({ executionId: "exec-workspace-inside", repository: "sample-org/vtdd-v2" })
+          }
+        ];
+      }
+      if (url.endsWith("/issues/157")) {
+        return { number: 157, user: { login: "alice" }, body: "Issue body" };
+      }
+      return [];
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /workspace isolation blocked/);
+  assert.equal(posted.length, 2);
+  assert.equal(posted[0].body.body.includes('"lastEvent": "picked_up"'), true);
+  assert.equal(posted[1].body.body.includes('"lastEvent": "workspace_isolation_blocked"'), true);
+  assert.equal(posted[1].body.body.includes('"workRootInsideControlPlane": true'), true);
 });
 
 test("VPS runner dry run reports selected execution without side effects", async () => {
