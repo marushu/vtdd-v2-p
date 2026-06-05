@@ -220,7 +220,7 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
     const text = pane.querySelector(".progress-text");
     if (!text) return { before, after: log.scrollTop };
     text.textContent =
-      "Issue #590 の production evidence、reviewer 指摘、deploy 後 E2E の残リスクを確認しています。通常チャット履歴には保存しません。";
+      "Codex app-server に渡しています。Codex usage を消費し得ます。repo=未指定 / Issue=未指定 / usage_profile=conversation / reasoning_effort=low";
     return { before };
   });
   layoutAfterProgressUpdate.afterImmediate = await page.evaluate(() => document.querySelector("#butler-chat-log")?.scrollTop ?? -1);
@@ -231,7 +231,7 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
 
   const pane = page.locator("[data-transient-progress='true']");
   await expect(pane).toBeVisible();
-  await expect(pane).toContainText("通常チャット履歴には保存しません");
+  await expect(pane).toContainText("Codex app-server に渡しています");
   await expect(page.locator(".bubble")).toHaveCount(beforeBubbleCount);
 
   const layout = await page.evaluate(() => {
@@ -308,6 +308,7 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
     verified: [
       "inline transient progress is visible above the composer in 390x844 mobile viewport",
       "inline transient progress does not append durable chat bubbles",
+      "app-server handoff status remains transient-only",
       "progress text wraps without horizontal overflow",
       "transient progress updates preserve the owner's chat scroll position",
       "Dashboard page does not include gentle progress auto-scroll"
