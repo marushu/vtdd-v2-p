@@ -91,7 +91,7 @@ None.
 - Generated: `npm run check:generated-worker` -> pass。
 - E2E: `npx playwright test scripts/e2e-issue590-dashboard-timeout-recovery.spec.mjs --browser=chromium --reporter=line` -> 2 passed。
 - Static: `git diff --check` -> pass。
-- E2E state: `blockedProgressBubbleMatches: 0` で `Codex app-server に渡しています` / `続き生成中` が chat bubble 内にないことを直接確認。
+- E2E state: `preexistingBubbleCount: 3` + `fixtureAddedBubbleCount: 18` = `bubbleCountBeforeProgress: 21` と内訳を明示し、progress 更新後も `progressAddedBubbleCount: 0` / `blockedProgressBubbleMatches: 0` / `blockedProgressBubbleTexts: []` で `Codex app-server に渡しています` / `作業を継続しています。まだ最終回答は生成中です。` / `続き生成中` が chat bubble 内にないことを直接確認。
 - Evidence path/link: `docs/mvp/e2e/assets/issue-590/local/issue590-dashboard-inline-transient-progress-chromium-state.json`, `docs/mvp/e2e/assets/issue-590/local/issue590-dashboard-inline-transient-progress-chromium-390x844.png`
 
 ## Butler Completion Contract

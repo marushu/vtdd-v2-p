@@ -194,6 +194,7 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
 }) => {
   await page.goto(dashboardUrl);
 
+  const preexistingBubbleCount = await page.locator(".bubble").count();
   await page.evaluate(() => {
     const log = document.querySelector("#butler-chat-log");
     if (!log) return;
@@ -207,6 +208,7 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   });
 
   const beforeBubbleCount = await page.locator(".bubble").count();
+  const fixtureAddedBubbleCount = beforeBubbleCount - preexistingBubbleCount;
   const layoutAfterProgressUpdate = await page.evaluate(() => {
     const log = document.querySelector("#butler-chat-log");
     const pane = document.querySelector("#butler-transient-progress");
@@ -234,13 +236,21 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   await expect(pane).toContainText("Codex app-server に渡しています");
   await expect(page.locator(".bubble")).toHaveCount(beforeBubbleCount);
 
-  const layout = await page.evaluate((expectedBubbleCount) => {
+  const layout = await page.evaluate(({ preexistingCount, fixtureAddedCount, expectedBubbleCount }) => {
     const pane = document.querySelector("[data-transient-progress='true']");
     const log = document.querySelector("#butler-chat-log");
     const text = pane?.querySelector(".progress-text");
     const paneRect = pane?.getBoundingClientRect();
     const logRect = log?.getBoundingClientRect();
     const bubbleCountAfterProgress = document.querySelectorAll(".bubble").length;
+    const blockedPhrases = [
+      "Codex app-server に渡しています",
+      "作業を継続しています。まだ最終回答は生成中です。",
+      "続き生成中"
+    ];
+    const blockedProgressBubbleTexts = Array.from(document.querySelectorAll(".bubble"))
+      .map((bubble) => (bubble.textContent || "").trim())
+      .filter((body) => blockedPhrases.some((phrase) => body.includes(phrase)));
     return {
       viewportWidth: window.innerWidth,
       paneLeft: paneRect?.left ?? 0,
@@ -255,19 +265,25 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
       textHeight: text?.getBoundingClientRect().height ?? 0,
       progressTextMaxHeight: text ? window.getComputedStyle(text).maxHeight : "",
       progressTextLineClamp: text ? window.getComputedStyle(text).webkitLineClamp : "",
+      preexistingBubbleCount: preexistingCount,
+      fixtureAddedBubbleCount: fixtureAddedCount,
       bubbleCountBeforeProgress: expectedBubbleCount,
       bubbleCountAfterProgress,
       bubbleCountDeltaAfterProgress: bubbleCountAfterProgress - expectedBubbleCount,
-      blockedProgressBubbleMatches: Array.from(document.querySelectorAll(".bubble")).filter((bubble) => {
-        const body = bubble.textContent || "";
-        return body.includes("Codex app-server に渡しています") || body.includes("続き生成中");
-      }).length,
+      progressAddedBubbleCount: bubbleCountAfterProgress - expectedBubbleCount,
+      blockedProgressBubbleMatches: blockedProgressBubbleTexts.length,
+      blockedProgressBubbleTexts,
+      blockedPhrases,
       transientCount: document.querySelectorAll("[data-transient-progress='true']").length
     };
-  }, beforeBubbleCount);
+  }, { preexistingCount: preexistingBubbleCount, fixtureAddedCount: fixtureAddedBubbleCount, expectedBubbleCount: beforeBubbleCount });
   expect(layout.transientCount).toBe(1);
+  expect(layout.preexistingBubbleCount).toBe(preexistingBubbleCount);
+  expect(layout.fixtureAddedBubbleCount).toBe(18);
   expect(layout.bubbleCountDeltaAfterProgress).toBe(0);
+  expect(layout.progressAddedBubbleCount).toBe(0);
   expect(layout.blockedProgressBubbleMatches).toBe(0);
+  expect(layout.blockedProgressBubbleTexts).toEqual([]);
   expect(layout.paneLeft).toBeGreaterThanOrEqual(0);
   expect(layout.paneRight).toBeLessThanOrEqual(layout.viewportWidth);
   expect(layout.paneWidth).toBeLessThanOrEqual(layout.logWidth);
