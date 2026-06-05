@@ -3219,6 +3219,10 @@ test("worker maps repo-less Dashboard bridge restart intent to unresolved bridge
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution.status, "approval_required");
+  assert.match(body.execution.executionId, /^dashboard-butler-issue741-vps-maintenance:/);
+  assert.equal(body.execution.runtimeTruth.executionId, body.execution.executionId);
+  assert.equal(body.execution.runtimeTruth.dashboardThreadIdIncluded, true);
+  assert.equal(body.execution.runtimeTruth.approvalOperatorUrlComplete, true);
   assert.equal(body.execution.approvalScope.vpsCapabilityId, "systemd.user.app.server.bridge.unresolved.restart");
   assert.equal(body.execution.approvalScope.vpsOperation, "enable");
   assert.equal(
@@ -3228,11 +3232,14 @@ test("worker maps repo-less Dashboard bridge restart intent to unresolved bridge
   assert.equal(body.execution.approvalScope.vpsImpactScope.includes("systemctl --user restart"), false);
   assert.match(body.messages[1].text, /Restart repo-less Dashboard app-server bridge/);
   assert.match(body.messages[1].text, /approval_required/);
+  assert.match(body.messages[1].text, /passkey 承認だけ/);
+  assert.match(body.messages[1].text, /コピーは不要/);
   assert.match(body.messages[1].text, /rootExecutionStarted=false, helperExecutionStarted=false/);
   const approvalUrl = new URL(body.execution.approvalOperatorUrl);
   assert.equal(approvalUrl.searchParams.get("mode"), "vps");
   assert.equal(approvalUrl.searchParams.get("dashboardThreadId"), "dashboard-main-unresolved");
   assert.equal(approvalUrl.searchParams.get("vpsProposalId"), body.execution.vpsProposalId);
+  assert.equal(approvalUrl.searchParams.get("executionId"), body.execution.executionId);
 });
 
 test("worker maps Dashboard Butler VPS runner status text to the low-risk preset", async () => {

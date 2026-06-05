@@ -12185,11 +12185,15 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
         }
       };
     }
+    const dashboardThreadId = normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id);
+    const executionId =
+      normalizeText(payload?.executionId || payload?.execution_id) ||
+      createDashboardRequestId(`dashboard-butler-issue${relatedIssue || "unknown"}-vps-maintenance`);
     const proposal = await createVpsPrivilegedMaintenanceProposal({
       payload: {
         ...proposalPayload,
-        dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
-        executionId: normalizeText(payload?.executionId || payload?.execution_id)
+        dashboardThreadId,
+        executionId
       },
       provider,
       origin: origin || "https://example.com"
@@ -12235,10 +12239,14 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
         kind: "dashboard_vps_privileged_maintenance_natural_language",
         status: "approval_required",
         vpsProposalId: proposal.body.vpsProposalId,
+        executionId,
         approvalScope: proposal.body.approvalScope,
         approvalOperatorUrl: proposal.body.approvalOperatorUrl,
         runtimeTruth: {
           ...proposal.body.runtimeTruth,
+          executionId,
+          dashboardThreadIdIncluded: Boolean(dashboardThreadId),
+          approvalOperatorUrlComplete: Boolean(proposal.body.vpsProposalId && dashboardThreadId && executionId),
           dashboardNaturalLanguagePathReached: true,
           helperQueueReached: false
         }
@@ -12765,6 +12773,7 @@ function buildDashboardVpsPrivilegedMaintenanceApprovalRequiredReply({ repositor
     `- 操作: ${operation}`,
     `- risk: ${riskLevel}`,
     `- vpsProposalId: ${proposal?.vpsProposalId || "未作成"}`,
+    "- owner action: この approval URL を開いて passkey 承認だけ行ってください。vpsProposalId や approvalGrantId のコピーは不要です。",
     "- authority: scoped passkey approval が必要です。承認なしに root / sudo / helper 実行は開始しません。",
     "- runtime truth: status=approval_required, rootExecutionStarted=false, helperExecutionStarted=false",
     proposal?.approvalOperatorUrl ? `- approval URL: ${proposal.approvalOperatorUrl}` : "- approval URL: 未生成",
