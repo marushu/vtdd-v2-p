@@ -1830,6 +1830,119 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
   assert.equal(handlers.size, 0);
 });
 
+test("dashboard app-server bridge sends recoverable timeout when thread start stalls", async () => {
+  const events = [];
+  const appServer = {
+    nextRequestId() {
+      return 1;
+    },
+    request(message) {
+      assert.equal(message.method, "thread/start");
+      return new Promise((resolve) => {
+        setTimeout(() => resolve({ thread: { id: "codex-thread-after-timeout" } }), 60);
+      });
+    },
+    onNotification() {
+      return () => {};
+    },
+    drainApprovalRequests() {
+      return Promise.resolve();
+    }
+  };
+
+  await assert.rejects(
+    handleDashboardTurnRequest({
+      request: {
+        threadId: "dashboard-main-unresolved",
+        repository: null,
+        relatedIssue: null,
+        text: "君は誰？"
+      },
+      appServer,
+      sendDashboardEvent: async (event) => events.push(event),
+      cwd: "/repo",
+      turnTimeoutMs: 20,
+      activityQuietMs: 1000,
+      lateCompletionTimeoutMs: 1,
+      liveProgressInitialDelayMs: 1000
+    }),
+    /応答確認が長引いています/
+  );
+  await new Promise((resolve) => setTimeout(resolve, 80));
+
+  const timeoutEvent = events.find((event) => event.type === "app_server_turn_failed");
+  assert.ok(timeoutEvent);
+  assert.equal(timeoutEvent.status, "timeout");
+  assert.equal(timeoutEvent.threadId, "dashboard-main-unresolved");
+  assert.equal(timeoutEvent.codexThreadId, null);
+  assert.equal(timeoutEvent.repository, null);
+  assert.equal(timeoutEvent.relatedIssue, null);
+  assert.match(timeoutEvent.text, /応答確認が長引いています/);
+  assert.match(timeoutEvent.text, /入力と文脈は Dashboard thread に保存済み/);
+  assert.equal(timeoutEvent.recovery.retryable, true);
+  assert.equal(timeoutEvent.recovery.originalText, "君は誰？");
+});
+
+test("dashboard app-server bridge sends recoverable timeout when turn start stalls", async () => {
+  const events = [];
+  const requests = [];
+  const appServer = {
+    nextId: 1,
+    nextRequestId() {
+      const id = this.nextId;
+      this.nextId += 1;
+      return id;
+    },
+    request(message) {
+      requests.push(message.method);
+      if (message.method === "thread/start") {
+        return Promise.resolve({ thread: { id: "codex-thread-stalled-turn-start" } });
+      }
+      if (message.method === "turn/start") {
+        return new Promise((resolve) => {
+          setTimeout(() => resolve({ turn: { id: "turn-after-timeout" } }), 60);
+        });
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    },
+    onNotification() {
+      return () => {};
+    },
+    drainApprovalRequests() {
+      return Promise.resolve();
+    }
+  };
+
+  await assert.rejects(
+    handleDashboardTurnRequest({
+      request: {
+        threadId: "dashboard-main-unresolved",
+        repository: null,
+        relatedIssue: null,
+        text: "もしもし"
+      },
+      appServer,
+      sendDashboardEvent: async (event) => events.push(event),
+      cwd: "/repo",
+      turnTimeoutMs: 20,
+      activityQuietMs: 1000,
+      lateCompletionTimeoutMs: 1,
+      liveProgressInitialDelayMs: 1000
+    }),
+    /応答確認が長引いています/
+  );
+  await new Promise((resolve) => setTimeout(resolve, 80));
+
+  assert.deepEqual(requests, ["thread/start", "turn/start"]);
+  const timeoutEvent = events.find((event) => event.type === "app_server_turn_failed");
+  assert.ok(timeoutEvent);
+  assert.equal(timeoutEvent.status, "timeout");
+  assert.equal(timeoutEvent.threadId, "dashboard-main-unresolved");
+  assert.equal(timeoutEvent.codexThreadId, "codex-thread-stalled-turn-start");
+  assert.equal(timeoutEvent.recovery.retryable, true);
+  assert.equal(timeoutEvent.recovery.originalText, "もしもし");
+});
+
 test("dashboard app-server bridge parses Issue #590 debug slow turn duration from natural language", () => {
   assert.deepEqual(
     parseDashboardDebugSlowTurnRequest({
