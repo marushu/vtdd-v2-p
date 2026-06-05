@@ -72296,6 +72296,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble p { color: var(--text); margin-bottom: 12px; }
     .bubble .message-body { display: grid; gap: 12px; min-width: 0; max-width: 100%; overflow: visible; }
     .bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+    .bubble .message-body .summary-section-title { margin-top: 4px; color: var(--text); font-size: .9em; font-weight: 850; line-height: 1.45; }
+    .bubble .message-body .summary-key-value { display: grid; grid-template-columns: minmax(4.5em, max-content) minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: start; margin: 0; padding: 2px 0; line-height: 1.58; }
+    .bubble .message-body .summary-key { color: var(--muted); font-size: .88em; font-weight: 800; line-height: inherit; }
+    .bubble .message-body .summary-value { min-width: 0; color: var(--text); overflow-wrap: anywhere; word-break: break-word; }
+    @media (max-width: 520px) {
+      .bubble .message-body .summary-key-value { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
+      .bubble .message-body .summary-key { font-size: .82em; }
+    }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body a, .bubble .message-body code { overflow-wrap: anywhere; word-break: break-word; }
@@ -72305,10 +72313,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
-    .progress-summary { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel-strong); color: var(--muted); }
-    .progress-summary summary { cursor: pointer; font-weight: 800; color: var(--text); }
-    .progress-summary ol { margin: 10px 0 0; padding-left: 22px; }
-    .progress-summary li { margin-top: 6px; overflow-wrap: anywhere; word-break: break-word; }
+    .progress-summary { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; color: var(--muted); font-size: .88em; }
+    .progress-summary summary { cursor: pointer; font-weight: 700; color: var(--muted); }
+    .progress-summary ol { margin: 8px 0 0; padding-left: 20px; }
+    .progress-summary li { margin-top: 5px; overflow-wrap: anywhere; word-break: break-word; }
     .progress-checkpoint-entry { opacity: .92; }
     .progress-checkpoint-bubble { color: var(--muted); }
     .progress-checkpoint-bubble .bubble-header strong { color: var(--muted); }
@@ -73835,6 +73843,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return source.length > 80 && !/\\s/.test(source);
       }
 
+      function isSummarySectionTitle(line) {
+        const source = String(line || "").trim();
+        if (!source || source.length > 28) return false;
+        if (/[\u3002.!?\uFF01\uFF1F:\uFF1A]$/.test(source)) return false;
+        if (/^#{1,6}\\s+/.test(source)) return true;
+        return /^(\u5909\u66F4\u5951\u7D04|\u5BFE\u8C61|\u6210\u529F\u6761\u4EF6|\u975E\u30B4\u30FC\u30EB|\u5909\u66F4\u4E88\u5B9A|\u691C\u8A3C|\u691C\u8A3C\u8A08\u753B|\u5883\u754C|\u6B21|\u6B21\u306E\u4E00\u624B|\u72B6\u614B|\u95A2\u9023Issue\\/PR|\u672A\u89E3\u6C7Ablocker|Evidence|Issue\\/PR|\u73FE\u72B6|Blocker|Next|Validation|Non-goals?)$/i.test(source);
+      }
+
+      function parseSummaryKeyValueLine(line) {
+        const source = String(line || "").trim();
+        if (!source || source.length > 220) return null;
+        if (/^https?:\\/\\//i.test(source) || /^go:/i.test(source)) return null;
+        const match = source.match(/^([A-Za-z0-9_#\\/\\-\u4E00-\u9FA0\u3041-\u3093\u30A1-\u30F6\u30FC\u30FB ]{1,24})[:\uFF1A]\\s+(.{1,180})$/);
+        if (!match) return null;
+        const key = match[1].trim();
+        const value = match[2].trim();
+        if (!key || !value || /^https?$/i.test(key)) return null;
+        if (/^https?:\\/\\//i.test(value)) return null;
+        return { key, value };
+      }
+
       function renderMessageText(container, text) {
         const source = String(text || "");
         const lines = source.replace(/\\r\\n/g, "\\n").split("\\n");
@@ -73889,13 +73918,39 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             container.appendChild(list);
             continue;
           }
+          if (isSummarySectionTitle(lines[index])) {
+            const heading = document.createElement("p");
+            heading.className = "summary-section-title";
+            renderInlineMarkdown(heading, lines[index].replace(/^#{1,6}\\s+/, "").trim());
+            container.appendChild(heading);
+            index += 1;
+            continue;
+          }
+          const keyValue = parseSummaryKeyValueLine(lines[index]);
+          if (keyValue) {
+            const row = document.createElement("p");
+            row.className = "summary-key-value";
+            const key = document.createElement("span");
+            key.className = "summary-key";
+            key.textContent = keyValue.key;
+            const value = document.createElement("span");
+            value.className = "summary-value";
+            renderInlineMarkdown(value, keyValue.value);
+            row.appendChild(key);
+            row.appendChild(value);
+            container.appendChild(row);
+            index += 1;
+            continue;
+          }
           const paragraph = document.createElement("p");
           const paragraphLines = [];
           while (
             index < lines.length &&
             lines[index].trim() &&
             !lines[index].trim().startsWith(fence) &&
-            !/^\\s*-\\s+/.test(lines[index])
+            !/^\\s*-\\s+/.test(lines[index]) &&
+            !isSummarySectionTitle(lines[index]) &&
+            !parseSummaryKeyValueLine(lines[index])
           ) {
             paragraphLines.push(lines[index]);
             index += 1;

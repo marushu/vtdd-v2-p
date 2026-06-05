@@ -162,9 +162,15 @@ function createMinimalDashboardDocument() {
 
     querySelectorAll(tagName) {
       const matches = [];
-      const expected = String(tagName || "").toUpperCase();
+      const selector = String(tagName || "");
+      const expected = selector.toUpperCase();
+      const expectedClass = selector.startsWith(".") ? selector.slice(1) : "";
       const visit = (node) => {
-        if (node.nodeType === 1 && node.tagName === expected) {
+        const classNames = String(node.className || "").split(/\s+/).filter(Boolean);
+        if (
+          node.nodeType === 1 &&
+          ((expectedClass && classNames.includes(expectedClass)) || (!expectedClass && node.tagName === expected))
+        ) {
           matches.push(node);
         }
         for (const child of node.children || []) {
@@ -173,6 +179,10 @@ function createMinimalDashboardDocument() {
       };
       visit(this);
       return matches;
+    }
+
+    querySelector(selector) {
+      return this.querySelectorAll(selector)[0] || null;
     }
   }
 
@@ -195,6 +205,8 @@ function loadDashboardInlineChatHelpers(html) {
     "normalizeComposerInputText",
     "decodeSafeChatCommandText",
     "shouldWrapCodeBlock",
+    "isSummarySectionTitle",
+    "parseSummaryKeyValueLine",
     "renderMessageText",
     "renderInlineMarkdown",
     "splitTrailingLinkPunctuation",
@@ -1279,7 +1291,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function renderProgressSummaryDetails(progressSummary)"), true);
   assert.equal(body.includes("進行ログ"), true);
   assert.equal(body.includes(".progress-summary"), true);
-  assert.equal(body.includes("background: var(--panel-strong); color: var(--muted);"), true);
+  assert.equal(body.includes(".progress-summary { margin-top: 8px; border-top: 1px solid var(--border);"), true);
+  assert.equal(body.includes(".progress-summary summary { cursor: pointer; font-weight: 700; color: var(--muted); }"), true);
   assert.equal(body.includes("data-thread-progress-checkpoint"), true);
   assert.equal(body.includes("function renderThreadProgressCheckpoint(snapshot, options = {})"), true);
   assert.equal(body.includes("function clearThreadProgressCheckpoint()"), true);
@@ -1535,6 +1548,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("decodeURIComponent(line)"), true);
   assert.equal(body.includes('if (/^https?:/i.test(line))'), true);
   assert.equal(body.includes("function shouldWrapCodeBlock("), true);
+  assert.equal(body.includes("function isSummarySectionTitle("), true);
+  assert.equal(body.includes("function parseSummaryKeyValueLine("), true);
+  assert.equal(body.includes(".summary-section-title"), true);
+  assert.equal(body.includes(".summary-key-value"), true);
+  assert.equal(body.includes(".summary-key"), true);
+  assert.equal(body.includes(".summary-value"), true);
   assert.equal(body.includes('if (/^https?:\\/\\//i.test(source)) return true;'), true);
   assert.equal(body.includes('if (/^go:%[0-9a-f]{2}/i.test(source)) return true;'), true);
   assert.equal(body.includes("return source.length > 80 && !/\\s/.test(source);"), true);
@@ -1859,6 +1878,20 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   assert.equal(mixedParagraphs[0].textContent, "黒潰れ確認。");
   assert.equal(mixedCodeBlocks.length, 1);
   assert.equal(mixedCodeBlocks[0].className, "wrap-code");
+
+  const summaryContainer = document.createElement("div");
+  helpers.renderMessageText(
+    summaryContainer,
+    "では進めます。\n\n変更契約\n対象: Issue #590。\n非ゴール: deploy、#637 実行。\n検証: `npm run build:worker` と E2E。"
+  );
+  const sectionTitles = summaryContainer.querySelectorAll(".summary-section-title");
+  assert.equal(sectionTitles.length, 1);
+  assert.equal(sectionTitles[0].textContent, "変更契約");
+  const keyValues = summaryContainer.querySelectorAll(".summary-key-value");
+  assert.equal(keyValues.length, 3);
+  assert.equal(keyValues[0].querySelector(".summary-key").textContent, "対象");
+  assert.equal(keyValues[0].querySelector(".summary-value").textContent, "Issue #590。");
+  assert.equal(keyValues[2].querySelector("code").textContent, "npm run build:worker");
 
   const messageCopyButton = document.createElement("button");
   await helpers.copyMessageText(
