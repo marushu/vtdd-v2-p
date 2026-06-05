@@ -65531,6 +65531,37 @@ function normalizeCanonicalRepositoryInput(value) {
   }
   return `${owner}/${repository}`;
 }
+function shouldDecodeDashboardCommandText(source) {
+  const text = String(source || "").trim();
+  if (!/%[0-9a-f]{2}/i.test(text)) return false;
+  if (/^https?:\/\//i.test(text)) return false;
+  if (/^go:%[0-9a-f]{2}/i.test(text)) return true;
+  if (/^(?:repository|repo|relatedIssue|issueNumber)\s*[:=]/i.test(text)) return true;
+  return false;
+}
+function decodeDashboardCommandTextSegment(source, force = false) {
+  const text = String(source || "");
+  if (/^https?:\/\//i.test(text.trim()) || /^https?%3a%2f%2f/i.test(text.trim())) return text;
+  if (!force && !shouldDecodeDashboardCommandText(text)) return text;
+  if (!/%[0-9a-f]{2}/i.test(text)) return text;
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+function decodeSafeDashboardChatCommandText(text) {
+  const source = String(text || "");
+  const commandBlock = shouldSplitEncodedDashboardCommandText(source);
+  const commandText = commandBlock ? source.replace(/%0d%0a|%0a|%0d/gi, "\n") : source;
+  return commandText.split("\n").map((line) => decodeDashboardCommandTextSegment(line, commandBlock)).join("\n");
+}
+function shouldSplitEncodedDashboardCommandText(source) {
+  const text = String(source || "").trim();
+  if (!/%0d|%0a/i.test(text)) return false;
+  if (/^https?:\/\//i.test(text)) return false;
+  return /^go:%[0-9a-f]{2}/i.test(text) || /^(?:repository|repo|relatedIssue|issueNumber)\s*[:=]/i.test(text);
+}
 async function handlePasskeyRegistrationOptionsRequest(request, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
@@ -66549,7 +66580,8 @@ async function requestDashboardVpsRunnerWakeup({ env, request, execution } = {})
 async function resolveDashboardChatRepository({ payload, env }) {
   const input = normalizeObject12(payload);
   const text = input.text || input.message || input.body;
-  const rawRepositoryInput = normalizeDashboardEventText(input.repository || input.repositoryInput || input.repository_input) || extractRepositoryTokenFromDashboardChatText(text);
+  const explicitTextRepository = extractCanonicalRepositoryTokenFromDashboardChatText(text);
+  const rawRepositoryInput = explicitTextRepository || normalizeDashboardEventText(input.repository || input.repositoryInput || input.repository_input) || extractRepositoryTokenFromDashboardChatText(text);
   const canonicalRepository = normalizeCanonicalRepositoryInput(rawRepositoryInput);
   if (canonicalRepository) {
     return {
@@ -67144,8 +67176,8 @@ async function notifyDashboardChatRoom({ env, threadId, messages }) {
     return false;
   }
 }
-function extractRepositoryTokenFromDashboardChatText(value) {
-  const text = sanitizeDashboardChatText(value);
+function extractCanonicalRepositoryTokenFromDashboardChatText(value) {
+  const text = sanitizeDashboardChatText(decodeSafeDashboardChatCommandText(value));
   if (!text) {
     return "";
   }
@@ -67163,12 +67195,24 @@ function extractRepositoryTokenFromDashboardChatText(value) {
   if (inlineCanonicalMatch) {
     return inlineCanonicalMatch[2];
   }
+  return "";
+}
+function extractRepositoryTokenFromDashboardChatText(value) {
+  const text = sanitizeDashboardChatText(decodeSafeDashboardChatCommandText(value));
+  if (!text) {
+    return "";
+  }
+  const canonicalToken = extractCanonicalRepositoryTokenFromDashboardChatText(text);
+  if (canonicalToken) {
+    return canonicalToken;
+  }
   const nicknameMatch = text.match(/^[\s　]*([^\s　#「『【\\/:]+?)(?:\s+|[　]*の|[　]*を|[　]*で|[　]*に)/u);
   return normalizeDashboardEventText(nicknameMatch?.[1]);
 }
 function extractIssueNumberFromDashboardChatText(value) {
-  const text = sanitizeDashboardChatText(value);
-  const match = text.match(/#([1-9][0-9]*)/);
+  const text = sanitizeDashboardChatText(decodeSafeDashboardChatCommandText(value));
+  const labeledMatch = text.match(/(?:relatedIssue|issueNumber|関連\s*Issue|Issue)\s*(?:は|:|：|=)?\s*#?\s*([1-9][0-9]*)/iu);
+  const match = labeledMatch || text.match(/#([1-9][0-9]*)/);
   return normalizePositiveInteger10(match?.[1]);
 }
 function normalizeDashboardRepositoryInput(value) {
@@ -68559,7 +68603,7 @@ function normalizeMediaReferences(value) {
     };
   }).filter(Boolean).slice(0, MEDIA_REFERENCE_LIMIT);
 }
-async function resolveDashboardChatMediaReferences({ env, mediaReferences, repository, relatedIssue }) {
+async function resolveDashboardChatMediaReferences({ env, mediaReferences, repository, relatedIssue, clientMessageId }) {
   const requested = normalizeMediaReferences(mediaReferences);
   if (requested.length === 0) {
     return { ok: true, mediaReferences: [] };
@@ -68591,7 +68635,8 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
         reason: `media reference ${reference.mediaId} \u306F\u4FDD\u5B58\u671F\u9593\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5FC5\u8981\u3067\u3042\u308C\u3070\u518D\u6DFB\u4ED8\u3057\u3066\u304F\u3060\u3055\u3044\u3002`
       };
     }
-    const media = toMediaReference(record2);
+    const normalizedRecord = normalizeMediaObjectRecord(record2);
+    const media = toMediaReference(normalizedRecord);
     if (!media) {
       return {
         ok: false,
@@ -68599,14 +68644,18 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
         reason: `media reference ${reference.mediaId} is malformed`
       };
     }
-    if (resolvedRepository && media.repository !== resolvedRepository) {
+    const mediaSourceEventId = normalizeDashboardEventText(normalizedRecord?.sourceEventId);
+    const ownerMessageId = sanitizeDashboardChatText(clientMessageId);
+    const sameOwnerMessageUpload = ownerMessageId && mediaSourceEventId === ownerMessageId && mediaSourceEventId.startsWith("dashboard_owner_message:");
+    const privateUnscopedDashboardMedia = !media.repository && !media.relatedIssue && media.visibility === "private" && media.sourceSurface === "dashboard_butler" && sameOwnerMessageUpload;
+    if (resolvedRepository && media.repository !== resolvedRepository && !privateUnscopedDashboardMedia) {
       return {
         ok: false,
         error: "media_reference_repository_mismatch",
         reason: `media reference ${reference.mediaId} does not belong to ${resolvedRepository}`
       };
     }
-    if (resolvedIssue && media.relatedIssue !== resolvedIssue) {
+    if (resolvedIssue && media.relatedIssue !== resolvedIssue && !privateUnscopedDashboardMedia) {
       return {
         ok: false,
         error: "media_reference_issue_mismatch",
@@ -68619,10 +68668,10 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
 }
 async function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject12(payload);
-  const repository = normalizeCanonicalRepositoryInput(input.repository);
-  const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
   const clientMessageId = sanitizeDashboardChatText(input.clientMessageId || input.client_message_id);
-  const text = sanitizeDashboardChatText(input.text || input.message || input.body) || (mediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
+  const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
+  const normalizedTextInput = normalizeDashboardChatMessageText(input.text || input.message || input.body);
+  const text = sanitizeDashboardChatText(normalizedTextInput) || (mediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
   if (!text) {
     return {
       ok: false,
@@ -68631,12 +68680,15 @@ async function buildDashboardChatTurn(payload, options = {}) {
     };
   }
   const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
+  const explicitTextRepository = extractCanonicalRepositoryTokenFromDashboardChatText(text);
+  const repository = normalizeCanonicalRepositoryInput(explicitTextRepository) || normalizeCanonicalRepositoryInput(input.repository || input.repositoryInput || input.repository_input);
   const relatedIssue = normalizePositiveInteger10(input.relatedIssue || input.issueNumber) || extractIssueNumberFromDashboardChatText(text);
   const mediaValidation = await resolveDashboardChatMediaReferences({
     env: options.env,
     mediaReferences: input.mediaReferences || input.media_references || input.media,
     repository,
-    relatedIssue
+    relatedIssue,
+    clientMessageId
   });
   if (!mediaValidation.ok) {
     return mediaValidation;
@@ -72132,6 +72184,9 @@ function normalizeTextList2(value) {
 function uniqueTextList2(value) {
   return [...new Set(normalizeTextList2(value))];
 }
+function normalizeDashboardChatMessageText(text) {
+  return decodeSafeDashboardChatCommandText(String(text || ""));
+}
 function shouldSubmitDashboardComposerShortcut(event) {
   return event && event.key === "Enter" && event.shiftKey !== true && event.isComposing !== true && (event.metaKey === true || event.ctrlKey === true);
 }
@@ -72338,7 +72393,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .thread-title { min-width: 0; max-width: 100%; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; padding: 8px clamp(18px, 5vw, 96px) 28px; scroll-padding-bottom: 28px; scrollbar-gutter: stable both-edges; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 8px clamp(18px, 5vw, 96px) 28px; scroll-padding-bottom: calc(var(--composer-reserve, 112px) + 28px); scrollbar-gutter: stable both-edges; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
     .bubble { max-width: 100%; min-width: 0; color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -72359,7 +72414,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body a, .bubble .message-body code { overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body code { color: var(--code-text); font-size: .94em; }
-    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }
+    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; overflow-y: auto; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; white-space: pre-wrap; max-width: 100%; max-height: min(58dvh, 620px); }
     .bubble .message-body pre.wrap-code { overflow-x: hidden; white-space: pre-wrap; }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
@@ -72410,9 +72465,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @keyframes pulseProgress { 0%, 100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
-    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); overflow: hidden; overscroll-behavior-x: none; }
-    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; }
-    textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
+    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); overflow: visible; overscroll-behavior-x: none; touch-action: pan-y; }
+    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
+    textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; touch-action: pan-y; }
     textarea::placeholder { color: var(--muted); }
     .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
@@ -73906,21 +73961,33 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function decodeSafeChatCommandText(text) {
         const source = String(text || "");
-        return source
+        const decodeSegment = (segment, force = false) => {
+          const value = String(segment || "");
+          if (/^https?:\\/\\//i.test(value.trim()) || /^https?%3a%2f%2f/i.test(value.trim())) return value;
+          if (!/%[0-9a-f]{2}/i.test(value)) return value;
+          if (
+            !force &&
+            !/^go:%[0-9a-f]{2}/i.test(value) &&
+            !/^(?:repository|repo|relatedIssue|issueNumber)\\s*[:=]/i.test(value)
+          ) {
+            return value;
+          }
+          try {
+            return decodeURIComponent(value);
+          } catch {
+            return value;
+          }
+        };
+        const commandBlock =
+          /%0d|%0a/i.test(source) &&
+          !/^https?:\\/\\//i.test(source.trim()) &&
+          (/^go:%[0-9a-f]{2}/i.test(source.trim()) || /^(?:repository|repo|relatedIssue|issueNumber)\\s*[:=]/i.test(source.trim()));
+        const commandText = commandBlock
+            ? source.replace(/%0d%0a|%0a|%0d/gi, "\\n")
+            : source;
+        return commandText
           .split("\\n")
-          .map((line) => {
-            if (!/^go:%[0-9a-f]{2}/i.test(line)) {
-              return line;
-            }
-            if (/^https?:/i.test(line)) {
-              return line;
-            }
-            try {
-              return decodeURIComponent(line);
-            } catch {
-              return line;
-            }
-          })
+          .map((line) => decodeSegment(line, commandBlock))
           .join("\\n");
       }
 

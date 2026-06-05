@@ -236,6 +236,19 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   await expect(pane).toContainText("Codex app-server に渡しています");
   await expect(page.locator(".bubble")).toHaveCount(beforeBubbleCount);
 
+  const encodedCommandInput = await page.evaluate(() => {
+    const textarea = document.querySelector("#butler-message");
+    if (!textarea) return { value: "" };
+    textarea.value =
+      "repository:%20marushu/vtdd-v2-p%0ArelatedIssue:%20590%0A%0ADashboard%20Butler%20read-only%20確認";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    return { value: textarea.value };
+  });
+  expect(encodedCommandInput.value).toBe(
+    "repository: marushu/vtdd-v2-p\nrelatedIssue: 590\n\nDashboard Butler read-only 確認"
+  );
+  expect(encodedCommandInput.value).not.toContain("20marushu/vtdd-v2-p");
+
   const layout = await page.evaluate(({ preexistingCount, fixtureAddedCount, expectedBubbleCount }) => {
     const pane = document.querySelector("[data-transient-progress='true']");
     const log = document.querySelector("#butler-chat-log");
@@ -322,9 +335,59 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
   expect(progressScrollSource.usesGentleCheckpointFollow).toBe(false);
   expect(progressScrollSource.hasImmediateFollowHelper).toBe(true);
 
+  const longCodeScrollState = await page.evaluate(() => {
+    const log = document.querySelector("#butler-chat-log");
+    if (!log) return { ok: false };
+    const entry = document.createElement("div");
+    entry.className = "message-entry butler";
+    const bubble = document.createElement("article");
+    bubble.className = "bubble";
+    const body = document.createElement("div");
+    body.className = "message-body";
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.textContent = Array.from({ length: 90 }, (_, index) =>
+      `const issue590ScrollFixture${index} = "Dashboard Butler iPad PWA long code block must not lock vertical scroll";`
+    ).join("\n");
+    pre.appendChild(code);
+    body.appendChild(pre);
+    bubble.appendChild(body);
+    entry.appendChild(bubble);
+    log.appendChild(entry);
+    log.scrollTop = Math.max(0, log.scrollHeight - log.clientHeight - 120);
+    const before = log.scrollTop;
+    log.scrollTop = before + 80;
+    const preStyle = window.getComputedStyle(pre);
+    const logStyle = window.getComputedStyle(log);
+    return {
+      ok: true,
+      before,
+      after: log.scrollTop,
+      logScrollHeight: log.scrollHeight,
+      logClientHeight: log.clientHeight,
+      logScrollWidth: log.scrollWidth,
+      logClientWidth: log.clientWidth,
+      preScrollHeight: pre.scrollHeight,
+      preClientHeight: pre.clientHeight,
+      preOverflowY: preStyle.overflowY,
+      preTouchAction: preStyle.touchAction,
+      logTouchAction: logStyle.touchAction,
+      logWebkitOverflowScrolling: logStyle.webkitOverflowScrolling || "",
+      scrollPaddingBottom: logStyle.scrollPaddingBottom
+    };
+  });
+  expect(longCodeScrollState.ok).toBe(true);
+  expect(longCodeScrollState.after).toBeGreaterThan(longCodeScrollState.before);
+  expect(longCodeScrollState.logScrollHeight).toBeGreaterThan(longCodeScrollState.logClientHeight);
+  expect(longCodeScrollState.logScrollWidth).toBeLessThanOrEqual(longCodeScrollState.logClientWidth + 1);
+  expect(longCodeScrollState.preScrollHeight).toBeGreaterThan(longCodeScrollState.preClientHeight);
+  expect(longCodeScrollState.preOverflowY).toBe("auto");
+  expect(longCodeScrollState.preTouchAction).toBe("pan-y");
+  expect(longCodeScrollState.logTouchAction).toBe("pan-y");
+
   const statePath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-state.json`);
   const screenshotPath = path.join(evidenceDir, `issue590-dashboard-inline-transient-progress-${browserName}-390x844.png`);
-  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout, layoutAfterProgressUpdate, scrollPreservation, progressScrollSource }, null, 2));
+  await fs.writeFile(statePath, JSON.stringify({ ok: true, browserName, layout, layoutAfterProgressUpdate, scrollPreservation, progressScrollSource, encodedCommandInput, longCodeScrollState }, null, 2));
   await page.screenshot({ path: screenshotPath, fullPage: true });
   console.log(JSON.stringify({
     ok: true,
@@ -336,7 +399,9 @@ test("Dashboard Butler inline transient progress stays visible on mobile without
       "handoff and continuation markers are absent from chat bubbles",
       "progress text wraps without horizontal overflow",
       "transient progress updates preserve the owner's chat scroll position",
-      "Dashboard page does not include gentle progress auto-scroll"
+      "Dashboard page does not include gentle progress auto-scroll",
+      "URL encoded repository and relatedIssue input is decoded before send",
+      "long code blocks stay vertically scrollable without horizontal overflow"
     ],
     evidence: { statePath, screenshotPath }
   }));
