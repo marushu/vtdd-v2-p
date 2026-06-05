@@ -27,5 +27,12 @@
     "before": 52,
     "afterImmediate": 52,
     "afterNextFrames": 52
+  },
+  "gentleFollowSource": {
+    "hasGentleFollow": true,
+    "hasHumanInteractionGuard": true,
+    "hasWheelGuard": true,
+    "hasTouchGuard": true,
+    "usesGentleCheckpointFollow": true
   }
 }
