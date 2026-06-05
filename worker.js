@@ -66764,7 +66764,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       transientStatus
     });
     snapshotTransientStatus = transientStatus === "thinking";
-    snapshotSource = "app_server_status";
+    snapshotSource = isDashboardBridgeLifecycleStatus(input) ? "app_server_bridge_lifecycle" : "app_server_status";
     if (shouldPersistDashboardAppServerProgress(input, { transientStatus })) {
       messages.push(
         normalizeDashboardChatMessage(
@@ -66979,6 +66979,20 @@ function shouldPersistDashboardAppServerProgress(input, { transientStatus = "" }
   ).toLowerCase().replaceAll("-", "_");
   return DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES.has(stage);
 }
+var DASHBOARD_BRIDGE_LIFECYCLE_STAGES = /* @__PURE__ */ new Set([
+  "bridge_connected",
+  "thread_resume",
+  "turn_started"
+]);
+function isDashboardBridgeLifecycleStatus(input) {
+  const stage = normalizeDashboardEventText(
+    input?.stage || input?.phase || input?.step || input?.activity || input?.progressStage || input?.progress_stage
+  ).toLowerCase().replaceAll("-", "_");
+  const lifecycleStatus = normalizeDashboardEventText(
+    input?.bridgeLifecycle?.status || input?.bridge_lifecycle?.status
+  ).toLowerCase().replaceAll("-", "_");
+  return DASHBOARD_BRIDGE_LIFECYCLE_STAGES.has(stage) || DASHBOARD_BRIDGE_LIFECYCLE_STAGES.has(lifecycleStatus);
+}
 var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   read_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
   inspect_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
@@ -67001,6 +67015,9 @@ var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   web_search: "\u5FC5\u8981\u306A\u60C5\u5831\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
   waiting_approval: "\u627F\u8A8D\u5F85\u3061\u3067\u3059\u3002",
   waiting_user_input: "\u78BA\u8A8D\u304C\u5FC5\u8981\u3067\u3059\u3002",
+  bridge_connected: "bridge \u63A5\u7D9A\u6E08\u307F\u3002",
+  thread_resume: "\u65E2\u5B58 thread \u5FA9\u5E30\u3002",
+  turn_started: "turn \u958B\u59CB\u3002",
   quiet: "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u614B\u3092\u78BA\u8A8D\u4E2D\u3067\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002",
   debug_slow_turn: "Issue #590 slow turn E2E \u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
   long_turn_checkpoint: "\u4F5C\u696D\u3092\u7D99\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002\u307E\u3060\u6700\u7D42\u56DE\u7B54\u306F\u751F\u6210\u4E2D\u3067\u3059\u3002",
@@ -72328,6 +72345,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .progress-checkpoint-bubble { color: var(--muted); }
     .progress-checkpoint-bubble .bubble-header strong { color: var(--muted); }
     .progress-checkpoint-bubble .message-body p { color: var(--text); }
+    .bridge-lifecycle-checkpoint { opacity: .72; }
+    .bridge-lifecycle-checkpoint .bubble-header { margin-bottom: 3px; }
+    .bridge-lifecycle-checkpoint .bubble-header strong { color: var(--muted); font-size: 10px; letter-spacing: .04em; text-transform: none; }
+    .bridge-lifecycle-checkpoint .message-body { gap: 0; }
+    .bridge-lifecycle-checkpoint .message-body p { color: var(--muted); font-size: 13px; line-height: 1.45; }
     .reply-context { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: min(100%, 680px); margin: 0 0 10px; padding: 8px 10px; border: 0; border-left: 3px solid var(--border); border-radius: 0 8px 8px 0; background: var(--soft); color: var(--muted); font: inherit; font-size: 12px; line-height: 1.45; text-align: left; cursor: pointer; }
     .reply-context:hover, .reply-context:focus-visible { color: var(--text); background: var(--panel-strong); outline: none; }
     .reply-context:focus-visible { box-shadow: 0 0 0 2px var(--link); }
@@ -72962,6 +72984,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return (source || "checkpoint") + ":" + text;
       }
 
+      function isBridgeLifecycleCheckpointEntry(entry) {
+        return String(entry && entry.source || "").trim() === "app_server_bridge_lifecycle";
+      }
+
       function hasProgressCheckpointSnapshot(snapshot) {
         return Boolean(latestProgressCheckpointText(snapshot));
       }
@@ -73064,21 +73090,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
       }
 
-      function ensureThreadProgressCheckpointCard(entryKey) {
+      function ensureThreadProgressCheckpointCard(entryKey, checkpoint = {}) {
         const existing = threadProgressCheckpointCards.get(entryKey);
         if (existing && existing.isConnected) {
           return existing;
         }
+        const bridgeLifecycle = isBridgeLifecycleCheckpointEntry(checkpoint);
         const entry = document.createElement("div");
-        entry.className = "message-entry butler progress-checkpoint-entry";
+        entry.className = "message-entry butler progress-checkpoint-entry" + (bridgeLifecycle ? " bridge-lifecycle-checkpoint" : "");
         entry.setAttribute("data-thread-progress-checkpoint", "true");
         entry.dataset.progressCheckpointKey = entryKey;
         const article = document.createElement("article");
-        article.className = "bubble progress-checkpoint-bubble";
+        article.className = "bubble progress-checkpoint-bubble" + (bridgeLifecycle ? " bridge-lifecycle-bubble" : "");
         const header = document.createElement("div");
         header.className = "bubble-header";
         const strong = document.createElement("strong");
-        strong.textContent = "Butler";
+        strong.textContent = bridgeLifecycle ? "status" : "Butler";
         header.appendChild(strong);
         const body = document.createElement("div");
         body.className = "message-body";
@@ -73103,7 +73130,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return false;
         }
         for (const entry of entries) {
-          const card = ensureThreadProgressCheckpointCard(progressCheckpointEntryKey(entry));
+          const card = ensureThreadProgressCheckpointCard(progressCheckpointEntryKey(entry), entry);
           const paragraph = card.querySelector(".message-body p");
           if (paragraph) {
             schedulePacedProgressCheckpointText(paragraph, entry.text);
