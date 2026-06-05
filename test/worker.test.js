@@ -1265,8 +1265,14 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes(".composer-status:empty"), true);
   assert.equal(body.includes(".transient-progress-card"), false);
   assert.equal(body.includes(".composer-progress"), true);
+  assert.equal(body.includes(".composer-progress .progress-text { display: -webkit-box;"), true);
+  assert.equal(body.includes("-webkit-line-clamp: 2"), true);
+  assert.equal(body.includes("max-height: 3lh"), true);
   assert.equal(body.includes('id="butler-transient-progress"'), true);
   assert.equal(body.includes("data-transient-progress"), true);
+  assert.equal(body.includes("function compactComposerProgressText(text)"), true);
+  assert.equal(body.includes('new RegExp("\\\\s+", "g")'), true);
+  assert.equal(body.includes("compactComposerProgressText(normalized)"), true);
   assert.equal(body.includes("function updateTransientProgress(text, options = {})"), true);
   assert.equal(body.includes("function clearTransientProgress()"), true);
   assert.equal(body.includes("function renderTransientProgress()"), true);
