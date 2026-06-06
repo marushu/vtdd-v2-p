@@ -121,6 +121,7 @@ function readRequestBody(request) {
 
 const chatStore = createInMemoryDashboardChatStore();
 const dashboardEventStore = createInMemoryDashboardEventStore();
+let mediaUploadCount = 0;
 const env = {
   VTDD_DASHBOARD_ALLOWED_EMAILS: "owner@example.com",
   CF_ACCESS_JWT_VERIFIER: async (token) => ({
@@ -161,6 +162,23 @@ test.beforeAll(async () => {
   });
   server = http.createServer(async (request, response) => {
     try {
+      const requestUrl = new URL(request.url || "/", origin);
+      if (request.method === "POST" && requestUrl.pathname === "/v2/media/upload") {
+        await readRequestBody(request);
+        mediaUploadCount += 1;
+        const media = {
+          mediaId: `med_issue816_followup_${mediaUploadCount}`,
+          filename: "issue816-followup.png",
+          contentType: "image/png",
+          byteLength: 68,
+          downloadUrl: `/v2/media/med_issue816_followup_${mediaUploadCount}/download`,
+          metadataUrl: `/v2/media/med_issue816_followup_${mediaUploadCount}`,
+          retentionLabel: "7日後に削除"
+        };
+        response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ ok: true, media }));
+        return;
+      }
       const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readRequestBody(request);
       const headers = new Headers(request.headers);
       headers.set("cf-access-authenticated-user-email", "owner@example.com");
@@ -278,8 +296,8 @@ async function installFakeSpeechRecognition(page) {
       stop() {
         this.onend?.();
       }
-      emitTranscript(text) {
-        const result = [{ transcript: text }];
+      emitTranscript(text, confidence = 0.92) {
+        const result = [{ transcript: text, confidence }];
         result.isFinal = true;
         this.onresult?.({ resultIndex: 0, results: [result] });
       }
@@ -387,7 +405,27 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
       }
     });
   })).toBe(true);
+  const voiceClientMessageId = await page.evaluate(() => {
+    const sent = window.__vtddFakeSockets?.[0]?.sent || [];
+    for (const entry of sent) {
+      try {
+        const parsed = JSON.parse(entry);
+        if (parsed.type === "owner_message" && parsed.text === "音声から追加したメモ") {
+          return parsed.clientMessageId || "";
+        }
+      } catch {}
+    }
+    return "";
+  });
+  await page.evaluate((clientMessageId) => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "owner_message_accepted",
+      ok: true,
+      clientMessageId
+    });
+  }, voiceClientMessageId);
   await expect.poll(async () => page.evaluate(() => window.__vtddWakeLockRequests || [])).toContain("screen");
+  await page.evaluate(() => window.__vtddDashboardVoiceTest?.suspendWithoutExplicitStop());
   await page.evaluate(() => {
     window.__vtddFakeSockets?.[0]?.emit({
       type: "transient_status",
@@ -403,6 +441,45 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
       ok: true,
       messages: [
         {
+          messageId: "issue-818-unrelated-final-reply",
+          role: "butler",
+          status: "replied",
+          replyToClientMessageId: "dashboard_owner_message:unrelated",
+          text: "別の入力への返信なので読み上げてはいけません。",
+          createdAt: "2026-06-06T09:09:00.000Z"
+        }
+      ]
+    });
+  });
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken?.length || 0)).toBe(0);
+  await page.evaluate((replyToClientMessageId) => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "thread",
+      ok: true,
+      messages: [
+        {
+          messageId: "issue-814-voice-final-reply",
+          role: "butler",
+          status: "replied",
+          replyToClientMessageId,
+          text: "音声モード中だけ、この Butler の最終返信を読み上げます。",
+          createdAt: "2026-06-06T09:10:00.000Z"
+        }
+      ]
+    });
+  }, voiceClientMessageId);
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken || [])).toEqual([
+    {
+      text: "音声モード中だけ、この Butler の最終返信を読み上げます。",
+      lang: "ja-JP"
+    }
+  ]);
+  await page.evaluate(() => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "thread",
+      ok: true,
+      messages: [
+        {
           messageId: "issue-814-voice-final-reply",
           role: "butler",
           status: "replied",
@@ -412,12 +489,24 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
       ]
     });
   });
-  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken || [])).toEqual([
-    {
-      text: "音声モード中だけ、この Butler の最終返信を読み上げます。",
-      lang: "ja-JP"
-    }
-  ]);
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken?.length || 0)).toBe(1);
+  const sentBeforeAmbient = await page.evaluate(() => window.__vtddFakeSockets?.[0]?.sent?.length || 0);
+  await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("あ", 0.2));
+  await expect.poll(async () => page.evaluate(() => window.__vtddFakeSockets?.[0]?.sent?.length || 0)).toBe(sentBeforeAmbient);
+  await expect(page.locator("#butler-chat-status")).toContainText("短い周囲音らしい音声");
+  await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("今の説明に追加して、先に差し込み確認して", 0.95));
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisCancelled || 0)).toBeGreaterThan(0);
+  await expect.poll(async () => page.evaluate(() => {
+    const sent = window.__vtddFakeSockets?.[0]?.sent || [];
+    return sent.some((entry) => {
+      try {
+        const parsed = JSON.parse(entry);
+        return parsed.type === "owner_message" && parsed.interruption === true && parsed.text.includes("先に差し込み確認");
+      } catch {
+        return false;
+      }
+    });
+  })).toBe(true);
   await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("ボイスモード終了"));
   await expect(page.locator("#butler-voice-button")).toHaveAttribute("data-listening", "false");
   await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisCancelled || 0)).toBeGreaterThan(0);
@@ -443,9 +532,39 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
   await expect(page.locator("#butler-send-button")).toHaveAttribute("data-mode", "stop");
   await page.locator("#butler-message").fill("これは現在の実行に差し込む補足。");
   await expect(page.locator("#butler-followup-draft")).toBeVisible();
+  await page.setInputFiles("#butler-media-input", {
+    name: "issue816-followup.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+      "base64"
+    )
+  });
+  await expect(page.locator("#butler-pending-media .media-chip")).toHaveCount(1);
   await page.locator("#butler-followup-queue").click();
   await expect(page.locator("#butler-followup-queue-list")).toContainText("差し込み済み");
   await expect(page.locator("#butler-followup-queue-list")).toContainText("これは現在の実行に差し込む補足。");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("添付 1件");
+  await expect.poll(async () => page.evaluate(() => {
+    const sent = window.__vtddFakeSockets?.[0]?.sent || [];
+    return sent
+      .map((entry) => {
+        try {
+          return JSON.parse(entry);
+        } catch {
+          return null;
+        }
+      })
+      .some((entry) =>
+        entry &&
+        entry.type === "owner_message" &&
+        entry.interruption === true &&
+        entry.text === "これは現在の実行に差し込む補足。" &&
+        Array.isArray(entry.mediaReferences) &&
+        entry.mediaReferences.length === 1 &&
+        entry.mediaReferences[0].mediaId === "med_issue816_followup_1"
+      );
+  })).toBe(true);
 
   await page.locator(".menu-open").first().click();
   await expect(page.locator(".mobile-drawer")).toBeVisible();

@@ -9998,6 +9998,14 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
   const progressText = sanitizeDashboardChatText(input.progressText || input.progress_text);
+  const replyTargetMessageId = normalizeDashboardEventText(
+    input.replyToClientMessageId ||
+    input.reply_to_client_message_id ||
+    input.originalMessageId ||
+    input.original_message_id ||
+    input.ownerMessageId ||
+    input.owner_message_id
+  );
   let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.issueNumber);
@@ -10024,6 +10032,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
             relatedIssue,
             status: "replied",
             text,
+            replyToClientMessageId: replyTargetMessageId || undefined,
             createdAt
           },
           { threadId }
@@ -10073,6 +10082,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
             relatedIssue,
             status: transientStatus,
             text: transientText,
+            replyToClientMessageId: replyTargetMessageId || undefined,
             createdAt
           },
           { threadId }
@@ -12992,6 +13002,8 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
     relatedIssue: normalizePositiveInteger(input.relatedIssue || input.issueNumber || input.related_issue),
     status: normalizeDashboardChatStatus(input.status),
     text: sanitizeDashboardChatText(input.text || input.message || input.body) || "（空のメッセージ）",
+    replyToMessageId: normalizeDashboardEventText(input.replyToMessageId || input.reply_to_message_id) || undefined,
+    replyToClientMessageId: normalizeDashboardEventText(input.replyToClientMessageId || input.reply_to_client_message_id) || undefined,
     ...(progressSummary.entries.length ? { progressSummary } : {}),
     mediaReferences: normalizeMediaReferences(input.mediaReferences || input.media_references || input.media),
     createdAt
@@ -16743,6 +16755,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let voiceWakeLock = null;
       let voiceWakeLockRetryTimer = null;
       let voiceWakeLockNoticeShown = false;
+      let voiceSpeaking = false;
+      let voiceExplicitlyStopped = false;
+      let voiceSubmitPending = false;
+      const pendingVoiceReplyClientMessageIds = new Set();
       const spokenButlerReplyKeys = new Set();
       const voiceExitPhrases = ["ボイスモード終了"];
       let retryClientMessageId = "";
@@ -17013,6 +17029,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         followupQueueList.replaceChildren();
         followupQueueList.hidden = followupQueue.length === 0;
         for (const item of followupQueue) {
+          const mediaReferences = Array.isArray(item.mediaReferences) ? item.mediaReferences : [];
           const chip = document.createElement("div");
           chip.className = "followup-chip";
           const label = document.createElement("small");
@@ -17021,6 +17038,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           text.textContent = item.text;
           chip.appendChild(label);
           chip.appendChild(text);
+          if (mediaReferences.length > 0) {
+            const media = document.createElement("small");
+            media.textContent = "添付 " + mediaReferences.length + "件";
+            chip.appendChild(media);
+          }
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
@@ -17030,14 +17052,41 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const normalized = String(text || "").trim();
         if (!normalized) return null;
         const item = {
-          id: createClientMessageId(),
+          id: options.id || createClientMessageId(),
           text: normalized,
+          mediaReferences: Array.isArray(options.mediaReferences) ? options.mediaReferences : [],
           status: options.status || "queued",
           createdAt: new Date().toISOString()
         };
         followupQueue.push(item);
         renderFollowupQueue();
         return item;
+      }
+
+      async function addFollowupQueueItemFromComposer(text, options = {}) {
+        const normalized = String(text || "").trim();
+        if (!normalized) return null;
+        const clientMessageId = createClientMessageId();
+        let mediaReferences = [];
+        if (pendingMediaItems.length > 0) {
+          setStatus("差し込みの添付を保存してからキューに追加しています。", { thinking: true });
+          try {
+            mediaReferences = await uploadPendingMedia(clientMessageId);
+          } catch (error) {
+            setStatus((error && error.message) || "添付を保存できませんでした。添付なしでは差し込みを送信しません。");
+            textarea.focus({ preventScroll: true });
+            return null;
+          }
+          if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
+          revokePendingMediaPreviews();
+          pendingMediaItems = [];
+          renderPendingMedia();
+        }
+        return addFollowupQueueItem(normalized, {
+          ...options,
+          id: clientMessageId,
+          mediaReferences
+        });
       }
 
       function showFollowupDraft(text) {
@@ -17113,6 +17162,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function submitVoiceTranscript(text) {
         if (!appendVoiceTranscript(text)) return;
+        voiceSubmitPending = true;
         window.requestAnimationFrame(() => {
           form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
         });
@@ -17132,6 +17182,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function cancelVoiceSpeech() {
+        voiceSpeaking = false;
         try {
           if (window.speechSynthesis && typeof window.speechSynthesis.cancel === "function") {
             window.speechSynthesis.cancel();
@@ -17147,8 +17198,47 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         ].join("\\u001f");
       }
 
+      function markPendingVoiceReply(clientMessageId) {
+        const id = String(clientMessageId || "").trim();
+        if (!id) return false;
+        pendingVoiceReplyClientMessageIds.add(id);
+        voiceExplicitlyStopped = false;
+        return true;
+      }
+
+      function hasPendingVoiceReply() {
+        return pendingVoiceReplyClientMessageIds.size > 0;
+      }
+
+      function getVoiceReplyTargetId(message) {
+        return getReplyTargetMessageId(message);
+      }
+
+      function matchesPendingVoiceReply(message) {
+        const targetId = getVoiceReplyTargetId(message);
+        return Boolean(targetId && pendingVoiceReplyClientMessageIds.has(targetId));
+      }
+
+      function consumePendingVoiceReply(message) {
+        const targetId = getVoiceReplyTargetId(message);
+        if (targetId) {
+          pendingVoiceReplyClientMessageIds.delete(targetId);
+          return;
+        }
+        pendingVoiceReplyClientMessageIds.clear();
+      }
+
+      function shouldSpeakFinalButlerReply(message) {
+        if (!message || message.role !== "butler" || message.status !== "replied") return false;
+        if (voiceExplicitlyStopped) return false;
+        if (hasPendingVoiceReply()) {
+          return matchesPendingVoiceReply(message);
+        }
+        return voiceModeActive;
+      }
+
       function speakFinalButlerReply(message) {
-        if (!voiceModeActive || !message || message.role !== "butler" || message.status !== "replied") return false;
+        if (!shouldSpeakFinalButlerReply(message)) return false;
         const text = normalizeMessageDisplayText(message.text || "").trim();
         if (!text) return false;
         const key = voiceReplyKey(message);
@@ -17162,13 +17252,52 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         try {
           const utterance = new SpeechSynthesisUtterance(text);
           utterance.lang = "ja-JP";
+          voiceSpeaking = true;
+          utterance.onend = () => {
+            voiceSpeaking = false;
+          };
+          utterance.onerror = () => {
+            voiceSpeaking = false;
+          };
           window.speechSynthesis.speak(utterance);
+          consumePendingVoiceReply(message);
           setStatus("Butler の返信を読み上げています。", { temporary: true });
           return true;
         } catch {
+          voiceSpeaking = false;
           setStatus("返信の読み上げを開始できませんでした。文字の返信は表示済みです。", { temporary: true });
           return false;
         }
+      }
+
+      function isLikelyAmbientVoiceFragment(text, confidence) {
+        const normalized = normalizeComposerInputText(text).replace(/[\\s、。.!！?？]/g, "").trim();
+        if (!normalized) return true;
+        if (containsVoiceExitPhrase(normalized)) return false;
+        if (normalized.length < 4) return true;
+        if (typeof confidence === "number" && confidence > 0 && confidence < 0.45) return true;
+        return false;
+      }
+
+      async function handleVoiceInterruptCandidate(text, options = {}) {
+        const transcript = normalizeComposerInputText(text).trim();
+        if (!transcript) return false;
+        if (containsVoiceExitPhrase(transcript)) {
+          stopVoiceMode("合言葉を確認しました。音声モードを終了します。");
+          return true;
+        }
+        if (isLikelyAmbientVoiceFragment(transcript, options.confidence)) {
+          setStatus("短い周囲音らしい音声は差し込みに入れませんでした。", { temporary: true });
+          return false;
+        }
+        cancelVoiceSpeech();
+        voiceModeActive = true;
+        const item = await addFollowupQueueItemFromComposer(transcript, { status: "queued" });
+        if (!item) return false;
+        clearFollowupDraft();
+        flushQueuedFollowups();
+        setStatus(item.status === "sent" ? "読み上げを止め、差し込みを現在の実行へ送りました。" : "読み上げを止め、差し込みをキューに追加しました。", { temporary: true });
+        return true;
       }
 
       function releaseVoiceWakeLock() {
@@ -17227,6 +17356,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function stopVoiceMode(message = "音声モードを終了しました。") {
         voiceModeActive = false;
+        voiceSpeaking = false;
+        voiceExplicitlyStopped = true;
+        voiceSubmitPending = false;
+        pendingVoiceReplyClientMessageIds.clear();
         clearVoiceTimers();
         cancelVoiceSpeech();
         releaseVoiceWakeLock();
@@ -17277,6 +17410,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             .join(" ")
             .trim();
           if (!transcript) return;
+          const confidence = finalResults
+            .map((result) => Number(result?.[0]?.confidence))
+            .find((value) => Number.isFinite(value) && value > 0);
+          if (voiceSpeaking) {
+            handleVoiceInterruptCandidate(transcript, { confidence }).catch(() => {});
+            return;
+          }
           if (containsVoiceExitPhrase(transcript)) {
             stopVoiceMode("合言葉を確認しました。音声モードを終了します。");
             return;
@@ -17293,6 +17433,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           setStatus("このブラウザでは音声入力に未対応です。テキスト入力と画像添付は使えます。", { temporary: true });
           return;
         }
+        voiceExplicitlyStopped = false;
         try {
           if (!options.restarting) {
             setStatus("音声モードを開始しています。マイク許可が出たら許可してください。", { temporary: true });
@@ -17321,6 +17462,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         startVoiceMode();
       }
 
+      if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+        window.__vtddDashboardVoiceTest = {
+          suspendWithoutExplicitStop() {
+            voiceModeActive = false;
+            setVoiceListening(false);
+          },
+          isSpeaking() {
+            return voiceSpeaking;
+          }
+        };
+      }
+
       function flushQueuedFollowups() {
         if (!isChatSocketOpen()) return;
         const queued = followupQueue.filter((item) => item.status === "queued");
@@ -17334,7 +17487,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               text: item.text,
               issueNumber,
               relatedIssue: issueNumber,
-              mediaReferences: [],
+              mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
               interruption: true
             }));
             item.status = "sent";
@@ -19049,13 +19202,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
+        const isVoiceSubmit = voiceSubmitPending === true;
+        voiceSubmitPending = false;
         if (activeTurnInProgress) {
           if (!text) {
             requestStopActiveTurn();
             textarea.focus({ preventScroll: true });
             return;
           }
-          const item = addFollowupQueueItem(text, { status: "queued" });
+          const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+          if (!item) {
+            return;
+          }
           textarea.value = "";
           resizeComposerInput();
           persistDashboardDraft();
@@ -19092,6 +19250,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             pendingSendRollbacks.delete(pendingOwnerSend.clientMessageId);
           }
           const clientMessageId = createClientMessageId();
+          if (isVoiceSubmit) {
+            markPendingVoiceReply(clientMessageId);
+          }
           pendingSendRollbacks.set(clientMessageId, []);
           pendingOwnerSend = {
             clientMessageId,
@@ -19123,9 +19284,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
+        if (isVoiceSubmit) {
+          markPendingVoiceReply(clientMessageId);
+        }
         try {
           mediaReferences = await uploadPendingMedia(clientMessageId);
         } catch (error) {
+          pendingVoiceReplyClientMessageIds.delete(clientMessageId);
           setStatus((error && error.message) || "添付の保存に失敗しました。");
           setComposerLocked(false);
           if (submitButton) submitButton.disabled = false;
@@ -19183,13 +19348,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         persistDashboardDraft();
         textarea.focus({ preventScroll: true });
       });
-      followupQueueButton?.addEventListener("click", () => {
-        const text = textarea.value.trim() || followupDraftText?.textContent || "";
+      followupQueueButton?.addEventListener("click", async () => {
+        const text = textarea.value.trim() || followupDraftText?.textContent || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
         if (!text) {
           clearFollowupDraft();
           return;
         }
-        addFollowupQueueItem(text, { status: "queued" });
+        const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+        if (!item) {
+          return;
+        }
         textarea.value = "";
         resizeComposerInput();
         clearFollowupDraft();

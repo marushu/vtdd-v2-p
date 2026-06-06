@@ -66750,6 +66750,9 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
   const progressText = sanitizeDashboardChatText(input.progressText || input.progress_text);
+  const replyTargetMessageId = normalizeDashboardEventText(
+    input.replyToClientMessageId || input.reply_to_client_message_id || input.originalMessageId || input.original_message_id || input.ownerMessageId || input.owner_message_id
+  );
   let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger10(input.relatedIssue || input.issueNumber);
@@ -66775,6 +66778,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
             relatedIssue,
             status: "replied",
             text,
+            replyToClientMessageId: replyTargetMessageId || void 0,
             createdAt
           },
           { threadId }
@@ -66821,6 +66825,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
             relatedIssue,
             status: transientStatus,
             text: transientText,
+            replyToClientMessageId: replyTargetMessageId || void 0,
             createdAt
           },
           { threadId }
@@ -69392,6 +69397,8 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
     relatedIssue: normalizePositiveInteger10(input.relatedIssue || input.issueNumber || input.related_issue),
     status: normalizeDashboardChatStatus(input.status),
     text: sanitizeDashboardChatText(input.text || input.message || input.body) || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09",
+    replyToMessageId: normalizeDashboardEventText(input.replyToMessageId || input.reply_to_message_id) || void 0,
+    replyToClientMessageId: normalizeDashboardEventText(input.replyToClientMessageId || input.reply_to_client_message_id) || void 0,
     ...progressSummary.entries.length ? { progressSummary } : {},
     mediaReferences: normalizeMediaReferences(input.mediaReferences || input.media_references || input.media),
     createdAt
@@ -72838,6 +72845,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let voiceWakeLock = null;
       let voiceWakeLockRetryTimer = null;
       let voiceWakeLockNoticeShown = false;
+      let voiceSpeaking = false;
+      let voiceExplicitlyStopped = false;
+      let voiceSubmitPending = false;
+      const pendingVoiceReplyClientMessageIds = new Set();
       const spokenButlerReplyKeys = new Set();
       const voiceExitPhrases = ["\u30DC\u30A4\u30B9\u30E2\u30FC\u30C9\u7D42\u4E86"];
       let retryClientMessageId = "";
@@ -73108,6 +73119,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         followupQueueList.replaceChildren();
         followupQueueList.hidden = followupQueue.length === 0;
         for (const item of followupQueue) {
+          const mediaReferences = Array.isArray(item.mediaReferences) ? item.mediaReferences : [];
           const chip = document.createElement("div");
           chip.className = "followup-chip";
           const label = document.createElement("small");
@@ -73116,6 +73128,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           text.textContent = item.text;
           chip.appendChild(label);
           chip.appendChild(text);
+          if (mediaReferences.length > 0) {
+            const media = document.createElement("small");
+            media.textContent = "\u6DFB\u4ED8 " + mediaReferences.length + "\u4EF6";
+            chip.appendChild(media);
+          }
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
@@ -73125,14 +73142,41 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const normalized = String(text || "").trim();
         if (!normalized) return null;
         const item = {
-          id: createClientMessageId(),
+          id: options.id || createClientMessageId(),
           text: normalized,
+          mediaReferences: Array.isArray(options.mediaReferences) ? options.mediaReferences : [],
           status: options.status || "queued",
           createdAt: new Date().toISOString()
         };
         followupQueue.push(item);
         renderFollowupQueue();
         return item;
+      }
+
+      async function addFollowupQueueItemFromComposer(text, options = {}) {
+        const normalized = String(text || "").trim();
+        if (!normalized) return null;
+        const clientMessageId = createClientMessageId();
+        let mediaReferences = [];
+        if (pendingMediaItems.length > 0) {
+          setStatus("\u5DEE\u3057\u8FBC\u307F\u306E\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u3066\u3044\u307E\u3059\u3002", { thinking: true });
+          try {
+            mediaReferences = await uploadPendingMedia(clientMessageId);
+          } catch (error) {
+            setStatus((error && error.message) || "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u6DFB\u4ED8\u306A\u3057\u3067\u306F\u5DEE\u3057\u8FBC\u307F\u3092\u9001\u4FE1\u3057\u307E\u305B\u3093\u3002");
+            textarea.focus({ preventScroll: true });
+            return null;
+          }
+          if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
+          revokePendingMediaPreviews();
+          pendingMediaItems = [];
+          renderPendingMedia();
+        }
+        return addFollowupQueueItem(normalized, {
+          ...options,
+          id: clientMessageId,
+          mediaReferences
+        });
       }
 
       function showFollowupDraft(text) {
@@ -73208,6 +73252,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function submitVoiceTranscript(text) {
         if (!appendVoiceTranscript(text)) return;
+        voiceSubmitPending = true;
         window.requestAnimationFrame(() => {
           form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
         });
@@ -73227,6 +73272,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function cancelVoiceSpeech() {
+        voiceSpeaking = false;
         try {
           if (window.speechSynthesis && typeof window.speechSynthesis.cancel === "function") {
             window.speechSynthesis.cancel();
@@ -73242,8 +73288,47 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         ].join("\\u001f");
       }
 
+      function markPendingVoiceReply(clientMessageId) {
+        const id = String(clientMessageId || "").trim();
+        if (!id) return false;
+        pendingVoiceReplyClientMessageIds.add(id);
+        voiceExplicitlyStopped = false;
+        return true;
+      }
+
+      function hasPendingVoiceReply() {
+        return pendingVoiceReplyClientMessageIds.size > 0;
+      }
+
+      function getVoiceReplyTargetId(message) {
+        return getReplyTargetMessageId(message);
+      }
+
+      function matchesPendingVoiceReply(message) {
+        const targetId = getVoiceReplyTargetId(message);
+        return Boolean(targetId && pendingVoiceReplyClientMessageIds.has(targetId));
+      }
+
+      function consumePendingVoiceReply(message) {
+        const targetId = getVoiceReplyTargetId(message);
+        if (targetId) {
+          pendingVoiceReplyClientMessageIds.delete(targetId);
+          return;
+        }
+        pendingVoiceReplyClientMessageIds.clear();
+      }
+
+      function shouldSpeakFinalButlerReply(message) {
+        if (!message || message.role !== "butler" || message.status !== "replied") return false;
+        if (voiceExplicitlyStopped) return false;
+        if (hasPendingVoiceReply()) {
+          return matchesPendingVoiceReply(message);
+        }
+        return voiceModeActive;
+      }
+
       function speakFinalButlerReply(message) {
-        if (!voiceModeActive || !message || message.role !== "butler" || message.status !== "replied") return false;
+        if (!shouldSpeakFinalButlerReply(message)) return false;
         const text = normalizeMessageDisplayText(message.text || "").trim();
         if (!text) return false;
         const key = voiceReplyKey(message);
@@ -73257,13 +73342,52 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         try {
           const utterance = new SpeechSynthesisUtterance(text);
           utterance.lang = "ja-JP";
+          voiceSpeaking = true;
+          utterance.onend = () => {
+            voiceSpeaking = false;
+          };
+          utterance.onerror = () => {
+            voiceSpeaking = false;
+          };
           window.speechSynthesis.speak(utterance);
+          consumePendingVoiceReply(message);
           setStatus("Butler \u306E\u8FD4\u4FE1\u3092\u8AAD\u307F\u4E0A\u3052\u3066\u3044\u307E\u3059\u3002", { temporary: true });
           return true;
         } catch {
+          voiceSpeaking = false;
           setStatus("\u8FD4\u4FE1\u306E\u8AAD\u307F\u4E0A\u3052\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u6587\u5B57\u306E\u8FD4\u4FE1\u306F\u8868\u793A\u6E08\u307F\u3067\u3059\u3002", { temporary: true });
           return false;
         }
+      }
+
+      function isLikelyAmbientVoiceFragment(text, confidence) {
+        const normalized = normalizeComposerInputText(text).replace(/[\\s\u3001\u3002.!\uFF01?\uFF1F]/g, "").trim();
+        if (!normalized) return true;
+        if (containsVoiceExitPhrase(normalized)) return false;
+        if (normalized.length < 4) return true;
+        if (typeof confidence === "number" && confidence > 0 && confidence < 0.45) return true;
+        return false;
+      }
+
+      async function handleVoiceInterruptCandidate(text, options = {}) {
+        const transcript = normalizeComposerInputText(text).trim();
+        if (!transcript) return false;
+        if (containsVoiceExitPhrase(transcript)) {
+          stopVoiceMode("\u5408\u8A00\u8449\u3092\u78BA\u8A8D\u3057\u307E\u3057\u305F\u3002\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u7D42\u4E86\u3057\u307E\u3059\u3002");
+          return true;
+        }
+        if (isLikelyAmbientVoiceFragment(transcript, options.confidence)) {
+          setStatus("\u77ED\u3044\u5468\u56F2\u97F3\u3089\u3057\u3044\u97F3\u58F0\u306F\u5DEE\u3057\u8FBC\u307F\u306B\u5165\u308C\u307E\u305B\u3093\u3067\u3057\u305F\u3002", { temporary: true });
+          return false;
+        }
+        cancelVoiceSpeech();
+        voiceModeActive = true;
+        const item = await addFollowupQueueItemFromComposer(transcript, { status: "queued" });
+        if (!item) return false;
+        clearFollowupDraft();
+        flushQueuedFollowups();
+        setStatus(item.status === "sent" ? "\u8AAD\u307F\u4E0A\u3052\u3092\u6B62\u3081\u3001\u5DEE\u3057\u8FBC\u307F\u3092\u73FE\u5728\u306E\u5B9F\u884C\u3078\u9001\u308A\u307E\u3057\u305F\u3002" : "\u8AAD\u307F\u4E0A\u3052\u3092\u6B62\u3081\u3001\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+        return true;
       }
 
       function releaseVoiceWakeLock() {
@@ -73322,6 +73446,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function stopVoiceMode(message = "\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u7D42\u4E86\u3057\u307E\u3057\u305F\u3002") {
         voiceModeActive = false;
+        voiceSpeaking = false;
+        voiceExplicitlyStopped = true;
+        voiceSubmitPending = false;
+        pendingVoiceReplyClientMessageIds.clear();
         clearVoiceTimers();
         cancelVoiceSpeech();
         releaseVoiceWakeLock();
@@ -73372,6 +73500,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             .join(" ")
             .trim();
           if (!transcript) return;
+          const confidence = finalResults
+            .map((result) => Number(result?.[0]?.confidence))
+            .find((value) => Number.isFinite(value) && value > 0);
+          if (voiceSpeaking) {
+            handleVoiceInterruptCandidate(transcript, { confidence }).catch(() => {});
+            return;
+          }
           if (containsVoiceExitPhrase(transcript)) {
             stopVoiceMode("\u5408\u8A00\u8449\u3092\u78BA\u8A8D\u3057\u307E\u3057\u305F\u3002\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u7D42\u4E86\u3057\u307E\u3059\u3002");
             return;
@@ -73388,6 +73523,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           setStatus("\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u3067\u306F\u97F3\u58F0\u5165\u529B\u306B\u672A\u5BFE\u5FDC\u3067\u3059\u3002\u30C6\u30AD\u30B9\u30C8\u5165\u529B\u3068\u753B\u50CF\u6DFB\u4ED8\u306F\u4F7F\u3048\u307E\u3059\u3002", { temporary: true });
           return;
         }
+        voiceExplicitlyStopped = false;
         try {
           if (!options.restarting) {
             setStatus("\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u958B\u59CB\u3057\u3066\u3044\u307E\u3059\u3002\u30DE\u30A4\u30AF\u8A31\u53EF\u304C\u51FA\u305F\u3089\u8A31\u53EF\u3057\u3066\u304F\u3060\u3055\u3044\u3002", { temporary: true });
@@ -73416,6 +73552,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         startVoiceMode();
       }
 
+      if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+        window.__vtddDashboardVoiceTest = {
+          suspendWithoutExplicitStop() {
+            voiceModeActive = false;
+            setVoiceListening(false);
+          },
+          isSpeaking() {
+            return voiceSpeaking;
+          }
+        };
+      }
+
       function flushQueuedFollowups() {
         if (!isChatSocketOpen()) return;
         const queued = followupQueue.filter((item) => item.status === "queued");
@@ -73429,7 +73577,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               text: item.text,
               issueNumber,
               relatedIssue: issueNumber,
-              mediaReferences: [],
+              mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
               interruption: true
             }));
             item.status = "sent";
@@ -75144,13 +75292,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
+        const isVoiceSubmit = voiceSubmitPending === true;
+        voiceSubmitPending = false;
         if (activeTurnInProgress) {
           if (!text) {
             requestStopActiveTurn();
             textarea.focus({ preventScroll: true });
             return;
           }
-          const item = addFollowupQueueItem(text, { status: "queued" });
+          const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+          if (!item) {
+            return;
+          }
           textarea.value = "";
           resizeComposerInput();
           persistDashboardDraft();
@@ -75187,6 +75340,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             pendingSendRollbacks.delete(pendingOwnerSend.clientMessageId);
           }
           const clientMessageId = createClientMessageId();
+          if (isVoiceSubmit) {
+            markPendingVoiceReply(clientMessageId);
+          }
           pendingSendRollbacks.set(clientMessageId, []);
           pendingOwnerSend = {
             clientMessageId,
@@ -75218,9 +75374,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
+        if (isVoiceSubmit) {
+          markPendingVoiceReply(clientMessageId);
+        }
         try {
           mediaReferences = await uploadPendingMedia(clientMessageId);
         } catch (error) {
+          pendingVoiceReplyClientMessageIds.delete(clientMessageId);
           setStatus((error && error.message) || "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
           setComposerLocked(false);
           if (submitButton) submitButton.disabled = false;
@@ -75278,13 +75438,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         persistDashboardDraft();
         textarea.focus({ preventScroll: true });
       });
-      followupQueueButton?.addEventListener("click", () => {
-        const text = textarea.value.trim() || followupDraftText?.textContent || "";
+      followupQueueButton?.addEventListener("click", async () => {
+        const text = textarea.value.trim() || followupDraftText?.textContent || (pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
         if (!text) {
           clearFollowupDraft();
           return;
         }
-        addFollowupQueueItem(text, { status: "queued" });
+        const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+        if (!item) {
+          return;
+        }
         textarea.value = "";
         resizeComposerInput();
         clearFollowupDraft();

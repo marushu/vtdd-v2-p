@@ -916,7 +916,8 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       threadId: context.dashboardThreadId,
       codexThreadId: params.threadId || context.codexThreadId || null,
       status: "replied",
-      text: context.accumulatedText || "codex app-server の turn が完了しました。"
+      text: context.accumulatedText || "codex app-server の turn が完了しました。",
+      originalMessageId: normalizeBridgeText(context.ownerMessageId)
     };
   }
   if (method === "error") {
