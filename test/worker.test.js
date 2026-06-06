@@ -242,6 +242,9 @@ function loadDashboardComposerRecoveryHelpers(html) {
     const submitButton = { disabled: true };
     const form = { querySelector(selector) { return selector === "button[type='submit']" ? submitButton : null; } };
     let pendingOwnerSend = null;
+    let activeTurnInProgress = true;
+    function setSendButtonMode() {}
+    function setActiveTurnInProgress(active) { activeTurnInProgress = active === true; }
     function setStatus(text, options = {}) { statusLog.push({ text, options }); }
     function updateComposerReserve() { statusLog.push({ reserveUpdated: true }); }
     return {
@@ -289,16 +292,35 @@ test("dashboard chat code block wrap policy keeps URL and command text readable"
   assert.equal(shouldWrapDashboardChatCodeBlock("const value = 1;\nconsole.log(value);"), false);
 });
 
-test("dashboard composer shortcut submits only modified Enter", () => {
-  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: true, ctrlKey: false }), true);
-  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: false, ctrlKey: true }), true);
+test("dashboard composer shortcut separates desktop Enter from mobile composer Enter", () => {
+  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", target: { value: "one line" }, metaKey: false, ctrlKey: false }), true);
+  assert.equal(
+    shouldSubmitDashboardComposerShortcut({
+      key: "Enter",
+      target: { value: "one line", dataset: { mobileComposer: "true" } },
+      metaKey: false,
+      ctrlKey: false
+    }),
+    false
+  );
+  assert.equal(
+    shouldSubmitDashboardComposerShortcut({
+      key: "Enter",
+      target: { value: "one line", dataset: { mobileComposer: "true" } },
+      metaKey: true,
+      ctrlKey: false
+    }),
+    true
+  );
+  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", target: { value: "one\ntwo" }, metaKey: true, ctrlKey: false }), true);
+  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", target: { value: "one\ntwo" }, metaKey: false, ctrlKey: true }), true);
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: false, ctrlKey: false, shiftKey: true }), false);
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: true, ctrlKey: false, shiftKey: true }), false);
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: true, ctrlKey: false, isComposing: true }), false);
-  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: false, ctrlKey: false }), false);
+  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", target: { value: "one\ntwo" }, metaKey: false, ctrlKey: false }), false);
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "a", metaKey: true, ctrlKey: false }), false);
   assert.equal(
-    shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: true, ctrlKey: false, isComposing: false }),
+    shouldSubmitDashboardComposerShortcut({ key: "Enter", target: { value: "one\ntwo" }, metaKey: true, ctrlKey: false, isComposing: false }),
     true
   );
 });
@@ -1279,7 +1301,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.match(response.headers.get("cache-control"), /no-store/);
   const body = await response.text();
   assert.equal(body.includes("Butler chat shell"), true);
-  assert.equal(body.includes("dashboard main chat"), true);
+  assert.equal(body.includes("main chat"), true);
   assert.equal(body.includes("管理メニュー"), true);
   assert.equal(body.includes("必要な時だけ開く"), true);
   assert.equal(body.includes("color-scheme: light dark"), true);
@@ -1301,8 +1323,26 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("minmax(220px, 320px)"), false);
   assert.equal(body.includes('id="tools" class="sidebar"'), false);
   assert.equal(body.includes(".mobile-drawer { position: fixed;"), true);
+  assert.equal(body.includes("--floating-bg"), true);
+  assert.equal(body.includes("backdrop-filter: blur(18px)"), true);
+  assert.equal(body.includes(".desktop-side-nav"), true);
+  assert.equal(body.includes("通知タップ時は通知センターを直接開きます"), true);
   assert.equal(body.includes(".menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }"), true);
+  assert.equal(body.includes("break-glass"), true);
+  assert.equal(body.includes("任意コマンドではなく、状態確認と固定復旧だけを扱います"), true);
   assert.equal(body.includes(".composer-status:empty"), true);
+  assert.equal(body.includes('id="butler-send-button"'), true);
+  assert.equal(body.includes('data-mode="stop"'), true);
+  assert.equal(body.includes('id="butler-voice-button"'), true);
+  assert.equal(body.includes("function toggleVoiceInput()"), true);
+  assert.equal(body.includes("function appendVoiceTranscript(text)"), true);
+  assert.equal(body.includes("発話は文字として入力欄に残します"), true);
+  assert.equal(body.includes('id="butler-followup-draft"'), true);
+  assert.equal(body.includes("function addFollowupQueueItem(text, options = {})"), true);
+  assert.equal(body.includes("function flushQueuedFollowups()"), true);
+  assert.equal(body.includes("function requestStopActiveTurn()"), true);
+  assert.equal(body.includes('id="butler-passkey-modal"'), true);
+  assert.equal(body.includes("function openPasskeyModal(href)"), true);
   assert.equal(body.includes(".transient-progress-card"), false);
   assert.equal(body.includes(".composer-progress"), true);
   assert.equal(body.includes(".composer-progress .progress-text { display: -webkit-box;"), true);
@@ -1649,8 +1689,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('body.type === "transient_status"'), true);
   assert.equal(body.includes("updateTransientProgress(transientText"), true);
   assert.equal(body.includes("setStatus(transientText, {\n                  thinking: isThinking"), false);
-  assert.equal(body.includes("clearTransientProgress();\n                setStatus(\"返信を受信しました。\""), true);
-  assert.equal(body.includes("clearTransientProgress();\n                releaseComposerForFollowUp"), true);
+  assert.equal(body.includes("clearTransientProgress();\n                setActiveTurnInProgress(false);\n                setStatus(\"返信を受信しました。\""), true);
+  assert.equal(body.includes("clearTransientProgress();\n                setActiveTurnInProgress(false);\n                releaseComposerForFollowUp"), true);
   assert.equal(body.includes('lastMessage?.status === "failed"'), true);
   assert.equal(body.includes("応答生成が時間切れになりました。同じ thread で続けられます。"), true);
   assert.equal(body.includes("appendMessage(body"), false);
@@ -1660,7 +1700,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes(".bubble .message-body { display: grid; gap: 12px; min-width: 0; max-width: 100%; overflow: visible; }"), true);
   assert.equal(body.includes(".bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }"), true);
   assert.equal(body.includes(".chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden;"), true);
-  assert.equal(body.includes("padding: 8px clamp(18px, 5vw, 96px) 28px;"), true);
+  assert.equal(body.includes("padding: calc(var(--topbar-reserve) + 18px) clamp(18px, 5vw, 96px) 28px;"), true);
   assert.equal(body.includes("scrollbar-gutter: stable both-edges;"), true);
   assert.equal(body.includes("calc((100% - 760px) / 2)"), false);
   assert.equal(body.includes(".message-entry { display: grid; gap: 5px; width: 100%; max-width: 100%; align-self: stretch; }"), true);
@@ -1692,7 +1732,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("会話履歴を読み込み中です"), false);
   assert.equal(body.includes("モバイル管理メニュー"), true);
   assert.equal(body.includes("直近 deploy event"), true);
-  assert.equal(body.includes("Butler V2 にメッセージ"), true);
+  assert.equal(body.includes("Butler にメッセージ"), true);
   assert.equal(body.includes("GitHub状況"), true);
   assert.equal(body.includes(">通知</a>"), true);
   assert.equal(body.includes(">Passkey</a>"), false);
@@ -1734,7 +1774,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.match(alias.headers.get("cache-control"), /no-store/);
   const aliasBody = await alias.text();
   assert.equal(aliasBody.includes("VTDD Butler"), true);
-  assert.equal(aliasBody.includes("dashboard main chat"), true);
+  assert.equal(aliasBody.includes("main chat"), true);
   assert.equal(aliasBody.includes("管理メニュー"), true);
   assert.equal(aliasBody.includes("WebSocket"), true);
 });
@@ -6338,8 +6378,9 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
     body.includes(
       '/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%3Frepository%3Dsample-org%252Fvtdd-v2-p'
     ),
-    false
+    true
   );
+  assert.equal(body.includes('id="butler-passkey-modal"'), true);
   const initialChat = body.slice(
     body.indexOf('<div class="chat-scroll"'),
     body.indexOf('<form class="composer"')
@@ -6594,8 +6635,8 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   assert.equal(serviceWorker.includes('self.addEventListener("notificationclick"'), true);
   assert.equal(serviceWorker.includes("/dashboard/notifications"), true);
   assert.equal(serviceWorker.includes("safeDashboardNotificationUrl"), true);
-  assert.equal(serviceWorker.includes('parsed.origin === "https://github.com"'), true);
-  assert.equal(serviceWorker.includes('pull\\/\\d+'), true);
+  assert.equal(serviceWorker.includes('parsed.origin === "https://github.com"'), false);
+  assert.equal(serviceWorker.includes('pull\\/\\d+'), false);
   assert.equal(serviceWorker.includes("parsed.origin !== self.location.origin"), true);
   assert.equal(serviceWorker.includes('!parsed.pathname.startsWith("/dashboard/")'), true);
   assert.equal(serviceWorker.includes("DASHBOARD_SERVICE_WORKER_VERSION"), true);
@@ -6794,7 +6835,7 @@ test("worker sends server-side dashboard Web Push test only for authenticated ow
   const decrypted = JSON.parse(await decryptTestWebPushPayload(calls[0].init.body, pushKeys));
   assert.equal(decrypted.title, "VTDD Butler テスト通知");
   assert.equal(decrypted.body, "通知経路は正常です。iPhone PWA にサーバ送信できました。");
-  assert.equal(decrypted.url, "/dashboard/notifications");
+  assert.equal(decrypted.url.startsWith("/dashboard/notifications?eventId=dashboard-push-test%3A"), true);
   assert.equal(JSON.stringify(body).includes("p256dh-key"), false);
   assert.equal(JSON.stringify(body).includes("auth-key"), false);
 });
@@ -6886,7 +6927,7 @@ test("worker sends owner-action-required PWA notification through machine event 
   const decrypted = JSON.parse(await decryptTestWebPushPayload(calls[0].init.body, pushKeys));
   assert.equal(decrypted.title, "要対応: VPS capability proposal requires owner approval");
   assert.equal(decrypted.body.includes("Issue #637"), true);
-  assert.equal(decrypted.url, "/dashboard/notifications?focus=owner-action");
+  assert.equal(decrypted.url, "/dashboard/notifications?focus=owner-action&eventId=owner-action-required%3Amarushu%2Fvtdd-v2-p%3Aissue-637-passkey-needed");
   const stored = await eventStore.latest({ kind: "owner_action_required", repository: "marushu/vtdd-v2-p" });
   assert.equal(stored.id, "owner-action-required:marushu/vtdd-v2-p:issue-637-passkey-needed");
   assert.equal(stored.pwaNotificationStatus, "sent");
@@ -7023,7 +7064,7 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
   assert.equal(deploySuccess.body.includes("run: 26323724369"), true);
   assert.equal(deploySuccess.body.includes("PR #571"), true);
   assert.equal(deploySuccess.body.includes("Issue #514"), true);
-  assert.equal(deploySuccess.url, "https://github.com/marushu/vtdd-v2-p/pull/571");
+  assert.equal(deploySuccess.url, "/dashboard/notifications?focus=github-actions");
 
   const deployFailure = buildDashboardWebPushPayload({
     kind: "github_actions_workflow_run",
@@ -7036,7 +7077,7 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
     title: "deploy-production"
   });
   assert.equal(deployFailure.title, "デプロイ失敗: vtdd-v2-p");
-  assert.equal(deployFailure.url, "/dashboard/notifications");
+  assert.equal(deployFailure.url, "/dashboard/notifications?focus=github-actions");
 
   const testPush = buildDashboardWebPushPayload({
     kind: "dashboard_push_test",
@@ -7065,7 +7106,7 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
   });
   assert.equal(ownerAction.title, "要対応: VPS capability proposal requires owner approval");
   assert.equal(ownerAction.body.includes("Issue #637"), true);
-  assert.equal(ownerAction.url, "/dashboard/notifications?focus=owner-action");
+  assert.equal(ownerAction.url, "/dashboard/notifications?focus=owner-action&eventId=owner-action-required%3Amarushu%2Fvtdd-v2-p%3Aissue-637-passkey-needed");
   assert.equal(ownerAction.sourceEventId, "owner-action-required:marushu/vtdd-v2-p:issue-637-passkey-needed");
 
   const aiNews = buildDashboardWebPushPayload({
@@ -7080,7 +7121,7 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
   });
   assert.equal(aiNews.title, "AI news 朝刊: Skills を VTDD のドリフト防止に使う");
   assert.equal(aiNews.body.includes("詳細は AI news"), true);
-  assert.equal(aiNews.url, "/dashboard/news");
+  assert.equal(aiNews.url, "/dashboard/notifications?focus=ai-news&eventId=ai-news%3Amorning%3A2026-05-28");
   assert.equal(aiNews.sourceEventId, "ai-news:morning:2026-05-28");
 
   const runner = buildDashboardWebPushPayload({
@@ -7363,7 +7404,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(decryptedPush.body.includes("dashboard: 通知カードにPR概要を出す"), true);
   assert.equal(decryptedPush.body.includes("PR #552"), true);
   assert.equal(decryptedPush.body.includes("workflow: deploy-production"), true);
-  assert.equal(decryptedPush.url, "https://github.com/marushu/vtdd-v2-p/pull/552");
+  assert.equal(decryptedPush.url, "/dashboard/notifications?focus=github-actions&eventId=github-actions%3Amarushu%2Fvtdd-v2-p%3Adeploy-production%3A26133044458");
   assert.equal(decryptedPush.sourceEventId, "github-actions:marushu/vtdd-v2-p:deploy-production:26133044458");
   assert.equal(decryptedPush.kind, "github_actions_workflow_run");
   assert.equal(decryptedPush.repository, "marushu/vtdd-v2-p");

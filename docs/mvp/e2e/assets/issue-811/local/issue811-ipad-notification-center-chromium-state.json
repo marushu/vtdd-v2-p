@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "viewport": "ipad-landscape",
+  "layout": {
+    "appWidth": 0,
+    "chatWidth": 887.265625,
+    "viewportWidth": 1194
+  },
+  "verified": [
+    "desktop side nav",
+    "wide iPad content",
+    "notification center direct URL"
+  ],
+  "state": {
+    "url": "http://127.0.0.1:8815/dashboard/notifications?focus=github-actions&eventId=issue811-test",
+    "title": "通知センター - VTDD Butler",
+    "topbar": "",
+    "drawerChecked": false,
+    "drawerVisible": false,
+    "passkeyModalHidden": false,
+    "followupDraftHidden": false,
+    "followupQueueText": "",
+    "status": "",
+    "bodyText": "DASHBOARD\nDashboard\n通知センター\nAI news\nGitHub truth\nStartup preflight\nExecution progress\nVPS runner\nOperational RAG\nSelf parity\n通知センター\n\ndashboard events\n\nDashboard\n最新通知\n直近30件\n\n通知はありません。\n\n通知センターについて\n通知設定\n通知の詳細設定と安全境界"
+  }
+}
