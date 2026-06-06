@@ -289,6 +289,51 @@ async function installFakeSpeechRecognition(page) {
   });
 }
 
+async function installFakeVoiceOutput(page) {
+  await page.addInitScript(() => {
+    window.__vtddSpeechSynthesisSpoken = [];
+    window.__vtddSpeechSynthesisCancelled = 0;
+    window.SpeechSynthesisUtterance = class SpeechSynthesisUtterance {
+      constructor(text) {
+        this.text = text;
+        this.lang = "";
+      }
+    };
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      value: {
+      speak(utterance) {
+        window.__vtddSpeechSynthesisSpoken.push({
+          text: utterance?.text || "",
+          lang: utterance?.lang || ""
+        });
+      },
+      cancel() {
+        window.__vtddSpeechSynthesisCancelled += 1;
+      }
+      }
+    });
+    window.__vtddWakeLockRequests = [];
+    window.__vtddWakeLockReleased = 0;
+    Object.defineProperty(navigator, "wakeLock", {
+      configurable: true,
+      value: {
+      async request(type) {
+        window.__vtddWakeLockRequests.push(type);
+        return {
+          released: false,
+          addEventListener() {},
+          async release() {
+            this.released = true;
+            window.__vtddWakeLockReleased += 1;
+          }
+        };
+      }
+      }
+    });
+  });
+}
+
 async function captureEvidence(page, name, details = {}) {
   const screenshotPath = path.join(evidenceDir, `${name}.png`);
   const statePath = path.join(evidenceDir, `${name}-state.json`);
@@ -313,6 +358,7 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
   await installFakeDashboardSocket(page);
   await installMobilePointerMedia(page);
   await installFakeSpeechRecognition(page);
+  await installFakeVoiceOutput(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(dashboardUrl);
 
@@ -341,8 +387,41 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
       }
     });
   })).toBe(true);
+  await expect.poll(async () => page.evaluate(() => window.__vtddWakeLockRequests || [])).toContain("screen");
+  await page.evaluate(() => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "transient_status",
+      ok: true,
+      status: "thinking",
+      text: "読み上げてはいけない進行中 status です。"
+    });
+  });
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken?.length || 0)).toBe(0);
+  await page.evaluate(() => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "thread",
+      ok: true,
+      messages: [
+        {
+          messageId: "issue-814-voice-final-reply",
+          role: "butler",
+          status: "replied",
+          text: "音声モード中だけ、この Butler の最終返信を読み上げます。",
+          createdAt: "2026-06-06T09:10:00.000Z"
+        }
+      ]
+    });
+  });
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken || [])).toEqual([
+    {
+      text: "音声モード中だけ、この Butler の最終返信を読み上げます。",
+      lang: "ja-JP"
+    }
+  ]);
   await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("ボイスモード終了"));
   await expect(page.locator("#butler-voice-button")).toHaveAttribute("data-listening", "false");
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisCancelled || 0)).toBeGreaterThan(0);
+  await expect.poll(async () => page.evaluate(() => window.__vtddWakeLockReleased || 0)).toBeGreaterThan(0);
   await page.evaluate(() => {
     window.__vtddFakeSockets?.[0]?.emit({
       type: "owner_message_accepted",
@@ -394,7 +473,7 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
 
   const evidence = await captureEvidence(page, `issue811-mobile-main-chat-${browserName}`, {
     viewport: "iphone",
-    verified: ["floating header", "mobile Enter separation", "voice transcript", "follow-up queue", "drawer overlay", "stream continues behind drawer", "passkey modal"]
+    verified: ["floating header", "mobile Enter separation", "voice transcript", "voice final reply readback", "voice wake lock", "follow-up queue", "drawer overlay", "stream continues behind drawer", "passkey modal"]
   });
   console.log(JSON.stringify({ ok: true, browserName, evidence }));
 });

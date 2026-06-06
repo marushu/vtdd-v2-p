@@ -35,7 +35,7 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   Issue #620, Issue #634, Issue #637, Issue #651, Issue #654, Issue #657,
   Issue #667, Issue #670, Issue #689, Issue #698, Issue #703, Issue #716,
   Issue #717, Issue #722, Issue #723, Issue #741, Issue #744, Issue #745,
-  Issue #748, Issue #793.
+  Issue #748, Issue #793, Issue #811, Issue #814.
 - Recently closed as completed with evidence and owner approval: Issue #573,
   Issue #565, Issue #577, Issue #580, Issue #601, Issue #609.
 - Open PRs read before this queue refresh PR was opened: none.
@@ -158,15 +158,21 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   完成しない状態が根本 blocker になっている。Issue #811 moves to `Now`.
   実装 PR は原則 1 本にし、iPhone / iPad の owner-facing main chat
   experience が通るまで未完成として扱う。
+- 2026-06-06 owner input classified Issue #814 as `ROOT` support for Issue
+  #811: voice mode を小スライスに分けると transcript、VPS handoff、final
+  Butler reply、読み上げ、sleep 抑止が分断され、Dashboard Butler が
+  voice-ready main chat として完成しない。Issue #814 moves to `Now` as the
+  bounded voice readback workflow PR. Issue #811 remains the parent root and is
+  not downscoped or completed by this slice alone.
 
 ## Now
 
-- Issue #811: Dashboard Butler V3 メインチャット体験を一体で作り直す。
-  Issue #590 / Issue #528 / Issue #613 を小 PR の集合ではなく
-  owner-facing main chat experience として統合する。実装 PR は原則 1 本で、
-  follow-up PR へ逃がさず、iPhone / iPad / light / dark / notification
-  center direct open / passkey modal / break-glass recovery / interruption
-  queue の E2E evidence が揃うまで未完成として扱う。
+- Issue #814: Dashboard Butler voice mode で VPS 返信を読み上げる。
+  Issue #811 の parent root のうち、voice mode を発話 transcript だけで
+  終わらせず、VPS Codex CLI / codex app-server 返信イベント、Web Speech
+  API 読み上げ、voice mode 中 Wake Lock、終了時 cleanup まで一体の
+  owner-facing workflow として 1 PR で実装する。Issue #811 は parent root
+  として active のまま残り、この PR だけで #811 completion とは扱わない。
 
 ## Next
 

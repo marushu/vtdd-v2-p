@@ -72835,6 +72835,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let voiceStartWatchdog = null;
       let voiceSubmitTimer = null;
       let voiceRestartTimer = null;
+      let voiceWakeLock = null;
+      let voiceWakeLockRetryTimer = null;
+      let voiceWakeLockNoticeShown = false;
+      const spokenButlerReplyKeys = new Set();
       const voiceExitPhrases = ["\u30DC\u30A4\u30B9\u30E2\u30FC\u30C9\u7D42\u4E86"];
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
@@ -73174,6 +73178,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           window.clearTimeout(voiceRestartTimer);
           voiceRestartTimer = null;
         }
+        if (voiceWakeLockRetryTimer) {
+          window.clearTimeout(voiceWakeLockRetryTimer);
+          voiceWakeLockRetryTimer = null;
+        }
       }
 
       function normalizeVoiceCommandText(text) {
@@ -73218,9 +73226,105 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }, 1000);
       }
 
+      function cancelVoiceSpeech() {
+        try {
+          if (window.speechSynthesis && typeof window.speechSynthesis.cancel === "function") {
+            window.speechSynthesis.cancel();
+          }
+        } catch {}
+      }
+
+      function voiceReplyKey(message) {
+        return getRenderedMessageId(message) || [
+          message?.createdAt || message?.created_at || "",
+          message?.status || "",
+          message?.text || ""
+        ].join("\\u001f");
+      }
+
+      function speakFinalButlerReply(message) {
+        if (!voiceModeActive || !message || message.role !== "butler" || message.status !== "replied") return false;
+        const text = normalizeMessageDisplayText(message.text || "").trim();
+        if (!text) return false;
+        const key = voiceReplyKey(message);
+        if (key && spokenButlerReplyKeys.has(key)) return false;
+        if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") {
+          setStatus("\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u3067\u306F\u8FD4\u4FE1\u306E\u8AAD\u307F\u4E0A\u3052\u306B\u672A\u5BFE\u5FDC\u3067\u3059\u3002\u6587\u5B57\u306E\u8FD4\u4FE1\u306F\u8868\u793A\u6E08\u307F\u3067\u3059\u3002", { temporary: true });
+          return false;
+        }
+        if (key) spokenButlerReplyKeys.add(key);
+        cancelVoiceSpeech();
+        try {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = "ja-JP";
+          window.speechSynthesis.speak(utterance);
+          setStatus("Butler \u306E\u8FD4\u4FE1\u3092\u8AAD\u307F\u4E0A\u3052\u3066\u3044\u307E\u3059\u3002", { temporary: true });
+          return true;
+        } catch {
+          setStatus("\u8FD4\u4FE1\u306E\u8AAD\u307F\u4E0A\u3052\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u6587\u5B57\u306E\u8FD4\u4FE1\u306F\u8868\u793A\u6E08\u307F\u3067\u3059\u3002", { temporary: true });
+          return false;
+        }
+      }
+
+      function releaseVoiceWakeLock() {
+        if (voiceWakeLockRetryTimer) {
+          window.clearTimeout(voiceWakeLockRetryTimer);
+          voiceWakeLockRetryTimer = null;
+        }
+        const lock = voiceWakeLock;
+        voiceWakeLock = null;
+        if (lock && typeof lock.release === "function") {
+          try {
+            lock.release();
+          } catch {}
+        }
+      }
+
+      function scheduleVoiceWakeLockRetry() {
+        if (!voiceModeActive || voiceWakeLockRetryTimer) return;
+        voiceWakeLockRetryTimer = window.setTimeout(() => {
+          voiceWakeLockRetryTimer = null;
+          acquireVoiceWakeLock({ retry: true });
+        }, 1200);
+      }
+
+      async function acquireVoiceWakeLock(options = {}) {
+        if (!voiceModeActive || voiceWakeLock) return false;
+        if (!navigator.wakeLock || typeof navigator.wakeLock.request !== "function") {
+          if (!voiceWakeLockNoticeShown) {
+            voiceWakeLockNoticeShown = true;
+            setStatus("\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u3067\u306F sleep \u6291\u6B62\u306B\u672A\u5BFE\u5FDC\u3067\u3059\u3002\u97F3\u58F0\u4F1A\u8A71\u306F\u7D99\u7D9A\u3067\u304D\u307E\u3059\u3002", { temporary: true });
+          }
+          return false;
+        }
+        try {
+          voiceWakeLock = await navigator.wakeLock.request("screen");
+          voiceWakeLockNoticeShown = false;
+          voiceWakeLock.addEventListener?.("release", () => {
+            voiceWakeLock = null;
+            if (voiceModeActive) {
+              setStatus("\u753B\u9762\u306E sleep \u6291\u6B62\u304C\u89E3\u9664\u3055\u308C\u307E\u3057\u305F\u3002\u97F3\u58F0\u30E2\u30FC\u30C9\u4E2D\u306E\u305F\u3081\u518D\u53D6\u5F97\u3057\u307E\u3059\u3002", { temporary: true });
+              scheduleVoiceWakeLockRetry();
+            }
+          }, { once: true });
+          if (!options.retry) {
+            setStatus("\u97F3\u58F0\u30E2\u30FC\u30C9\u4E2D\u306F\u753B\u9762\u306E sleep \u6291\u6B62\u3092\u8A66\u307F\u307E\u3059\u3002", { temporary: true });
+          }
+          return true;
+        } catch {
+          if (!voiceWakeLockNoticeShown) {
+            voiceWakeLockNoticeShown = true;
+            setStatus("\u753B\u9762\u306E sleep \u6291\u6B62\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u97F3\u58F0\u4F1A\u8A71\u306F\u7D99\u7D9A\u3067\u304D\u307E\u3059\u3002", { temporary: true });
+          }
+          return false;
+        }
+      }
+
       function stopVoiceMode(message = "\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u7D42\u4E86\u3057\u307E\u3057\u305F\u3002") {
         voiceModeActive = false;
         clearVoiceTimers();
+        cancelVoiceSpeech();
+        releaseVoiceWakeLock();
         if (voiceRecognizer) {
           try {
             voiceRecognizer.stop();
@@ -73287,6 +73391,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         try {
           if (!options.restarting) {
             setStatus("\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u958B\u59CB\u3057\u3066\u3044\u307E\u3059\u3002\u30DE\u30A4\u30AF\u8A31\u53EF\u304C\u51FA\u305F\u3089\u8A31\u53EF\u3057\u3066\u304F\u3060\u3055\u3044\u3002", { temporary: true });
+            acquireVoiceWakeLock();
           }
           voiceStartWatchdog = window.setTimeout(() => {
             if (!voiceListening) {
@@ -73307,6 +73412,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         voiceModeActive = true;
+        acquireVoiceWakeLock();
         startVoiceMode();
       }
 
@@ -74949,6 +75055,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
                 clearTransientProgress();
                 setActiveTurnInProgress(false);
                 setStatus("\u8FD4\u4FE1\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+                speakFinalButlerReply(lastMessage);
               } else if (lastMessage?.status === "failed" || lastMessage?.status === "stalled") {
                 clearTransientProgress();
                 setActiveTurnInProgress(false);
