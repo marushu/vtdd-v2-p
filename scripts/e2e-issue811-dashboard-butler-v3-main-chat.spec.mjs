@@ -121,6 +121,7 @@ function readRequestBody(request) {
 
 const chatStore = createInMemoryDashboardChatStore();
 const dashboardEventStore = createInMemoryDashboardEventStore();
+let mediaUploadCount = 0;
 const env = {
   VTDD_DASHBOARD_ALLOWED_EMAILS: "owner@example.com",
   CF_ACCESS_JWT_VERIFIER: async (token) => ({
@@ -161,6 +162,23 @@ test.beforeAll(async () => {
   });
   server = http.createServer(async (request, response) => {
     try {
+      const requestUrl = new URL(request.url || "/", origin);
+      if (request.method === "POST" && requestUrl.pathname === "/v2/media/upload") {
+        await readRequestBody(request);
+        mediaUploadCount += 1;
+        const media = {
+          mediaId: `med_issue816_followup_${mediaUploadCount}`,
+          filename: "issue816-followup.png",
+          contentType: "image/png",
+          byteLength: 68,
+          downloadUrl: `/v2/media/med_issue816_followup_${mediaUploadCount}/download`,
+          metadataUrl: `/v2/media/med_issue816_followup_${mediaUploadCount}`,
+          retentionLabel: "7日後に削除"
+        };
+        response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ ok: true, media }));
+        return;
+      }
       const body = request.method === "GET" || request.method === "HEAD" ? undefined : await readRequestBody(request);
       const headers = new Headers(request.headers);
       headers.set("cf-access-authenticated-user-email", "owner@example.com");
@@ -443,9 +461,39 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
   await expect(page.locator("#butler-send-button")).toHaveAttribute("data-mode", "stop");
   await page.locator("#butler-message").fill("これは現在の実行に差し込む補足。");
   await expect(page.locator("#butler-followup-draft")).toBeVisible();
+  await page.setInputFiles("#butler-media-input", {
+    name: "issue816-followup.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+      "base64"
+    )
+  });
+  await expect(page.locator("#butler-pending-media .media-chip")).toHaveCount(1);
   await page.locator("#butler-followup-queue").click();
   await expect(page.locator("#butler-followup-queue-list")).toContainText("差し込み済み");
   await expect(page.locator("#butler-followup-queue-list")).toContainText("これは現在の実行に差し込む補足。");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("添付 1件");
+  await expect.poll(async () => page.evaluate(() => {
+    const sent = window.__vtddFakeSockets?.[0]?.sent || [];
+    return sent
+      .map((entry) => {
+        try {
+          return JSON.parse(entry);
+        } catch {
+          return null;
+        }
+      })
+      .some((entry) =>
+        entry &&
+        entry.type === "owner_message" &&
+        entry.interruption === true &&
+        entry.text === "これは現在の実行に差し込む補足。" &&
+        Array.isArray(entry.mediaReferences) &&
+        entry.mediaReferences.length === 1 &&
+        entry.mediaReferences[0].mediaId === "med_issue816_followup_1"
+      );
+  })).toBe(true);
 
   await page.locator(".menu-open").first().click();
   await expect(page.locator(".mobile-drawer")).toBeVisible();

@@ -73108,6 +73108,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         followupQueueList.replaceChildren();
         followupQueueList.hidden = followupQueue.length === 0;
         for (const item of followupQueue) {
+          const mediaReferences = Array.isArray(item.mediaReferences) ? item.mediaReferences : [];
           const chip = document.createElement("div");
           chip.className = "followup-chip";
           const label = document.createElement("small");
@@ -73116,6 +73117,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           text.textContent = item.text;
           chip.appendChild(label);
           chip.appendChild(text);
+          if (mediaReferences.length > 0) {
+            const media = document.createElement("small");
+            media.textContent = "\u6DFB\u4ED8 " + mediaReferences.length + "\u4EF6";
+            chip.appendChild(media);
+          }
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
@@ -73125,14 +73131,41 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const normalized = String(text || "").trim();
         if (!normalized) return null;
         const item = {
-          id: createClientMessageId(),
+          id: options.id || createClientMessageId(),
           text: normalized,
+          mediaReferences: Array.isArray(options.mediaReferences) ? options.mediaReferences : [],
           status: options.status || "queued",
           createdAt: new Date().toISOString()
         };
         followupQueue.push(item);
         renderFollowupQueue();
         return item;
+      }
+
+      async function addFollowupQueueItemFromComposer(text, options = {}) {
+        const normalized = String(text || "").trim();
+        if (!normalized) return null;
+        const clientMessageId = createClientMessageId();
+        let mediaReferences = [];
+        if (pendingMediaItems.length > 0) {
+          setStatus("\u5DEE\u3057\u8FBC\u307F\u306E\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u3066\u3044\u307E\u3059\u3002", { thinking: true });
+          try {
+            mediaReferences = await uploadPendingMedia(clientMessageId);
+          } catch (error) {
+            setStatus((error && error.message) || "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u6DFB\u4ED8\u306A\u3057\u3067\u306F\u5DEE\u3057\u8FBC\u307F\u3092\u9001\u4FE1\u3057\u307E\u305B\u3093\u3002");
+            textarea.focus({ preventScroll: true });
+            return null;
+          }
+          if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
+          revokePendingMediaPreviews();
+          pendingMediaItems = [];
+          renderPendingMedia();
+        }
+        return addFollowupQueueItem(normalized, {
+          ...options,
+          id: clientMessageId,
+          mediaReferences
+        });
       }
 
       function showFollowupDraft(text) {
@@ -73429,7 +73462,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               text: item.text,
               issueNumber,
               relatedIssue: issueNumber,
-              mediaReferences: [],
+              mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
               interruption: true
             }));
             item.status = "sent";
@@ -75150,7 +75183,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             textarea.focus({ preventScroll: true });
             return;
           }
-          const item = addFollowupQueueItem(text, { status: "queued" });
+          const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+          if (!item) {
+            return;
+          }
           textarea.value = "";
           resizeComposerInput();
           persistDashboardDraft();
@@ -75278,13 +75314,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         persistDashboardDraft();
         textarea.focus({ preventScroll: true });
       });
-      followupQueueButton?.addEventListener("click", () => {
-        const text = textarea.value.trim() || followupDraftText?.textContent || "";
+      followupQueueButton?.addEventListener("click", async () => {
+        const text = textarea.value.trim() || followupDraftText?.textContent || (pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
         if (!text) {
           clearFollowupDraft();
           return;
         }
-        addFollowupQueueItem(text, { status: "queued" });
+        const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+        if (!item) {
+          return;
+        }
         textarea.value = "";
         resizeComposerInput();
         clearFollowupDraft();

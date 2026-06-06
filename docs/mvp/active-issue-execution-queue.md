@@ -35,7 +35,7 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   Issue #620, Issue #634, Issue #637, Issue #651, Issue #654, Issue #657,
   Issue #667, Issue #670, Issue #689, Issue #698, Issue #703, Issue #716,
   Issue #717, Issue #722, Issue #723, Issue #741, Issue #744, Issue #745,
-  Issue #748, Issue #793, Issue #811, Issue #814.
+  Issue #748, Issue #793, Issue #811, Issue #814, Issue #816.
 - Recently closed as completed with evidence and owner approval: Issue #573,
   Issue #565, Issue #577, Issue #580, Issue #601, Issue #609.
 - Open PRs read before this queue refresh PR was opened: none.
@@ -164,18 +164,30 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   voice-ready main chat として完成しない。Issue #814 moves to `Now` as the
   bounded voice readback workflow PR. Issue #811 remains the parent root and is
   not downscoped or completed by this slice alone.
+- 2026-06-06 owner input classified Issue #816 as `NEXT`: Issue #814 の
+  voice mode を進める前に、実行中差し込み queue が画像・動画添付を落とす
+  既知欠陥を直す必要がある。添付なしの差し込みが VPS Codex CLI /
+  codex app-server bridge に届くと、ボイス会話中の画像補足が成立しない。
+  Issue #816 moves to `Now`; Issue #814 pauses as the next automatic lane and
+  resumes after #816 evidence is merged. Issue #811 remains the parent root and
+  is not downscoped or completed by this slice alone.
 
 ## Now
 
-- Issue #814: Dashboard Butler voice mode で VPS 返信を読み上げる。
-  Issue #811 の parent root のうち、voice mode を発話 transcript だけで
-  終わらせず、VPS Codex CLI / codex app-server 返信イベント、Web Speech
-  API 読み上げ、voice mode 中 Wake Lock、終了時 cleanup まで一体の
-  owner-facing workflow として 1 PR で実装する。Issue #811 は parent root
-  として active のまま残り、この PR だけで #811 completion とは扱わない。
+- Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする。
+  Issue #814 の voice mode 実装前に、実行中差し込み queue が
+  `mediaReferences: []` 固定送信で添付を失う欠陥を直す。差し込み queue
+  item は upload 済み media reference を保持し、送信時に Dashboard thread
+  と codex app-server bridge turn input へ渡す。Issue #811 は parent root
+  として active のまま残り、この PR だけで #811 / #814 completion とは
+  扱わない。
 
 ## Next
 
+- Issue #814: Dashboard Butler voice mode で VPS 返信を読み上げる。
+  Issue #816 が merged / verified された後に、発話 transcript、VPS
+  handoff、返信読み上げ、Wake Lock、終了時 cleanup の owner-facing workflow
+  を再開する。
 - Issue #637: iPhone/PWA-complete VPS privileged maintenance capability
   lifecycle resumes after Issue #590 no longer blocks ordinary Dashboard Butler
   conversation continuity.

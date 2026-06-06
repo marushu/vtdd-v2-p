@@ -17013,6 +17013,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         followupQueueList.replaceChildren();
         followupQueueList.hidden = followupQueue.length === 0;
         for (const item of followupQueue) {
+          const mediaReferences = Array.isArray(item.mediaReferences) ? item.mediaReferences : [];
           const chip = document.createElement("div");
           chip.className = "followup-chip";
           const label = document.createElement("small");
@@ -17021,6 +17022,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           text.textContent = item.text;
           chip.appendChild(label);
           chip.appendChild(text);
+          if (mediaReferences.length > 0) {
+            const media = document.createElement("small");
+            media.textContent = "添付 " + mediaReferences.length + "件";
+            chip.appendChild(media);
+          }
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
@@ -17030,14 +17036,41 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const normalized = String(text || "").trim();
         if (!normalized) return null;
         const item = {
-          id: createClientMessageId(),
+          id: options.id || createClientMessageId(),
           text: normalized,
+          mediaReferences: Array.isArray(options.mediaReferences) ? options.mediaReferences : [],
           status: options.status || "queued",
           createdAt: new Date().toISOString()
         };
         followupQueue.push(item);
         renderFollowupQueue();
         return item;
+      }
+
+      async function addFollowupQueueItemFromComposer(text, options = {}) {
+        const normalized = String(text || "").trim();
+        if (!normalized) return null;
+        const clientMessageId = createClientMessageId();
+        let mediaReferences = [];
+        if (pendingMediaItems.length > 0) {
+          setStatus("差し込みの添付を保存してからキューに追加しています。", { thinking: true });
+          try {
+            mediaReferences = await uploadPendingMedia(clientMessageId);
+          } catch (error) {
+            setStatus((error && error.message) || "添付を保存できませんでした。添付なしでは差し込みを送信しません。");
+            textarea.focus({ preventScroll: true });
+            return null;
+          }
+          if (mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
+          revokePendingMediaPreviews();
+          pendingMediaItems = [];
+          renderPendingMedia();
+        }
+        return addFollowupQueueItem(normalized, {
+          ...options,
+          id: clientMessageId,
+          mediaReferences
+        });
       }
 
       function showFollowupDraft(text) {
@@ -17334,7 +17367,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               text: item.text,
               issueNumber,
               relatedIssue: issueNumber,
-              mediaReferences: [],
+              mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
               interruption: true
             }));
             item.status = "sent";
@@ -19055,7 +19088,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             textarea.focus({ preventScroll: true });
             return;
           }
-          const item = addFollowupQueueItem(text, { status: "queued" });
+          const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+          if (!item) {
+            return;
+          }
           textarea.value = "";
           resizeComposerInput();
           persistDashboardDraft();
@@ -19183,13 +19219,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         persistDashboardDraft();
         textarea.focus({ preventScroll: true });
       });
-      followupQueueButton?.addEventListener("click", () => {
-        const text = textarea.value.trim() || followupDraftText?.textContent || "";
+      followupQueueButton?.addEventListener("click", async () => {
+        const text = textarea.value.trim() || followupDraftText?.textContent || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
         if (!text) {
           clearFollowupDraft();
           return;
         }
-        addFollowupQueueItem(text, { status: "queued" });
+        const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+        if (!item) {
+          return;
+        }
         textarea.value = "";
         resizeComposerInput();
         clearFollowupDraft();

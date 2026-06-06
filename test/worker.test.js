@@ -1344,7 +1344,11 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function releaseVoiceWakeLock()"), true);
   assert.equal(body.includes('id="butler-followup-draft"'), true);
   assert.equal(body.includes("function addFollowupQueueItem(text, options = {})"), true);
+  assert.equal(body.includes("async function addFollowupQueueItemFromComposer(text, options = {})"), true);
   assert.equal(body.includes("function flushQueuedFollowups()"), true);
+  assert.equal(body.includes("mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : []"), true);
+  assert.equal(body.includes('media.textContent = "添付 " + mediaReferences.length + "件"'), true);
+  assert.equal(body.includes("添付なしでは差し込みを送信しません"), true);
   assert.equal(body.includes("function requestStopActiveTurn()"), true);
   assert.equal(body.includes('id="butler-passkey-modal"'), true);
   assert.equal(body.includes("function openPasskeyModal(href)"), true);
