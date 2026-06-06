@@ -16373,17 +16373,28 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
     .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 8; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--page-bg) 72%, transparent); overflow: visible; overscroll-behavior-x: none; touch-action: pan-y; }
-    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
+    .composer-box { width: 100%; max-width: 100%; display: flex; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
     textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; touch-action: pan-y; }
     textarea::placeholder { color: var(--muted); }
-    .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .voice-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--text); font: inherit; font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .media-button { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .voice-button { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 999px; border: 1px solid transparent; background: var(--text); color: var(--page-bg); font: inherit; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .voice-button[data-listening="true"] { background: var(--button); border-color: var(--border); color: var(--link); }
-    .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
+    .voice-bars { display: inline-flex; align-items: center; justify-content: center; gap: 2px; width: 20px; height: 20px; }
+    .voice-bars span { display: block; width: 3px; border-radius: 999px; background: currentColor; }
+    .voice-bars span:nth-child(1), .voice-bars span:nth-child(5) { height: 9px; }
+    .voice-bars span:nth-child(2), .voice-bars span:nth-child(4) { height: 15px; }
+    .voice-bars span:nth-child(3) { height: 20px; }
+    .voice-button[data-listening="true"] .voice-bars span { animation: voicePulse .9s ease-in-out infinite; }
+    .voice-button[data-listening="true"] .voice-bars span:nth-child(2), .voice-button[data-listening="true"] .voice-bars span:nth-child(4) { animation-delay: .08s; }
+    .voice-button[data-listening="true"] .voice-bars span:nth-child(3) { animation-delay: .16s; }
+    @keyframes voicePulse { 0%, 100% { transform: scaleY(.65); } 50% { transform: scaleY(1.08); } }
+    .send-button { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
     .send-button[data-mode="stop"] { font-size: 18px; }
     .send-button[data-mode="stop"]::before { content: "■"; }
     .send-button[data-mode="stop"] { color: var(--page-bg); }
     .send-button[data-mode="stop"] span { display: none; }
+    .composer-box[data-can-send="false"] .send-button[data-mode="send"] { display: none; }
+    .composer-box[data-running="true"] .voice-button, .composer-box[data-can-send="true"] .voice-button { display: none; }
     .followup-queue { display: grid; gap: 8px; padding: 0 10px; }
     .followup-queue[hidden], .followup-draft[hidden] { display: none; }
     .followup-chip, .followup-draft { width: fit-content; max-width: min(720px, 100%); justify-self: end; border: 1px solid var(--border); border-radius: 18px; background: var(--floating-bg); box-shadow: 0 10px 34px var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text); }
@@ -16483,10 +16494,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @media (max-width: 460px) {
       main { padding: 12px 10px 0; }
       .app-shell { height: calc(100dvh - 12px); }
-      .composer-box { grid-template-columns: 40px minmax(0, 1fr) 40px; border-radius: 24px; }
+      .composer-box { border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
       .tool-button { min-height: 38px; padding: 0 10px; font-size: 13px; }
-      .media-button, .send-button { width: 40px; height: 40px; }
+      .media-button, .voice-button, .send-button { width: 40px; height: 40px; flex-basis: 40px; }
     }
     @media (min-width: 761px) {
       .drawer-resize-handle { display: block; position: absolute; top: 0; right: -6px; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; }
@@ -16626,7 +16637,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <button class="media-button" id="butler-media-button" type="button" aria-label="画像・動画・ファイルを追加" title="画像・動画・ファイルを追加">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler にメッセージ..." aria-label="Butler にメッセージ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
-          <button class="voice-button" id="butler-voice-button" type="button" aria-label="音声入力" title="音声入力">◉</button>
+          <button class="voice-button" id="butler-voice-button" type="button" aria-label="音声入力" title="音声入力"><span class="voice-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span></button>
           <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler に送信"><span>↑</span></button>
         </div>
         <div class="followup-draft" id="butler-followup-draft" hidden>
@@ -16666,6 +16677,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const form = document.getElementById("butler-chat-form");
       const log = document.getElementById("butler-chat-log");
       const textarea = document.getElementById("butler-message");
+      const composerBox = form?.querySelector(".composer-box");
       const status = document.getElementById("butler-chat-status");
       const sendButton = document.getElementById("butler-send-button");
       const progressPane = document.getElementById("butler-transient-progress");
@@ -16724,6 +16736,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let followupQueue = [];
       let voiceRecognizer = null;
       let voiceListening = false;
+      let voiceModeActive = false;
+      let voiceStartWatchdog = null;
+      let voiceSubmitTimer = null;
+      let voiceRestartTimer = null;
+      const voiceExitPhrases = ["ボイスモード終了"];
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
       let authReturnResumePromise = null;
@@ -16874,6 +16891,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (draft && !textarea.value) {
             textarea.value = draft;
             normalizeComposerInput();
+            syncComposerActionState();
             setStatus(
               Number(meta.pendingMediaCount || 0) > 0
                 ? "前回の入力を復元しました。添付は再選択してください。"
@@ -16966,11 +16984,19 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           sendButton.replaceChildren(document.createElement("span"));
           sendButton.firstElementChild.textContent = "↑";
         }
+        syncComposerActionState();
+      }
+
+      function syncComposerActionState() {
+        if (!composerBox) return;
+        composerBox.dataset.canSend = textarea.value.trim() ? "true" : "false";
+        composerBox.dataset.running = activeTurnInProgress ? "true" : "false";
       }
 
       function setActiveTurnInProgress(active) {
         activeTurnInProgress = active === true;
         setSendButtonMode(activeTurnInProgress ? "stop" : "send");
+        syncComposerActionState();
       }
 
       function clearFollowupDraft() {
@@ -17029,74 +17055,164 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function setVoiceListening(active) {
         voiceListening = active === true;
+        if (voiceStartWatchdog) {
+          window.clearTimeout(voiceStartWatchdog);
+          voiceStartWatchdog = null;
+        }
         if (!voiceButton) return;
-        voiceButton.dataset.listening = voiceListening ? "true" : "false";
-        voiceButton.setAttribute("aria-pressed", voiceListening ? "true" : "false");
-        voiceButton.setAttribute("aria-label", voiceListening ? "音声入力を停止" : "音声入力");
+        voiceButton.dataset.listening = voiceModeActive || voiceListening ? "true" : "false";
+        voiceButton.setAttribute("aria-pressed", voiceModeActive || voiceListening ? "true" : "false");
+        voiceButton.setAttribute("aria-label", voiceModeActive || voiceListening ? "音声モード中" : "音声入力");
+        voiceButton.title = voiceModeActive || voiceListening ? "音声モード中" : "音声入力";
+      }
+
+      function clearVoiceTimers() {
+        if (voiceStartWatchdog) {
+          window.clearTimeout(voiceStartWatchdog);
+          voiceStartWatchdog = null;
+        }
+        if (voiceSubmitTimer) {
+          window.clearTimeout(voiceSubmitTimer);
+          voiceSubmitTimer = null;
+        }
+        if (voiceRestartTimer) {
+          window.clearTimeout(voiceRestartTimer);
+          voiceRestartTimer = null;
+        }
+      }
+
+      function normalizeVoiceCommandText(text) {
+        return normalizeComposerInputText(text).replace(/[\\s、。.!！?？]/g, "");
+      }
+
+      function containsVoiceExitPhrase(text) {
+        const normalized = normalizeVoiceCommandText(text);
+        return voiceExitPhrases.some((phrase) => normalized.includes(normalizeVoiceCommandText(phrase)));
       }
 
       function appendVoiceTranscript(text) {
         const transcript = normalizeComposerInputText(text).trim();
-        if (!transcript) return;
+        if (!transcript) return false;
         const current = textarea.value.trimEnd();
         textarea.value = current ? current + "\\n" + transcript : transcript;
         normalizeComposerInput();
         syncFollowupDraftFromInput();
         persistDashboardDraft();
+        syncComposerActionState();
         textarea.focus({ preventScroll: true });
+        return true;
+      }
+
+      function submitVoiceTranscript(text) {
+        if (!appendVoiceTranscript(text)) return;
+        window.requestAnimationFrame(() => {
+          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+      }
+
+      function scheduleVoiceTranscriptSubmit(text) {
+        const transcript = normalizeComposerInputText(text).trim();
+        if (!transcript) return;
+        if (voiceSubmitTimer) {
+          window.clearTimeout(voiceSubmitTimer);
+        }
+        setStatus("音声を文字にしました。1秒後にチャットへ送ります。", { temporary: true });
+        voiceSubmitTimer = window.setTimeout(() => {
+          voiceSubmitTimer = null;
+          submitVoiceTranscript(transcript);
+        }, 1000);
+      }
+
+      function stopVoiceMode(message = "音声モードを終了しました。") {
+        voiceModeActive = false;
+        clearVoiceTimers();
+        if (voiceRecognizer) {
+          try {
+            voiceRecognizer.stop();
+          } catch {}
+        }
+        voiceRecognizer = null;
+        setVoiceListening(false);
+        setStatus(message, { temporary: true });
       }
 
       function createVoiceRecognizer() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (typeof SpeechRecognition !== "function") {
+        if (window.isSecureContext === false || typeof SpeechRecognition !== "function") {
           return null;
         }
         const recognizer = new SpeechRecognition();
         recognizer.lang = "ja-JP";
         recognizer.continuous = true;
-        recognizer.interimResults = false;
+        recognizer.interimResults = true;
         recognizer.onstart = () => {
           setVoiceListening(true);
-          setStatus("音声入力中です。発話は文字として入力欄に残します。", { temporary: true });
+          setStatus("音声モード中です。無音区切りで送信します。終了は「ボイスモード終了」と話してください。", { temporary: true });
         };
         recognizer.onend = () => {
           setVoiceListening(false);
+          if (!voiceModeActive) return;
+          voiceRestartTimer = window.setTimeout(() => {
+            voiceRestartTimer = null;
+            startVoiceMode({ restarting: true });
+          }, 350);
         };
-        recognizer.onerror = () => {
+        recognizer.onerror = (event) => {
           setVoiceListening(false);
-          setStatus("音声入力を継続できませんでした。テキスト入力はそのまま使えます。", { temporary: true });
+          const errorName = event?.error ? String(event.error) : "";
+          const message = errorName === "not-allowed" || errorName === "service-not-allowed"
+            ? "音声入力の許可がありません。iOS のマイク許可を確認してください。テキスト入力は使えます。"
+            : "音声入力を継続できませんでした。テキスト入力はそのまま使えます。";
+          setStatus(message, { temporary: true });
         };
         recognizer.onresult = (event) => {
           const results = Array.from(event.results || []).slice(Number(event.resultIndex) || 0);
-          const transcript = results
-            .filter((result) => result && result.isFinal !== false)
+          const finalResults = results.filter((result) => result && result.isFinal !== false);
+          const transcript = finalResults
             .map((result) => result?.[0]?.transcript || "")
             .join(" ")
             .trim();
-          appendVoiceTranscript(transcript);
+          if (!transcript) return;
+          if (containsVoiceExitPhrase(transcript)) {
+            stopVoiceMode("合言葉を確認しました。音声モードを終了します。");
+            return;
+          }
+          scheduleVoiceTranscriptSubmit(transcript);
         };
         return recognizer;
       }
 
-      function toggleVoiceInput() {
-        if (voiceListening && voiceRecognizer) {
-          try {
-            voiceRecognizer.stop();
-          } catch {}
-          setVoiceListening(false);
-          return;
-        }
+      function startVoiceMode(options = {}) {
         voiceRecognizer = createVoiceRecognizer();
         if (!voiceRecognizer) {
+          voiceModeActive = false;
           setStatus("このブラウザでは音声入力に未対応です。テキスト入力と画像添付は使えます。", { temporary: true });
           return;
         }
         try {
+          if (!options.restarting) {
+            setStatus("音声モードを開始しています。マイク許可が出たら許可してください。", { temporary: true });
+          }
+          voiceStartWatchdog = window.setTimeout(() => {
+            if (!voiceListening) {
+              setStatus("音声モードの開始を待っています。反応しない場合はテキスト入力を使ってください。", { temporary: true });
+            }
+          }, 1800);
           voiceRecognizer.start();
         } catch {
           setVoiceListening(false);
-          setStatus("音声入力を開始できませんでした。テキスト入力はそのまま使えます。", { temporary: true });
+          voiceModeActive = false;
+          setStatus("音声モードを開始できませんでした。テキスト入力はそのまま使えます。", { temporary: true });
         }
+      }
+
+      function toggleVoiceInput() {
+        if (voiceModeActive || voiceListening) {
+          stopVoiceMode();
+          return;
+        }
+        voiceModeActive = true;
+        startVoiceMode();
       }
 
       function flushQueuedFollowups() {
@@ -19024,6 +19140,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       syncComposerShortcutMode();
       resizeComposerInput();
+      syncComposerActionState();
       restoreDashboardDraft();
       refreshCheckButton?.addEventListener("click", () => {
         refreshDashboardFreshnessStatus({ visibleStatus: true, pill: "確認済み" });
@@ -19034,11 +19151,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", () => {
         normalizeComposerInput();
         syncFollowupDraftFromInput();
+        syncComposerActionState();
         persistDashboardDraft();
       });
       textarea.addEventListener("paste", () => {
         window.setTimeout(() => {
           normalizeComposerInput();
+          syncComposerActionState();
           persistDashboardDraft();
         }, 0);
       });
@@ -19054,6 +19173,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       });
       window.addEventListener("resize", () => {
         syncComposerShortcutMode();
+        syncComposerActionState();
         resizeComposerInput();
       });
       window.addEventListener("online", async () => {
