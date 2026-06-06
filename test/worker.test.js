@@ -1343,6 +1343,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("let voiceExplicitlyStopped = false"), true);
   assert.equal(body.includes("let voiceSpeaking = false"), true);
   assert.equal(body.includes("function shouldSpeakFinalButlerReply(message)"), true);
+  assert.equal(body.includes("function matchesPendingVoiceReply(message)"), true);
+  assert.equal(body.includes("function consumePendingVoiceReply(message)"), true);
   assert.equal(body.includes("function handleVoiceInterruptCandidate(text, options = {})"), true);
   assert.equal(body.includes("speechSynthesis.speak"), true);
   assert.equal(body.includes("navigator.wakeLock.request"), true);
@@ -5028,6 +5030,7 @@ test("DashboardChatRoom maps app-server replies back into the dashboard thread",
       type: "app_server_reply",
       threadId: "dashboard-main-unresolved",
       codexThreadId: "codex-thread-450",
+      originalMessageId: "dashboard_owner_message:voice-target-1",
       text: "今日は日本時間で 2026年5月22日です。"
     })
   );
@@ -5045,6 +5048,7 @@ test("DashboardChatRoom maps app-server replies back into the dashboard thread",
   assert.equal(broadcast.messages[0].role, "butler");
   assert.equal(broadcast.messages[0].status, "replied");
   assert.equal(broadcast.messages[0].text, "今日は日本時間で 2026年5月22日です。");
+  assert.equal(broadcast.messages[0].replyToClientMessageId, "dashboard_owner_message:voice-target-1");
 });
 
 test("DashboardChatRoom does not persist app-server reply deltas as chat messages", async () => {

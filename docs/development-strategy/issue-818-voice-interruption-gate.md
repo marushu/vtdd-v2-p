@@ -68,3 +68,19 @@ production iPhone PWA で、voice input 由来の turn を送り、返信待ち�
 ## 停止条件
 
 final reply と voice owner turn の対応が runtime payload から全く判断できず、通常 text reply を読む危険が高い場合。#816 の follow-up queue と競合して添付保持を壊す場合。読み上げ中 recognition が iOS PWA で実行不能と判明し、UI 上の安全 gate だけでは周囲音混入を止められない場合。
+
+## 2026-06-07 reviewer blocker response: reply target
+
+Gemini reviewer が `reply_target_id` 不在を merge blocker として指摘したため、pending voice reply set と Butler final reply の対応を client-side timing だけで判断しない。`scripts/run-dashboard-app-server-bridge.mjs` は turn completion event に owner message id を `originalMessageId` として載せ、Worker の `normalizeDashboardAppServerBridgeEvent()` はこれを `replyToClientMessageId` として Dashboard thread message に保存する。Dashboard client は `pendingVoiceReplyClientMessageIds` と final Butler message の `replyToClientMessageId` が一致した場合だけ、voice inactive 復帰読み上げを許可する。
+
+この対応で閉じる blocker:
+
+- 別 turn の Butler final reply が先に届いた場合に、pending voice reply があるという理由だけで読み上げてしまう問題。
+- app-server bridge から Dashboard thread へ戻る final reply に owner message id が残らず、E2E が target 対応を検証できない問題。
+- duplicate reply は既存 `spokenButlerReplyKeys` で止め、pending voice reply は target 消費で一件ずつ減らす。
+
+残る evidence gap:
+
+- production iPhone / iPad PWA で実際に `replyToClientMessageId` が付いた final reply が戻ること。
+- Web Speech API の confidence / 周囲音 gate は local fake だけでは十分でなく、実機 evidence が必要。
+- PR #817 が未 merge のため、#819 は依然 stacked PR として merge order blocker を持つ。

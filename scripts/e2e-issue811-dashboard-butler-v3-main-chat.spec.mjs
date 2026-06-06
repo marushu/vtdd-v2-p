@@ -441,15 +441,33 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
       ok: true,
       messages: [
         {
+          messageId: "issue-818-unrelated-final-reply",
+          role: "butler",
+          status: "replied",
+          replyToClientMessageId: "dashboard_owner_message:unrelated",
+          text: "別の入力への返信なので読み上げてはいけません。",
+          createdAt: "2026-06-06T09:09:00.000Z"
+        }
+      ]
+    });
+  });
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken?.length || 0)).toBe(0);
+  await page.evaluate((replyToClientMessageId) => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "thread",
+      ok: true,
+      messages: [
+        {
           messageId: "issue-814-voice-final-reply",
           role: "butler",
           status: "replied",
+          replyToClientMessageId,
           text: "音声モード中だけ、この Butler の最終返信を読み上げます。",
           createdAt: "2026-06-06T09:10:00.000Z"
         }
       ]
     });
-  });
+  }, voiceClientMessageId);
   await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken || [])).toEqual([
     {
       text: "音声モード中だけ、この Butler の最終返信を読み上げます。",

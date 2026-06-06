@@ -66750,6 +66750,9 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
   const progressText = sanitizeDashboardChatText(input.progressText || input.progress_text);
+  const replyTargetMessageId = normalizeDashboardEventText(
+    input.replyToClientMessageId || input.reply_to_client_message_id || input.originalMessageId || input.original_message_id || input.ownerMessageId || input.owner_message_id
+  );
   let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger10(input.relatedIssue || input.issueNumber);
@@ -66775,6 +66778,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
             relatedIssue,
             status: "replied",
             text,
+            replyToClientMessageId: replyTargetMessageId || void 0,
             createdAt
           },
           { threadId }
@@ -66821,6 +66825,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
             relatedIssue,
             status: transientStatus,
             text: transientText,
+            replyToClientMessageId: replyTargetMessageId || void 0,
             createdAt
           },
           { threadId }
@@ -69392,6 +69397,8 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
     relatedIssue: normalizePositiveInteger10(input.relatedIssue || input.issueNumber || input.related_issue),
     status: normalizeDashboardChatStatus(input.status),
     text: sanitizeDashboardChatText(input.text || input.message || input.body) || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09",
+    replyToMessageId: normalizeDashboardEventText(input.replyToMessageId || input.reply_to_message_id) || void 0,
+    replyToClientMessageId: normalizeDashboardEventText(input.replyToClientMessageId || input.reply_to_client_message_id) || void 0,
     ...progressSummary.entries.length ? { progressSummary } : {},
     mediaReferences: normalizeMediaReferences(input.mediaReferences || input.media_references || input.media),
     createdAt
@@ -73293,10 +73300,31 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return pendingVoiceReplyClientMessageIds.size > 0;
       }
 
+      function getVoiceReplyTargetId(message) {
+        return getReplyTargetMessageId(message);
+      }
+
+      function matchesPendingVoiceReply(message) {
+        const targetId = getVoiceReplyTargetId(message);
+        return Boolean(targetId && pendingVoiceReplyClientMessageIds.has(targetId));
+      }
+
+      function consumePendingVoiceReply(message) {
+        const targetId = getVoiceReplyTargetId(message);
+        if (targetId) {
+          pendingVoiceReplyClientMessageIds.delete(targetId);
+          return;
+        }
+        pendingVoiceReplyClientMessageIds.clear();
+      }
+
       function shouldSpeakFinalButlerReply(message) {
         if (!message || message.role !== "butler" || message.status !== "replied") return false;
         if (voiceExplicitlyStopped) return false;
-        return voiceModeActive || hasPendingVoiceReply();
+        if (hasPendingVoiceReply()) {
+          return matchesPendingVoiceReply(message);
+        }
+        return voiceModeActive;
       }
 
       function speakFinalButlerReply(message) {
@@ -73322,7 +73350,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             voiceSpeaking = false;
           };
           window.speechSynthesis.speak(utterance);
-          pendingVoiceReplyClientMessageIds.clear();
+          consumePendingVoiceReply(message);
           setStatus("Butler \u306E\u8FD4\u4FE1\u3092\u8AAD\u307F\u4E0A\u3052\u3066\u3044\u307E\u3059\u3002", { temporary: true });
           return true;
         } catch {
