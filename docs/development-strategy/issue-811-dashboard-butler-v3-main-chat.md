@@ -183,3 +183,32 @@ E2E:
 - service 名、raw ID、capability 名を通常チャット本文へ出さないと説明できない。
 - voice transcript capture と読み上げ / 車載 Bluetooth 実機保証を混同し始めた。
 - open PR / merged PR / latest main の truth が不明なまま作業を進めようとしている。
+
+## 2026-06-06 production live gap: mobile composer / voice transcript
+
+PR #812 merge / deploy / app-server bridge restart 後の owner 実機確認で、以下の completion gap が見つかった。
+
+- iPhone 幅で composer の CSS が 3 列指定になっており、実 DOM の `+ / textarea / voice / send` の 4 要素が折り返して stop / send button が左下へ落ちた。
+- 右端の voice button が丸表示で、ChatGPT iOS の voice mode 入口と意味が合っていなかった。
+- text send / stop button は ChatGPT iOS app に倣い、入力欄の右側に置く必要がある。
+- voice button は「声を文字にする」だけでなく、文字化した内容を Butler チャットへ送る必要がある。
+- 発話停止から約 1 秒の無音を会話区切りとして扱い、final transcript をチャットへ送る必要がある。
+- 無音区切りは voice mode 終了ではない。各発話を送信し、VPS Codex CLI の返事後も voice mode 会話を続ける。voice mode 自体の終了は合言葉 `ボイスモード終了` のみで扱う。
+- PWA では voice mode 開始前から常時マイク待機できないため、開始は voice button で行う。テキストコマンド `ボイスモード開始` は採用しない。voice mode 自体の終了だけを合言葉 `ボイスモード終了` で扱う。
+
+修正方針:
+
+- composer は grid ではなく flex で折り返しを禁止する。
+- ChatGPT iOS に寄せ、左側に attachment、入力欄の右側に voice waveform / text send / stop button を置く。空欄時は voice、文字入力時は send、実行中は stop を表示する。
+- voice は Web search ではなく voice transcript input として扱う。
+- Web Speech API の final transcript を受けたら 1 秒待ち、入力欄へ残したうえで submit する。実行中の場合は既存 submit path により差し込み queue として扱う。
+- Web Speech API が無音区切りで recognition end した場合でも、voice mode が active なら recognizer を再開し、次の発話を待つ。
+- `ボイスモード終了` を認識した場合だけ voice mode を終了し、その合言葉自体は VPS Codex CLI へ送らない。
+- voice mode 開始は button の user activation に寄せる。`ボイスモード開始` テキストコマンドは会話入力との混線を避けるため採用しない。
+- Web Speech API 未対応、権限拒否、開始失敗でも Butler PWA を固めず、テキスト入力へ戻す。
+
+追加検証:
+
+- `node --test test/worker.test.js`
+- `npx playwright test scripts/e2e-issue811-dashboard-butler-v3-main-chat.spec.mjs --browser=chromium --reporter=line`
+- merge / deploy 後に production iPhone PWA で voice button から声→文字→チャット送信を実機確認する。

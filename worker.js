@@ -72472,17 +72472,28 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
     .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 8; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--page-bg) 72%, transparent); overflow: visible; overscroll-behavior-x: none; touch-action: pan-y; }
-    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
+    .composer-box { width: 100%; max-width: 100%; display: flex; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
     textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; touch-action: pan-y; }
     textarea::placeholder { color: var(--muted); }
-    .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .voice-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--text); font: inherit; font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .media-button { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .voice-button { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 999px; border: 1px solid transparent; background: var(--text); color: var(--page-bg); font: inherit; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .voice-button[data-listening="true"] { background: var(--button); border-color: var(--border); color: var(--link); }
-    .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
+    .voice-bars { display: inline-flex; align-items: center; justify-content: center; gap: 2px; width: 20px; height: 20px; }
+    .voice-bars span { display: block; width: 3px; border-radius: 999px; background: currentColor; }
+    .voice-bars span:nth-child(1), .voice-bars span:nth-child(5) { height: 9px; }
+    .voice-bars span:nth-child(2), .voice-bars span:nth-child(4) { height: 15px; }
+    .voice-bars span:nth-child(3) { height: 20px; }
+    .voice-button[data-listening="true"] .voice-bars span { animation: voicePulse .9s ease-in-out infinite; }
+    .voice-button[data-listening="true"] .voice-bars span:nth-child(2), .voice-button[data-listening="true"] .voice-bars span:nth-child(4) { animation-delay: .08s; }
+    .voice-button[data-listening="true"] .voice-bars span:nth-child(3) { animation-delay: .16s; }
+    @keyframes voicePulse { 0%, 100% { transform: scaleY(.65); } 50% { transform: scaleY(1.08); } }
+    .send-button { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
     .send-button[data-mode="stop"] { font-size: 18px; }
     .send-button[data-mode="stop"]::before { content: "\u25A0"; }
     .send-button[data-mode="stop"] { color: var(--page-bg); }
     .send-button[data-mode="stop"] span { display: none; }
+    .composer-box[data-can-send="false"] .send-button[data-mode="send"] { display: none; }
+    .composer-box[data-running="true"] .voice-button, .composer-box[data-can-send="true"] .voice-button { display: none; }
     .followup-queue { display: grid; gap: 8px; padding: 0 10px; }
     .followup-queue[hidden], .followup-draft[hidden] { display: none; }
     .followup-chip, .followup-draft { width: fit-content; max-width: min(720px, 100%); justify-self: end; border: 1px solid var(--border); border-radius: 18px; background: var(--floating-bg); box-shadow: 0 10px 34px var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text); }
@@ -72582,10 +72593,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @media (max-width: 460px) {
       main { padding: 12px 10px 0; }
       .app-shell { height: calc(100dvh - 12px); }
-      .composer-box { grid-template-columns: 40px minmax(0, 1fr) 40px; border-radius: 24px; }
+      .composer-box { border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
       .tool-button { min-height: 38px; padding: 0 10px; font-size: 13px; }
-      .media-button, .send-button { width: 40px; height: 40px; }
+      .media-button, .voice-button, .send-button { width: 40px; height: 40px; flex-basis: 40px; }
     }
     @media (min-width: 761px) {
       .drawer-resize-handle { display: block; position: absolute; top: 0; right: -6px; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; }
@@ -72721,7 +72732,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
-          <button class="voice-button" id="butler-voice-button" type="button" aria-label="\u97F3\u58F0\u5165\u529B" title="\u97F3\u58F0\u5165\u529B">\u25C9</button>
+          <button class="voice-button" id="butler-voice-button" type="button" aria-label="\u97F3\u58F0\u5165\u529B" title="\u97F3\u58F0\u5165\u529B"><span class="voice-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span></button>
           <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1"><span>\u2191</span></button>
         </div>
         <div class="followup-draft" id="butler-followup-draft" hidden>
@@ -72761,6 +72772,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const form = document.getElementById("butler-chat-form");
       const log = document.getElementById("butler-chat-log");
       const textarea = document.getElementById("butler-message");
+      const composerBox = form?.querySelector(".composer-box");
       const status = document.getElementById("butler-chat-status");
       const sendButton = document.getElementById("butler-send-button");
       const progressPane = document.getElementById("butler-transient-progress");
@@ -72819,6 +72831,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let followupQueue = [];
       let voiceRecognizer = null;
       let voiceListening = false;
+      let voiceModeActive = false;
+      let voiceStartWatchdog = null;
+      let voiceSubmitTimer = null;
+      let voiceRestartTimer = null;
+      const voiceExitPhrases = ["\u30DC\u30A4\u30B9\u30E2\u30FC\u30C9\u7D42\u4E86"];
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
       let authReturnResumePromise = null;
@@ -72969,6 +72986,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (draft && !textarea.value) {
             textarea.value = draft;
             normalizeComposerInput();
+            syncComposerActionState();
             setStatus(
               Number(meta.pendingMediaCount || 0) > 0
                 ? "\u524D\u56DE\u306E\u5165\u529B\u3092\u5FA9\u5143\u3057\u307E\u3057\u305F\u3002\u6DFB\u4ED8\u306F\u518D\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
@@ -73061,11 +73079,19 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           sendButton.replaceChildren(document.createElement("span"));
           sendButton.firstElementChild.textContent = "\u2191";
         }
+        syncComposerActionState();
+      }
+
+      function syncComposerActionState() {
+        if (!composerBox) return;
+        composerBox.dataset.canSend = textarea.value.trim() ? "true" : "false";
+        composerBox.dataset.running = activeTurnInProgress ? "true" : "false";
       }
 
       function setActiveTurnInProgress(active) {
         activeTurnInProgress = active === true;
         setSendButtonMode(activeTurnInProgress ? "stop" : "send");
+        syncComposerActionState();
       }
 
       function clearFollowupDraft() {
@@ -73124,74 +73150,164 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function setVoiceListening(active) {
         voiceListening = active === true;
+        if (voiceStartWatchdog) {
+          window.clearTimeout(voiceStartWatchdog);
+          voiceStartWatchdog = null;
+        }
         if (!voiceButton) return;
-        voiceButton.dataset.listening = voiceListening ? "true" : "false";
-        voiceButton.setAttribute("aria-pressed", voiceListening ? "true" : "false");
-        voiceButton.setAttribute("aria-label", voiceListening ? "\u97F3\u58F0\u5165\u529B\u3092\u505C\u6B62" : "\u97F3\u58F0\u5165\u529B");
+        voiceButton.dataset.listening = voiceModeActive || voiceListening ? "true" : "false";
+        voiceButton.setAttribute("aria-pressed", voiceModeActive || voiceListening ? "true" : "false");
+        voiceButton.setAttribute("aria-label", voiceModeActive || voiceListening ? "\u97F3\u58F0\u30E2\u30FC\u30C9\u4E2D" : "\u97F3\u58F0\u5165\u529B");
+        voiceButton.title = voiceModeActive || voiceListening ? "\u97F3\u58F0\u30E2\u30FC\u30C9\u4E2D" : "\u97F3\u58F0\u5165\u529B";
+      }
+
+      function clearVoiceTimers() {
+        if (voiceStartWatchdog) {
+          window.clearTimeout(voiceStartWatchdog);
+          voiceStartWatchdog = null;
+        }
+        if (voiceSubmitTimer) {
+          window.clearTimeout(voiceSubmitTimer);
+          voiceSubmitTimer = null;
+        }
+        if (voiceRestartTimer) {
+          window.clearTimeout(voiceRestartTimer);
+          voiceRestartTimer = null;
+        }
+      }
+
+      function normalizeVoiceCommandText(text) {
+        return normalizeComposerInputText(text).replace(/[\\s\u3001\u3002.!\uFF01?\uFF1F]/g, "");
+      }
+
+      function containsVoiceExitPhrase(text) {
+        const normalized = normalizeVoiceCommandText(text);
+        return voiceExitPhrases.some((phrase) => normalized.includes(normalizeVoiceCommandText(phrase)));
       }
 
       function appendVoiceTranscript(text) {
         const transcript = normalizeComposerInputText(text).trim();
-        if (!transcript) return;
+        if (!transcript) return false;
         const current = textarea.value.trimEnd();
         textarea.value = current ? current + "\\n" + transcript : transcript;
         normalizeComposerInput();
         syncFollowupDraftFromInput();
         persistDashboardDraft();
+        syncComposerActionState();
         textarea.focus({ preventScroll: true });
+        return true;
+      }
+
+      function submitVoiceTranscript(text) {
+        if (!appendVoiceTranscript(text)) return;
+        window.requestAnimationFrame(() => {
+          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+      }
+
+      function scheduleVoiceTranscriptSubmit(text) {
+        const transcript = normalizeComposerInputText(text).trim();
+        if (!transcript) return;
+        if (voiceSubmitTimer) {
+          window.clearTimeout(voiceSubmitTimer);
+        }
+        setStatus("\u97F3\u58F0\u3092\u6587\u5B57\u306B\u3057\u307E\u3057\u305F\u30021\u79D2\u5F8C\u306B\u30C1\u30E3\u30C3\u30C8\u3078\u9001\u308A\u307E\u3059\u3002", { temporary: true });
+        voiceSubmitTimer = window.setTimeout(() => {
+          voiceSubmitTimer = null;
+          submitVoiceTranscript(transcript);
+        }, 1000);
+      }
+
+      function stopVoiceMode(message = "\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u7D42\u4E86\u3057\u307E\u3057\u305F\u3002") {
+        voiceModeActive = false;
+        clearVoiceTimers();
+        if (voiceRecognizer) {
+          try {
+            voiceRecognizer.stop();
+          } catch {}
+        }
+        voiceRecognizer = null;
+        setVoiceListening(false);
+        setStatus(message, { temporary: true });
       }
 
       function createVoiceRecognizer() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (typeof SpeechRecognition !== "function") {
+        if (window.isSecureContext === false || typeof SpeechRecognition !== "function") {
           return null;
         }
         const recognizer = new SpeechRecognition();
         recognizer.lang = "ja-JP";
         recognizer.continuous = true;
-        recognizer.interimResults = false;
+        recognizer.interimResults = true;
         recognizer.onstart = () => {
           setVoiceListening(true);
-          setStatus("\u97F3\u58F0\u5165\u529B\u4E2D\u3067\u3059\u3002\u767A\u8A71\u306F\u6587\u5B57\u3068\u3057\u3066\u5165\u529B\u6B04\u306B\u6B8B\u3057\u307E\u3059\u3002", { temporary: true });
+          setStatus("\u97F3\u58F0\u30E2\u30FC\u30C9\u4E2D\u3067\u3059\u3002\u7121\u97F3\u533A\u5207\u308A\u3067\u9001\u4FE1\u3057\u307E\u3059\u3002\u7D42\u4E86\u306F\u300C\u30DC\u30A4\u30B9\u30E2\u30FC\u30C9\u7D42\u4E86\u300D\u3068\u8A71\u3057\u3066\u304F\u3060\u3055\u3044\u3002", { temporary: true });
         };
         recognizer.onend = () => {
           setVoiceListening(false);
+          if (!voiceModeActive) return;
+          voiceRestartTimer = window.setTimeout(() => {
+            voiceRestartTimer = null;
+            startVoiceMode({ restarting: true });
+          }, 350);
         };
-        recognizer.onerror = () => {
+        recognizer.onerror = (event) => {
           setVoiceListening(false);
-          setStatus("\u97F3\u58F0\u5165\u529B\u3092\u7D99\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30C6\u30AD\u30B9\u30C8\u5165\u529B\u306F\u305D\u306E\u307E\u307E\u4F7F\u3048\u307E\u3059\u3002", { temporary: true });
+          const errorName = event?.error ? String(event.error) : "";
+          const message = errorName === "not-allowed" || errorName === "service-not-allowed"
+            ? "\u97F3\u58F0\u5165\u529B\u306E\u8A31\u53EF\u304C\u3042\u308A\u307E\u305B\u3093\u3002iOS \u306E\u30DE\u30A4\u30AF\u8A31\u53EF\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u30C6\u30AD\u30B9\u30C8\u5165\u529B\u306F\u4F7F\u3048\u307E\u3059\u3002"
+            : "\u97F3\u58F0\u5165\u529B\u3092\u7D99\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30C6\u30AD\u30B9\u30C8\u5165\u529B\u306F\u305D\u306E\u307E\u307E\u4F7F\u3048\u307E\u3059\u3002";
+          setStatus(message, { temporary: true });
         };
         recognizer.onresult = (event) => {
           const results = Array.from(event.results || []).slice(Number(event.resultIndex) || 0);
-          const transcript = results
-            .filter((result) => result && result.isFinal !== false)
+          const finalResults = results.filter((result) => result && result.isFinal !== false);
+          const transcript = finalResults
             .map((result) => result?.[0]?.transcript || "")
             .join(" ")
             .trim();
-          appendVoiceTranscript(transcript);
+          if (!transcript) return;
+          if (containsVoiceExitPhrase(transcript)) {
+            stopVoiceMode("\u5408\u8A00\u8449\u3092\u78BA\u8A8D\u3057\u307E\u3057\u305F\u3002\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u7D42\u4E86\u3057\u307E\u3059\u3002");
+            return;
+          }
+          scheduleVoiceTranscriptSubmit(transcript);
         };
         return recognizer;
       }
 
-      function toggleVoiceInput() {
-        if (voiceListening && voiceRecognizer) {
-          try {
-            voiceRecognizer.stop();
-          } catch {}
-          setVoiceListening(false);
-          return;
-        }
+      function startVoiceMode(options = {}) {
         voiceRecognizer = createVoiceRecognizer();
         if (!voiceRecognizer) {
+          voiceModeActive = false;
           setStatus("\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u3067\u306F\u97F3\u58F0\u5165\u529B\u306B\u672A\u5BFE\u5FDC\u3067\u3059\u3002\u30C6\u30AD\u30B9\u30C8\u5165\u529B\u3068\u753B\u50CF\u6DFB\u4ED8\u306F\u4F7F\u3048\u307E\u3059\u3002", { temporary: true });
           return;
         }
         try {
+          if (!options.restarting) {
+            setStatus("\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u958B\u59CB\u3057\u3066\u3044\u307E\u3059\u3002\u30DE\u30A4\u30AF\u8A31\u53EF\u304C\u51FA\u305F\u3089\u8A31\u53EF\u3057\u3066\u304F\u3060\u3055\u3044\u3002", { temporary: true });
+          }
+          voiceStartWatchdog = window.setTimeout(() => {
+            if (!voiceListening) {
+              setStatus("\u97F3\u58F0\u30E2\u30FC\u30C9\u306E\u958B\u59CB\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002\u53CD\u5FDC\u3057\u306A\u3044\u5834\u5408\u306F\u30C6\u30AD\u30B9\u30C8\u5165\u529B\u3092\u4F7F\u3063\u3066\u304F\u3060\u3055\u3044\u3002", { temporary: true });
+            }
+          }, 1800);
           voiceRecognizer.start();
         } catch {
           setVoiceListening(false);
-          setStatus("\u97F3\u58F0\u5165\u529B\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30C6\u30AD\u30B9\u30C8\u5165\u529B\u306F\u305D\u306E\u307E\u307E\u4F7F\u3048\u307E\u3059\u3002", { temporary: true });
+          voiceModeActive = false;
+          setStatus("\u97F3\u58F0\u30E2\u30FC\u30C9\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30C6\u30AD\u30B9\u30C8\u5165\u529B\u306F\u305D\u306E\u307E\u307E\u4F7F\u3048\u307E\u3059\u3002", { temporary: true });
         }
+      }
+
+      function toggleVoiceInput() {
+        if (voiceModeActive || voiceListening) {
+          stopVoiceMode();
+          return;
+        }
+        voiceModeActive = true;
+        startVoiceMode();
       }
 
       function flushQueuedFollowups() {
@@ -75119,6 +75235,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       syncComposerShortcutMode();
       resizeComposerInput();
+      syncComposerActionState();
       restoreDashboardDraft();
       refreshCheckButton?.addEventListener("click", () => {
         refreshDashboardFreshnessStatus({ visibleStatus: true, pill: "\u78BA\u8A8D\u6E08\u307F" });
@@ -75129,11 +75246,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", () => {
         normalizeComposerInput();
         syncFollowupDraftFromInput();
+        syncComposerActionState();
         persistDashboardDraft();
       });
       textarea.addEventListener("paste", () => {
         window.setTimeout(() => {
           normalizeComposerInput();
+          syncComposerActionState();
           persistDashboardDraft();
         }, 0);
       });
@@ -75149,6 +75268,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       });
       window.addEventListener("resize", () => {
         syncComposerShortcutMode();
+        syncComposerActionState();
         resizeComposerInput();
       });
       window.addEventListener("online", async () => {

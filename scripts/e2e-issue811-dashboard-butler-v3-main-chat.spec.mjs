@@ -320,9 +320,36 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
   await expect(page.locator("#butler-message")).toHaveAttribute("data-mobile-composer", "true");
   await expect(page.locator(".desktop-side-nav")).toBeHidden();
   await expect(page.locator(".menu-open").first()).toBeVisible();
+  await page.locator("#butler-message").fill("テキスト送信確認");
+  await expect(page.locator("#butler-send-button")).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => {
+    const sendBox = document.querySelector("#butler-send-button")?.getBoundingClientRect();
+    const textBox = document.querySelector("#butler-message")?.getBoundingClientRect();
+    return Boolean(sendBox && textBox && sendBox.left > textBox.left);
+  })).toBe(true);
+  await page.locator("#butler-message").fill("");
   await page.locator("#butler-voice-button").click();
   await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("音声から追加したメモ"));
-  await expect(page.locator("#butler-message")).toHaveValue("音声から追加したメモ");
+  await expect.poll(async () => page.evaluate(() => {
+    const sent = window.__vtddFakeSockets?.[0]?.sent || [];
+    return sent.some((entry) => {
+      try {
+        const parsed = JSON.parse(entry);
+        return parsed.type === "owner_message" && parsed.text === "音声から追加したメモ";
+      } catch {
+        return false;
+      }
+    });
+  })).toBe(true);
+  await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("ボイスモード終了"));
+  await expect(page.locator("#butler-voice-button")).toHaveAttribute("data-listening", "false");
+  await page.evaluate(() => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "owner_message_accepted",
+      ok: true,
+      clientMessageId: JSON.parse(window.__vtddFakeSockets?.[0]?.sent?.at(-1) || "{}").clientMessageId
+    });
+  });
   await page.locator("#butler-message").fill("");
 
   await page.evaluate(() => {
