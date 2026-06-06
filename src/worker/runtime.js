@@ -16740,6 +16740,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let voiceStartWatchdog = null;
       let voiceSubmitTimer = null;
       let voiceRestartTimer = null;
+      let voiceWakeLock = null;
+      let voiceWakeLockRetryTimer = null;
+      let voiceWakeLockNoticeShown = false;
+      const spokenButlerReplyKeys = new Set();
       const voiceExitPhrases = ["ボイスモード終了"];
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
@@ -17079,6 +17083,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           window.clearTimeout(voiceRestartTimer);
           voiceRestartTimer = null;
         }
+        if (voiceWakeLockRetryTimer) {
+          window.clearTimeout(voiceWakeLockRetryTimer);
+          voiceWakeLockRetryTimer = null;
+        }
       }
 
       function normalizeVoiceCommandText(text) {
@@ -17123,9 +17131,105 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }, 1000);
       }
 
+      function cancelVoiceSpeech() {
+        try {
+          if (window.speechSynthesis && typeof window.speechSynthesis.cancel === "function") {
+            window.speechSynthesis.cancel();
+          }
+        } catch {}
+      }
+
+      function voiceReplyKey(message) {
+        return getRenderedMessageId(message) || [
+          message?.createdAt || message?.created_at || "",
+          message?.status || "",
+          message?.text || ""
+        ].join("\\u001f");
+      }
+
+      function speakFinalButlerReply(message) {
+        if (!voiceModeActive || !message || message.role !== "butler" || message.status !== "replied") return false;
+        const text = normalizeMessageDisplayText(message.text || "").trim();
+        if (!text) return false;
+        const key = voiceReplyKey(message);
+        if (key && spokenButlerReplyKeys.has(key)) return false;
+        if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") {
+          setStatus("このブラウザでは返信の読み上げに未対応です。文字の返信は表示済みです。", { temporary: true });
+          return false;
+        }
+        if (key) spokenButlerReplyKeys.add(key);
+        cancelVoiceSpeech();
+        try {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = "ja-JP";
+          window.speechSynthesis.speak(utterance);
+          setStatus("Butler の返信を読み上げています。", { temporary: true });
+          return true;
+        } catch {
+          setStatus("返信の読み上げを開始できませんでした。文字の返信は表示済みです。", { temporary: true });
+          return false;
+        }
+      }
+
+      function releaseVoiceWakeLock() {
+        if (voiceWakeLockRetryTimer) {
+          window.clearTimeout(voiceWakeLockRetryTimer);
+          voiceWakeLockRetryTimer = null;
+        }
+        const lock = voiceWakeLock;
+        voiceWakeLock = null;
+        if (lock && typeof lock.release === "function") {
+          try {
+            lock.release();
+          } catch {}
+        }
+      }
+
+      function scheduleVoiceWakeLockRetry() {
+        if (!voiceModeActive || voiceWakeLockRetryTimer) return;
+        voiceWakeLockRetryTimer = window.setTimeout(() => {
+          voiceWakeLockRetryTimer = null;
+          acquireVoiceWakeLock({ retry: true });
+        }, 1200);
+      }
+
+      async function acquireVoiceWakeLock(options = {}) {
+        if (!voiceModeActive || voiceWakeLock) return false;
+        if (!navigator.wakeLock || typeof navigator.wakeLock.request !== "function") {
+          if (!voiceWakeLockNoticeShown) {
+            voiceWakeLockNoticeShown = true;
+            setStatus("このブラウザでは sleep 抑止に未対応です。音声会話は継続できます。", { temporary: true });
+          }
+          return false;
+        }
+        try {
+          voiceWakeLock = await navigator.wakeLock.request("screen");
+          voiceWakeLockNoticeShown = false;
+          voiceWakeLock.addEventListener?.("release", () => {
+            voiceWakeLock = null;
+            if (voiceModeActive) {
+              setStatus("画面の sleep 抑止が解除されました。音声モード中のため再取得します。", { temporary: true });
+              scheduleVoiceWakeLockRetry();
+            }
+          }, { once: true });
+          if (!options.retry) {
+            setStatus("音声モード中は画面の sleep 抑止を試みます。", { temporary: true });
+          }
+          return true;
+        } catch {
+          if (!voiceWakeLockNoticeShown) {
+            voiceWakeLockNoticeShown = true;
+            setStatus("画面の sleep 抑止を取得できませんでした。音声会話は継続できます。", { temporary: true });
+          }
+          return false;
+        }
+      }
+
       function stopVoiceMode(message = "音声モードを終了しました。") {
         voiceModeActive = false;
         clearVoiceTimers();
+        cancelVoiceSpeech();
+        releaseVoiceWakeLock();
         if (voiceRecognizer) {
           try {
             voiceRecognizer.stop();
@@ -17192,6 +17296,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         try {
           if (!options.restarting) {
             setStatus("音声モードを開始しています。マイク許可が出たら許可してください。", { temporary: true });
+            acquireVoiceWakeLock();
           }
           voiceStartWatchdog = window.setTimeout(() => {
             if (!voiceListening) {
@@ -17212,6 +17317,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         voiceModeActive = true;
+        acquireVoiceWakeLock();
         startVoiceMode();
       }
 
@@ -18854,6 +18960,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
                 clearTransientProgress();
                 setActiveTurnInProgress(false);
                 setStatus("返信を受信しました。", { temporary: true });
+                speakFinalButlerReply(lastMessage);
               } else if (lastMessage?.status === "failed" || lastMessage?.status === "stalled") {
                 clearTransientProgress();
                 setActiveTurnInProgress(false);

@@ -5,6 +5,8 @@
     "floating header",
     "mobile Enter separation",
     "voice transcript",
+    "voice final reply readback",
+    "voice wake lock",
     "follow-up queue",
     "drawer overlay",
     "stream continues behind drawer",
@@ -20,6 +22,6 @@
     "followupDraftHidden": true,
     "followupQueueText": "差し込み済みこれは現在の実行に差し込む補足。",
     "status": "パスキー承認を開いています。承認後はこのチャットへ戻ります。",
-    "bodyText": "≡\nVTDD Butler\nこの作業: marushu/vtdd-v2-p ・ main chat\n\nDashboard Butler V3 のメインチャットを一体で作り直して。\n\n18:00\n⧉\nBUTLER\n返信先\nDashboard Butler V3 のメインチャットを一体で作り直して。\n\nIssue #811 として扱います。\nチャットを主役にし、進捗、承認、復旧、通知センター導線を通常会話から浮かせます。\nVPS 復旧の承認を開く\n\n18:01\n⧉\nBUTLER\n返信先\nDashboard Butler V3 のメインチャットを一体で作り直して。\n\nドロワーを開いていても返信ストリームは裏で継続します。\n\n18:30\n⧉\n+\n差し込み済み\nこれは現在の実行に差し込む補足。\nパスキー承認を開いています。承認後はこのチャットへ戻ります。\nパスキー承認\n承認後はこのチャットへ戻って自動継続します。\n×"
+    "bodyText": "≡\nVTDD Butler\nこの作業: marushu/vtdd-v2-p ・ main chat\n\nDashboard Butler V3 のメインチャットを一体で作り直して。\n\n18:00\n⧉\nBUTLER\n返信先\nDashboard Butler V3 のメインチャットを一体で作り直して。\n\nIssue #811 として扱います。\nチャットを主役にし、進捗、承認、復旧、通知センター導線を通常会話から浮かせます。\nVPS 復旧の承認を開く\n\n18:01\n⧉\nBUTLER\n返信先\nDashboard Butler V3 のメインチャットを一体で作り直して。\n\n音声モード中だけ、この Butler の最終返信を読み上げます。\n\n18:10\n⧉\nBUTLER\n返信先\nDashboard Butler V3 のメインチャットを一体で作り直して。\n\nドロワーを開いていても返信ストリームは裏で継続します。\n\n18:30\n⧉\n+\n差し込み済み\nこれは現在の実行に差し込む補足。\nパスキー承認を開いています。承認後はこのチャットへ戻ります。\nパスキー承認\n承認後はこのチャットへ戻って自動継続します。\n×"
   }
 }

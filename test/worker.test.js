@@ -1338,6 +1338,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function appendVoiceTranscript(text)"), true);
   assert.equal(body.includes("無音区切りで送信します"), true);
   assert.equal(body.includes("ボイスモード終了"), true);
+  assert.equal(body.includes("function speakFinalButlerReply(message)"), true);
+  assert.equal(body.includes("speechSynthesis.speak"), true);
+  assert.equal(body.includes("navigator.wakeLock.request"), true);
+  assert.equal(body.includes("function releaseVoiceWakeLock()"), true);
   assert.equal(body.includes('id="butler-followup-draft"'), true);
   assert.equal(body.includes("function addFollowupQueueItem(text, options = {})"), true);
   assert.equal(body.includes("function flushQueuedFollowups()"), true);
