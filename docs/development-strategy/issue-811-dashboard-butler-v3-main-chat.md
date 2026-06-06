@@ -212,3 +212,28 @@ PR #812 merge / deploy / app-server bridge restart 後の owner 実機確認で�
 - `node --test test/worker.test.js`
 - `npx playwright test scripts/e2e-issue811-dashboard-butler-v3-main-chat.spec.mjs --browser=chromium --reporter=line`
 - merge / deploy 後に production iPhone PWA で voice button から声→文字→チャット送信を実機確認する。
+
+## 2026-06-07 production live gap: voice button beside stop/send
+
+Owner production evidence showed that, while a turn is running, the composer
+shows only the stop button on the right edge and hides the voice mode button.
+This is wrong for the target voice-ready main chat: owner should be able to keep
+voice mode available beside the send/stop control, especially while the current
+turn is running and follow-up input may be spoken.
+
+修正方針:
+
+- Composer right-side controls should be a stable inline group.
+- Voice mode button stays visible next to the send/stop button while a turn is
+  running.
+- Voice mode button may still hide when normal text is ready to send, because
+  that state needs a clear send affordance and prevents accidental voice start.
+- Stop button remains the rightmost primary control during an active turn.
+- This slice must not change SpeechRecognition, readback, passkey, deploy, or
+  follow-up queue semantics.
+
+追加検証:
+
+- `node --test test/worker.test.js`
+- `npx playwright test scripts/e2e-issue811-dashboard-butler-v3-main-chat.spec.mjs`
+- `npm run check:generated-worker`

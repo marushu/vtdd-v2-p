@@ -1334,6 +1334,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('id="butler-send-button"'), true);
   assert.equal(body.includes('data-mode="stop"'), true);
   assert.equal(body.includes('id="butler-voice-button"'), true);
+  assert.equal(body.includes('class="composer-actions"'), true);
+  assert.equal(body.includes('.composer-box[data-can-send="true"]:not([data-running="true"]) .voice-button { display: none; }'), true);
+  assert.equal(body.includes('.composer-box[data-running="true"] .voice-button'), false);
   assert.equal(body.includes("function toggleVoiceInput()"), true);
   assert.equal(body.includes("function appendVoiceTranscript(text)"), true);
   assert.equal(body.includes("無音区切りで送信します"), true);

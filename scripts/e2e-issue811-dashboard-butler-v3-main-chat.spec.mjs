@@ -424,6 +424,15 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
       clientMessageId
     });
   }, voiceClientMessageId);
+  await expect(page.locator("#butler-voice-button")).toBeVisible();
+  await expect(page.locator("#butler-send-button")).toBeVisible();
+  await expect(page.locator("#butler-send-button")).toHaveAttribute("data-mode", "stop");
+  await expect.poll(async () => page.evaluate(() => {
+    const voiceBox = document.querySelector("#butler-voice-button")?.getBoundingClientRect();
+    const stopBox = document.querySelector("#butler-send-button")?.getBoundingClientRect();
+    const composerBox = document.querySelector(".composer-box")?.getBoundingClientRect();
+    return Boolean(voiceBox && stopBox && composerBox && voiceBox.left > composerBox.left && stopBox.left > voiceBox.left);
+  })).toBe(true);
   await expect.poll(async () => page.evaluate(() => window.__vtddWakeLockRequests || [])).toContain("screen");
   await page.evaluate(() => window.__vtddDashboardVoiceTest?.suspendWithoutExplicitStop());
   await page.evaluate(() => {
