@@ -6420,6 +6420,9 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   assert.equal(body.includes("最新状態"), true);
   assert.equal(body.includes("dashboard-refresh-check-button"), true);
   assert.equal(body.includes("dashboard-force-refresh-button"), true);
+  assert.equal(body.includes("dashboard-drawer-force-refresh-button"), true);
+  assert.equal(body.includes("drawerForceRefreshButton?.addEventListener"), true);
+  assert.equal(body.includes(".surface-list button"), true);
   assert.equal(body.includes("強制キャッシュ削除リロード"), true);
   assert.equal(body.includes("20260601-issue-723-self-refresh"), true);
   assert.equal(body.includes("VTDD_DASHBOARD_CLEAR_CACHES"), true);

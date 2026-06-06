@@ -568,6 +568,7 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
 
   await page.locator(".menu-open").first().click();
   await expect(page.locator(".mobile-drawer")).toBeVisible();
+  await expect(page.locator("#dashboard-drawer-force-refresh-button")).toBeVisible();
   await page.evaluate(() => {
     window.__vtddFakeSockets?.[0]?.emit({
       type: "thread",
