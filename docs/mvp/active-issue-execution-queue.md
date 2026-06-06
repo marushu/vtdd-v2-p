@@ -177,21 +177,26 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   interrupt candidate gate に通す必要がある。Issue #816 PR #817 が未 merge
   のため、Issue #818 implementation は #816 上に stacked し、#811 / #814 /
   #816 completion とは扱わない。
+- 2026-06-07 PR #819 merged Issue #818 voice readback / interrupt gate, and
+  PR #820 merged Issue #723 drawer force refresh action. Owner then clarified
+  that Codex-style follow-up insertion is still wrong: queued follow-up UI must
+  appear above the composer, not keep accumulating below it, and must expose
+  queue / guide / edit / cancel choices. This keeps Issue #816 as `Now` until
+  PR #817 is updated.
 
 ## Now
 
-- Issue #818: Dashboard Butler voice mode の返信読み上げと割り込み gate。
-  Issue #816 PR #817 の上に stacked して、voice input 由来 reply の
-  pending readback と読み上げ中 interrupt candidate gate を実験実装する。
-  通常 text reply の勝手な読み上げ、明示終了後の読み上げ、短い周囲音の
-  差し込み送信は regression として扱う。Issue #816 は prerequisite PR として
-  active のまま残り、この PR だけで #811 / #814 / #816 completion とは扱わない。
+- Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする。
+  Issue #814 の voice mode 実装前に、実行中差し込み queue が
+  `mediaReferences: []` 固定送信で添付を失う欠陥と、入力欄の下へ
+  差し込みを積み続ける UX 欠陥を直す。差し込み queue item は upload 済み
+  media reference を保持し、composer 上に queue / guide / edit / cancel を
+  owner-facing に出し、送信時に Dashboard thread と codex app-server bridge
+  turn input へ渡す。Issue #811 は parent root として active のまま残り、
+  この PR だけで #811 / #814 / #818 completion とは扱わない。
 
 ## Next
 
-- Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする。
-  PR #817 が open / checks success / clean。Issue #818 はこの PR 上に stacked
-  しているため、merge / rebase order を PR body で明記する。
 - Issue #814: Dashboard Butler voice mode で VPS 返信を読み上げる。
   Issue #816 が merged / verified された後に、発話 transcript、VPS
   handoff、返信読み上げ、Wake Lock、終了時 cleanup の owner-facing workflow

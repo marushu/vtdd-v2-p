@@ -1,5 +1,15 @@
 # Issue #816 差し込み queue 添付保持 作戦図
 
+## 2026-06-07 follow-up: Codex-style insertion panel
+
+owner 観測: 現行の差し込み queue は入力欄の下に積み続けており、体験として NG。実行中に composer へ入力した follow-up は、入力欄の上に owner-facing panel として出し、デフォルトでは queue して AI の作業完了または owner の停止後に送る。必要な時だけ `誘導する` を選ぶと、現在の AI 返しタイミングに応じて差し込む。queued item には `編集する` と `キャンセル` も必要。
+
+この follow-up の scope は Issue #816 内に収める。添付保持だけでなく、queue 表示位置と owner action の選択肢までが差し込み workflow の completion 体験であるため、PR #817 を更新する。Issue #818 の voice interrupt gate と Issue #820 の drawer force refresh は merge 済み truth として取り込み、#816 は `Now` に戻す。
+
+設計: `followup-draft` と `followup-queue-list` を composer box の前に置き、入力欄の下へ流れないようにする。active turn 中の submit は queue item を作るだけで即 flush しない。`setActiveTurnInProgress(true -> false)` の遷移で queued follow-up を flush し、stop button で停止した場合も stop request 後に flush する。queue item の `誘導する` action はその item を即送信し、`編集する` は mediaReferences を保持したまま text を更新し、`キャンセル` は未送信 item を queue から外す。
+
+検証計画: unit で DOM order、button labels、default submit が immediate flush しないことを source guard する。E2E で active turn 中に text+添付を送信し、入力欄の上の queue panel に `キュー待ち` / `誘導する` / `編集する` / `キャンセル` が見えること、default では WebSocket payload が増えず、`誘導する` 選択後に mediaReferences 付き owner_message が送られることを確認する。
+
 ## 完了体験
 
 owner が Dashboard Butler の通常チャットまたはボイスモード中に、実行中 turn へ画像・動画つきで差し込みを入れても、添付が queue item に残り、送信時に Dashboard thread と codex app-server bridge の turn input へ同じ media reference が届く。owner は queue に何を送る予定かを見られ、添付が upload 中なら添付なしで送られず、待機または blocker として分かる。

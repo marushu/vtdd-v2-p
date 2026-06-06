@@ -72505,7 +72505,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .followup-queue { display: grid; gap: 8px; padding: 0 10px; }
     .followup-queue[hidden], .followup-draft[hidden] { display: none; }
     .followup-chip, .followup-draft { width: fit-content; max-width: min(720px, 100%); justify-self: end; border: 1px solid var(--border); border-radius: 18px; background: var(--floating-bg); box-shadow: 0 10px 34px var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text); }
-    .followup-chip { display: grid; gap: 3px; padding: 9px 12px; font-size: 13px; line-height: 1.42; }
+    .followup-chip { display: grid; gap: 7px; padding: 9px 12px; font-size: 13px; line-height: 1.42; }
     .followup-chip small { color: var(--muted); font-weight: 800; }
     .followup-draft { display: grid; gap: 8px; padding: 10px; }
     .followup-draft p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
@@ -72741,6 +72741,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <span class="progress-title">\u9032\u884C\u4E2D</span>
           <p class="progress-text"></p>
         </div>
+        <div class="followup-draft" id="butler-followup-draft" hidden>
+          <p id="butler-followup-draft-text"></p>
+          <div class="followup-actions">
+            <button id="butler-followup-cancel" type="button">\u30AD\u30E3\u30F3\u30BB\u30EB</button>
+            <button id="butler-followup-queue" type="button">\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0</button>
+          </div>
+        </div>
+        <div class="followup-queue" id="butler-followup-queue-list" aria-live="polite" hidden></div>
         <div class="composer-box" data-can-send="false" data-running="false">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
@@ -72750,14 +72758,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1" data-mode="send"><span>\u2191</span></button>
           </div>
         </div>
-        <div class="followup-draft" id="butler-followup-draft" hidden>
-          <p id="butler-followup-draft-text"></p>
-          <div class="followup-actions">
-            <button id="butler-followup-cancel" type="button">\u30AD\u30E3\u30F3\u30BB\u30EB</button>
-            <button id="butler-followup-queue" type="button">\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0</button>
-          </div>
-        </div>
-        <div class="followup-queue" id="butler-followup-queue-list" aria-live="polite" hidden></div>
         <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E96\u5099\u4E2D\u3067\u3059\u3002\u9001\u4FE1\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u77E5\u3089\u305B\u307E\u3059\u3002</div>
       </form>
       <div class="media-lightbox" id="butler-media-lightbox" role="dialog" aria-modal="true" aria-label="\u6DFB\u4ED8\u30D7\u30EC\u30D3\u30E5\u30FC" hidden>
@@ -73114,9 +73114,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setActiveTurnInProgress(active) {
+        const wasActive = activeTurnInProgress;
         activeTurnInProgress = active === true;
         setSendButtonMode(activeTurnInProgress ? "stop" : "send");
         syncComposerActionState();
+        if (wasActive && !activeTurnInProgress) {
+          flushQueuedFollowups();
+        }
       }
 
       function clearFollowupDraft() {
@@ -73143,9 +73147,90 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             media.textContent = "\u6DFB\u4ED8 " + mediaReferences.length + "\u4EF6";
             chip.appendChild(media);
           }
+          if (item.status === "queued") {
+            const actions = document.createElement("div");
+            actions.className = "followup-actions";
+            const guideButton = document.createElement("button");
+            guideButton.type = "button";
+            guideButton.dataset.followupAction = "guide";
+            guideButton.dataset.followupId = item.id;
+            guideButton.textContent = "\u8A98\u5C0E\u3059\u308B";
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.dataset.followupAction = "edit";
+            editButton.dataset.followupId = item.id;
+            editButton.textContent = "\u7DE8\u96C6\u3059\u308B";
+            const cancelButton = document.createElement("button");
+            cancelButton.type = "button";
+            cancelButton.dataset.followupAction = "cancel";
+            cancelButton.dataset.followupId = item.id;
+            cancelButton.textContent = "\u30AD\u30E3\u30F3\u30BB\u30EB";
+            actions.appendChild(guideButton);
+            actions.appendChild(editButton);
+            actions.appendChild(cancelButton);
+            chip.appendChild(actions);
+          }
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
+      }
+
+      function findFollowupQueueItem(itemId) {
+        return followupQueue.find((item) => item.id === itemId) || null;
+      }
+
+      function flushFollowupQueueItem(itemId) {
+        const item = findFollowupQueueItem(itemId);
+        if (!item || item.status !== "queued") return false;
+        if (!isChatSocketOpen()) {
+          setStatus("\u63A5\u7D9A\u304C\u623B\u3063\u305F\u3089\u5DEE\u3057\u8FBC\u307F\u3092\u9001\u308A\u307E\u3059\u3002", { thinking: true });
+          return false;
+        }
+        try {
+          chatSocket.send(JSON.stringify({
+            type: "owner_message",
+            threadId,
+            clientMessageId: item.id,
+            repositoryInput,
+            text: item.text,
+            issueNumber,
+            relatedIssue: issueNumber,
+            mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
+            interruption: true
+          }));
+          item.status = "sent";
+          renderFollowupQueue();
+          return true;
+        } catch {
+          setStatus("\u5DEE\u3057\u8FBC\u307F\u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u5FA9\u5E30\u5F8C\u306B\u518D\u9001\u3067\u304D\u307E\u3059\u3002");
+          renderFollowupQueue();
+          return false;
+        }
+      }
+
+      function cancelFollowupQueueItem(itemId) {
+        const before = followupQueue.length;
+        followupQueue = followupQueue.filter((item) => item.id !== itemId || item.status === "sent");
+        if (followupQueue.length !== before) {
+          renderFollowupQueue();
+          setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E3\u30F3\u30BB\u30EB\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+        }
+      }
+
+      function editFollowupQueueItem(itemId) {
+        const item = findFollowupQueueItem(itemId);
+        if (!item || item.status !== "queued") return false;
+        const nextText = window.prompt("\u5DEE\u3057\u8FBC\u307F\u3092\u7DE8\u96C6", item.text);
+        if (nextText === null) return false;
+        const normalized = normalizeComposerInputText(nextText).trim();
+        if (!normalized) {
+          setStatus("\u7A7A\u306E\u5DEE\u3057\u8FBC\u307F\u306B\u306F\u3067\u304D\u307E\u305B\u3093\u3002", { temporary: true });
+          return false;
+        }
+        item.text = normalized;
+        renderFollowupQueue();
+        setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u7DE8\u96C6\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+        return true;
       }
 
       function addFollowupQueueItem(text, options = {}) {
@@ -73578,20 +73663,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (!isChatSocketOpen()) return;
         const queued = followupQueue.filter((item) => item.status === "queued");
         for (const item of queued) {
-          try {
-            chatSocket.send(JSON.stringify({
-              type: "owner_message",
-              threadId,
-              clientMessageId: item.id,
-              repositoryInput,
-              text: item.text,
-              issueNumber,
-              relatedIssue: issueNumber,
-              mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
-              interruption: true
-            }));
-            item.status = "sent";
-          } catch {
+          if (!flushFollowupQueueItem(item.id)) {
             break;
           }
         }
@@ -73612,6 +73684,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         } catch {}
         clearTransientProgress();
         setActiveTurnInProgress(false);
+        flushQueuedFollowups();
         setComposerLocked(false);
         setStatus("\u505C\u6B62\u3092\u30EA\u30AF\u30A8\u30B9\u30C8\u3057\u307E\u3057\u305F\u3002\u53CD\u6620\u307E\u3067\u306F\u540C\u3058 thread \u3067\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002", { temporary: true });
         return true;
@@ -75318,8 +75391,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           resizeComposerInput();
           persistDashboardDraft();
           clearFollowupDraft();
-          flushQueuedFollowups();
-          setStatus(item?.status === "sent" ? "\u5DEE\u3057\u8FBC\u307F\u3092\u73FE\u5728\u306E\u5B9F\u884C\u3078\u9001\u308A\u307E\u3057\u305F\u3002" : "\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002\u73FE\u5728\u306E\u5B9F\u884C\u3078\u53CD\u6620\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u9001\u308A\u307E\u3059\u3002", { temporary: true });
+          setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002AI \u306E\u4F5C\u696D\u304C\u7D42\u308F\u308B\u304B\u505C\u6B62\u3057\u305F\u6642\u306B\u9001\u308A\u307E\u3059\u3002", { temporary: true });
           textarea.focus({ preventScroll: true });
           return;
         }
@@ -75461,10 +75533,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         textarea.value = "";
         resizeComposerInput();
         clearFollowupDraft();
-        flushQueuedFollowups();
         persistDashboardDraft();
-        setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+        setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002AI \u306E\u4F5C\u696D\u304C\u7D42\u308F\u308B\u304B\u505C\u6B62\u3057\u305F\u6642\u306B\u9001\u308A\u307E\u3059\u3002", { temporary: true });
         textarea.focus({ preventScroll: true });
+      });
+      followupQueueList?.addEventListener("click", (event) => {
+        const button = event.target?.closest?.("button[data-followup-action]");
+        if (!button) return;
+        const itemId = button.dataset.followupId || "";
+        if (button.dataset.followupAction === "guide") {
+          if (flushFollowupQueueItem(itemId)) {
+            setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u73FE\u5728\u306E\u5B9F\u884C\u3078\u8A98\u5C0E\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+          }
+          return;
+        }
+        if (button.dataset.followupAction === "edit") {
+          editFollowupQueueItem(itemId);
+          return;
+        }
+        if (button.dataset.followupAction === "cancel") {
+          cancelFollowupQueueItem(itemId);
+        }
       });
       voiceButton?.addEventListener("click", toggleVoiceInput);
 

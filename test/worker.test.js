@@ -1354,6 +1354,15 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("navigator.wakeLock.request"), true);
   assert.equal(body.includes("function releaseVoiceWakeLock()"), true);
   assert.equal(body.includes('id="butler-followup-draft"'), true);
+  assert.equal(body.indexOf('id="butler-followup-queue-list"') < body.indexOf('<div class="composer-box"'), true);
+  assert.equal(body.includes('data-followup-action = "guide"'), false);
+  assert.equal(body.includes('guideButton.dataset.followupAction = "guide"'), true);
+  assert.equal(body.includes('guideButton.textContent = "誘導する"'), true);
+  assert.equal(body.includes('editButton.textContent = "編集する"'), true);
+  assert.equal(body.includes('cancelButton.textContent = "キャンセル"'), true);
+  assert.equal(body.includes('function flushFollowupQueueItem(itemId)'), true);
+  assert.equal(body.includes('function editFollowupQueueItem(itemId)'), true);
+  assert.equal(body.includes('AI の作業が終わるか停止した時に送ります'), true);
   assert.equal(body.includes("function addFollowupQueueItem(text, options = {})"), true);
   assert.equal(body.includes("async function addFollowupQueueItemFromComposer(text, options = {})"), true);
   assert.equal(body.includes("function flushQueuedFollowups()"), true);

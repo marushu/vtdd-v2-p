@@ -547,10 +547,25 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
     )
   });
   await expect(page.locator("#butler-pending-media .media-chip")).toHaveCount(1);
+  const sentBeforeFollowupQueue = await page.evaluate(() => window.__vtddFakeSockets?.[0]?.sent?.length || 0);
   await page.locator("#butler-followup-queue").click();
-  await expect(page.locator("#butler-followup-queue-list")).toContainText("差し込み済み");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("キュー待ち");
   await expect(page.locator("#butler-followup-queue-list")).toContainText("これは現在の実行に差し込む補足。");
   await expect(page.locator("#butler-followup-queue-list")).toContainText("添付 1件");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("誘導する");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("編集する");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("キャンセル");
+  await expect.poll(async () => page.evaluate(() => window.__vtddFakeSockets?.[0]?.sent?.length || 0)).toBe(sentBeforeFollowupQueue);
+  await expect.poll(async () => page.evaluate(() => {
+    const queue = document.querySelector("#butler-followup-queue-list");
+    const composerBox = document.querySelector(".composer-box");
+    return Boolean(
+      queue &&
+      composerBox &&
+      (queue.compareDocumentPosition(composerBox) & Node.DOCUMENT_POSITION_FOLLOWING)
+    );
+  })).toBe(true);
+  await page.locator('button[data-followup-action="guide"]').click();
   await expect.poll(async () => page.evaluate(() => {
     const sent = window.__vtddFakeSockets?.[0]?.sent || [];
     return sent
