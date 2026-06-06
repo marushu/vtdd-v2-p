@@ -1,0 +1,1374 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD Butler current aligned mock</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --chat-font-size: 17px;
+      --page-bg: #f7f7f4;
+      --text: #151515;
+      --muted: #6b6b64;
+      --muted-2: #9a9a93;
+      --soft: #f0f0eb;
+      --panel: #ffffff;
+      --border: #ddddd5;
+      --button: #f4f4ef;
+      --owner-bubble: #171717;
+      --owner-text: #f7f7f4;
+      --link: #0b6b65;
+      --shadow: rgba(20, 20, 20, .12);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--page-bg);
+      color: var(--text);
+    }
+
+    body[data-font="16"] { --chat-font-size: 16px; }
+    body[data-font="18"] { --chat-font-size: 18px; }
+
+    body[data-theme="dark"] {
+      --page-bg: #030303;
+      --text: #f5f5f2;
+      --muted: #9a9a94;
+      --muted-2: #71716c;
+      --soft: #171717;
+      --panel: #171717;
+      --border: #2a2a2a;
+      --button: #151515;
+      --owner-bubble: #f2f2ee;
+      --owner-text: #111111;
+      --link: #7cc8f0;
+      --shadow: rgba(0, 0, 0, .48);
+    }
+
+    * { box-sizing: border-box; min-width: 0; }
+
+    body {
+      margin: 0;
+      background: var(--page-bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    .screen {
+      width: 390px;
+      min-height: 844px;
+      margin: 0 auto;
+      background: var(--page-bg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    body[data-device="ipad"] .screen {
+      width: 834px;
+      min-height: 1194px;
+    }
+
+    body[data-device="ipad"] .chat {
+      height: calc(1194px - 54px);
+      padding-left: 300px;
+      padding-right: 48px;
+      padding-top: 116px;
+    }
+
+    body[data-device="ipad"] .topbar {
+      left: 300px;
+      right: 36px;
+    }
+
+    body[data-device="ipad"] .composer-wrap {
+      left: 300px;
+      right: 36px;
+    }
+
+    body[data-device="ipad"] .owner-message {
+      max-width: min(68%, 560px);
+    }
+
+    .statusbar {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      font-size: 17px;
+      font-weight: 800;
+      color: #000;
+      background: #f7f7f4;
+    }
+
+    .phone-icons {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 15px;
+    }
+
+    .topbar {
+      position: absolute;
+      top: 76px;
+      left: 16px;
+      right: 16px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0;
+      pointer-events: none;
+    }
+
+    .topbar::before {
+      content: "";
+      position: absolute;
+      inset: -18px -16px -14px;
+      z-index: -1;
+      background: linear-gradient(to bottom, var(--page-bg) 62%, rgba(247, 247, 244, 0));
+      pointer-events: none;
+    }
+
+    body[data-theme="dark"] .topbar::before {
+      background: linear-gradient(to bottom, var(--page-bg) 62%, rgba(3, 3, 3, 0));
+    }
+
+    .menu-scrim {
+      display: none;
+      position: absolute;
+      inset: 54px 0 0;
+      z-index: 30;
+      background: rgba(247, 247, 244, .22);
+      backdrop-filter: blur(5px);
+    }
+
+    body[data-theme="dark"] .menu-scrim {
+      background: rgba(3, 3, 3, .30);
+    }
+
+    body[data-state="menu"] .menu-scrim,
+    body[data-state="menu-keyboard"] .menu-scrim {
+      display: block;
+    }
+
+    body[data-device="ipad"] .menu-scrim {
+      display: none;
+    }
+
+    .submenu {
+      display: none;
+      position: absolute;
+      top: 78px;
+      left: 16px;
+      z-index: 40;
+      width: min(298px, calc(100% - 32px));
+      max-height: calc(100% - 120px);
+      padding: 12px;
+      border: 1px solid rgba(221, 221, 213, .72);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, .78);
+      box-shadow: 0 22px 58px rgba(20, 20, 20, .14);
+      backdrop-filter: blur(22px);
+      color: var(--text);
+    }
+
+    body[data-theme="dark"] .submenu {
+      border-color: rgba(42, 42, 42, .84);
+      background: rgba(18, 18, 18, .78);
+      box-shadow: 0 22px 60px rgba(0, 0, 0, .56);
+    }
+
+    body[data-state="menu"] .submenu,
+    body[data-state="menu-keyboard"] .submenu {
+      display: grid;
+      gap: 12px;
+    }
+
+    body[data-device="ipad"] .submenu {
+      display: grid;
+      gap: 12px;
+      top: 78px;
+      left: 24px;
+      width: 248px;
+      max-height: calc(100% - 112px);
+      border-radius: 24px;
+    }
+
+    .submenu-head {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 2px 2px 4px;
+    }
+
+    .submenu-close {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(244, 244, 239, .72);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      font-weight: 760;
+    }
+
+    body[data-theme="dark"] .submenu-close {
+      background: rgba(21, 21, 21, .72);
+    }
+
+    .submenu-title strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.2;
+      font-weight: 850;
+    }
+
+    .submenu-title span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .submenu-section {
+      display: grid;
+      gap: 3px;
+    }
+
+    .submenu-section-title {
+      padding: 6px 12px 3px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+      font-weight: 860;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .submenu-item {
+      min-height: 42px;
+      border: 0;
+      border-radius: 16px;
+      background: transparent;
+      color: var(--text);
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      align-items: center;
+      gap: 8px;
+      padding: 0 11px;
+      text-align: left;
+      font: inherit;
+      font-size: 15px;
+      line-height: 1.2;
+      font-weight: 720;
+    }
+
+    .submenu-item.active {
+      background: rgba(20, 20, 20, .07);
+    }
+
+    body[data-theme="dark"] .submenu-item.active {
+      background: rgba(255, 255, 255, .08);
+    }
+
+    .submenu-item .meta {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .submenu-foot {
+      border-top: 1px solid var(--border);
+      padding: 10px 12px 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .menu {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--button);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      font-weight: 800;
+      flex: 0 0 auto;
+      box-shadow: 0 10px 26px rgba(20, 20, 20, .08);
+      pointer-events: auto;
+      backdrop-filter: blur(18px);
+    }
+
+    body[data-theme="light"] .menu {
+      background: rgba(244, 244, 239, .70);
+    }
+
+    body[data-theme="dark"] .menu {
+      background: rgba(21, 21, 21, .68);
+    }
+
+    .thread-title h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.05;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .thread-title {
+      min-width: 0;
+      max-width: calc(100% - 58px);
+      pointer-events: auto;
+      padding: 8px 13px 9px;
+      border-radius: 20px;
+      background: rgba(247, 247, 244, .58);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 10px 24px rgba(20, 20, 20, .045);
+    }
+
+    body[data-theme="dark"] .thread-title {
+      background: rgba(3, 3, 3, .50);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, .30);
+    }
+
+    .thread-title span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat {
+      height: calc(844px - 54px);
+      overflow: hidden;
+      padding: 110px 30px 128px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .butler-text {
+      font-size: var(--chat-font-size, 17px);
+      line-height: 1.76;
+      color: var(--text);
+    }
+
+    .butler-text p {
+      margin: 0 0 20px;
+    }
+
+    .butler-text ul {
+      margin: 0 0 22px;
+      padding-left: 24px;
+    }
+
+    .butler-text li {
+      margin: 0 0 9px;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: .92em;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: -6px;
+    }
+
+    .copy {
+      width: 31px;
+      height: 31px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--button);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .owner-message {
+      align-self: flex-end;
+      width: fit-content;
+      max-width: 82%;
+      background: var(--owner-bubble);
+      color: var(--owner-text);
+      border-radius: 25px;
+      padding: 13px 17px;
+      font-size: var(--chat-font-size, 17px);
+      line-height: 1.55;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 850;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      margin-bottom: -8px;
+    }
+
+    .status-line {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    body[data-state="queued"] .status-line {
+      opacity: .38;
+    }
+
+    body[data-state="multi-queue"] .status-line {
+      opacity: .38;
+    }
+
+    body[data-state="recovery"] .status-line,
+    body[data-state="recovery-running"] .status-line {
+      opacity: .78;
+    }
+
+    .status-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 850;
+    }
+
+    .status-title::before {
+      content: "";
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      background: var(--link);
+      box-shadow: 0 0 0 6px rgba(11, 107, 101, .10);
+    }
+
+    .quiet-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+      padding-left: 2px;
+    }
+
+    .inline-tools {
+      display: none;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+
+    .inline-tools span {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 9px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, .5);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .composer-wrap {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 0;
+      padding-bottom: 15px;
+      background: linear-gradient(to top, var(--page-bg) 78%, rgba(247, 247, 244, 0));
+    }
+
+    body[data-theme="dark"] .composer-wrap {
+      background: linear-gradient(to top, var(--page-bg) 78%, rgba(3, 3, 3, 0));
+    }
+
+    .jump-latest {
+      position: absolute;
+      left: 50%;
+      bottom: 108px;
+      transform: translateX(-50%);
+      width: 43px;
+      height: 43px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, .86);
+      color: var(--text);
+      box-shadow: 0 12px 28px rgba(20, 20, 20, .12);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 25px;
+      line-height: 1;
+      z-index: 2;
+    }
+
+    .followup-stack {
+      display: none;
+      gap: 8px;
+      justify-items: center;
+      margin: 0 10px 10px;
+      position: relative;
+    }
+
+    body[data-state="codex-followup"] .followup-stack {
+      display: grid;
+    }
+
+    body[data-state="followup-menu"] .followup-stack {
+      display: grid;
+    }
+
+    body[data-state="queued"] .followup-stack {
+      display: grid;
+    }
+
+    body[data-state="multi-queue"] .followup-stack {
+      display: grid;
+    }
+
+    body[data-state="recovery"] .followup-stack,
+    body[data-state="recovery-running"] .followup-stack {
+      display: grid;
+    }
+
+    .followup-bubble {
+      justify-self: end;
+      max-width: 82%;
+      padding: 10px 13px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .82);
+      color: var(--text);
+      box-shadow: 0 12px 28px rgba(20, 20, 20, .08);
+      font-size: 15px;
+      line-height: 1.55;
+      backdrop-filter: blur(14px);
+    }
+
+    body[data-theme="dark"] .followup-bubble {
+      background: rgba(24, 24, 24, .86);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .42);
+    }
+
+    .followup-bubble.secondary {
+      max-width: 76%;
+      opacity: .72;
+      font-size: 14px;
+      padding: 8px 12px;
+    }
+
+    .change-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 34px;
+      padding: 0 16px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .86);
+      color: var(--muted);
+      box-shadow: 0 10px 22px rgba(20, 20, 20, .08);
+      font-size: 13px;
+      font-weight: 750;
+      backdrop-filter: blur(14px);
+    }
+
+    body[data-theme="dark"] .change-pill {
+      background: rgba(24, 24, 24, .86);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, .42);
+    }
+
+    .change-pill .plus { color: #1f9d55; }
+    .change-pill .minus { color: #d84c58; }
+
+    .queue-pill {
+      display: none;
+      align-items: center;
+      justify-self: end;
+      gap: 8px;
+      min-height: 35px;
+      padding: 0 13px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .86);
+      color: var(--muted);
+      box-shadow: 0 10px 22px rgba(20, 20, 20, .08);
+      font-size: 13px;
+      font-weight: 760;
+      backdrop-filter: blur(14px);
+    }
+
+    body[data-theme="dark"] .queue-pill {
+      background: rgba(24, 24, 24, .86);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, .42);
+    }
+
+    body[data-state="queued"] .queue-pill {
+      display: inline-flex;
+    }
+
+    body[data-state="multi-queue"] .queue-pill {
+      display: inline-flex;
+    }
+
+    body[data-state="queued"] .followup-bubble,
+    body[data-state="queued"] .task-card {
+      display: none;
+    }
+
+    body[data-state="recovery"] .followup-bubble,
+    body[data-state="recovery"] .change-pill,
+    body[data-state="recovery"] .task-card,
+    body[data-state="recovery"] .queue-pill,
+    body[data-state="recovery-running"] .followup-bubble,
+    body[data-state="recovery-running"] .change-pill,
+    body[data-state="recovery-running"] .task-card,
+    body[data-state="recovery-running"] .queue-pill {
+      display: none;
+    }
+
+    body[data-state="queued"] .change-pill {
+      margin-bottom: 2px;
+    }
+
+    body[data-state="multi-queue"] .task-card {
+      display: none;
+    }
+
+    body[data-state="multi-queue"] .change-pill {
+      margin-bottom: 2px;
+    }
+
+    .queue-list {
+      display: none;
+      width: min(296px, calc(100% - 16px));
+      justify-self: end;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 19px;
+      background: rgba(255, 255, 255, .88);
+      color: var(--muted);
+      box-shadow: 0 12px 26px rgba(20, 20, 20, .08);
+      backdrop-filter: blur(14px);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    body[data-theme="dark"] .queue-list {
+      background: rgba(24, 24, 24, .88);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .42);
+    }
+
+    body[data-state="multi-queue"] .queue-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .queue-list div {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 6px;
+      align-items: start;
+    }
+
+    .queue-list strong {
+      color: var(--text);
+      font-weight: 760;
+    }
+
+    .task-card {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      background: rgba(255, 255, 255, .86);
+      color: var(--text);
+      box-shadow: 0 12px 28px rgba(20, 20, 20, .08);
+      backdrop-filter: blur(14px);
+    }
+
+    body[data-theme="dark"] .task-card {
+      background: rgba(24, 24, 24, .90);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .44);
+    }
+
+    .task-card h3 {
+      margin: 0 0 7px;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    .task-card ol {
+      margin: 0;
+      padding-left: 24px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .task-card li.done {
+      text-decoration: line-through;
+      opacity: .68;
+    }
+
+    .followup-action-menu {
+      display: none;
+      width: min(270px, 84%);
+      padding: 12px 0;
+      border: 1px solid rgba(221, 221, 213, .92);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, .90);
+      box-shadow: 0 18px 48px rgba(20, 20, 20, .14);
+      backdrop-filter: blur(18px);
+      position: absolute;
+      left: 50%;
+      bottom: 62px;
+      transform: translateX(-50%);
+      z-index: 4;
+    }
+
+    body[data-state="followup-menu"] .followup-action-menu {
+      display: block;
+    }
+
+    body[data-theme="dark"] .followup-action-menu {
+      background: rgba(24, 24, 24, .92);
+      border-color: rgba(54, 54, 54, .9);
+      box-shadow: 0 18px 52px rgba(0, 0, 0, .52);
+    }
+
+    .followup-action-menu .draft {
+      padding: 8px 22px 13px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .followup-action-menu button {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 12px 24px;
+      text-align: left;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 670;
+    }
+
+    .followup-action-menu button.danger {
+      color: #f04438;
+    }
+
+    .recovery-panel {
+      display: none;
+      width: min(342px, calc(100% - 10px));
+      justify-self: center;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 16px 38px rgba(20, 20, 20, .12);
+      backdrop-filter: blur(18px);
+    }
+
+    body[data-theme="dark"] .recovery-panel {
+      background: rgba(24, 24, 24, .92);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .52);
+    }
+
+    body[data-state="recovery"] .recovery-panel,
+    body[data-state="recovery-running"] .recovery-panel {
+      display: grid;
+      gap: 10px;
+    }
+
+    .recovery-panel h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .recovery-panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .recovery-steps {
+      display: grid;
+      gap: 7px;
+      margin: 2px 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .recovery-steps div {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 7px;
+      align-items: start;
+    }
+
+    .recovery-steps strong {
+      color: var(--text);
+      font-weight: 760;
+    }
+
+    .recovery-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .recovery-actions button {
+      min-height: 42px;
+      border-radius: 15px;
+      border: 1px solid var(--border);
+      background: var(--button);
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 780;
+    }
+
+    .recovery-actions .primary {
+      background: var(--owner-bubble);
+      color: var(--owner-text);
+      border-color: var(--owner-bubble);
+    }
+
+    body[data-state="scrolled"] .jump-latest,
+    body[data-state="insert"] .jump-latest,
+    body[data-state="codex-followup"] .jump-latest,
+    body[data-state="queued"] .jump-latest,
+    body[data-state="multi-queue"] .jump-latest {
+      display: inline-flex;
+    }
+
+    body[data-theme="dark"] .jump-latest {
+      background: rgba(22, 22, 22, .88);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .48);
+    }
+
+    body[data-state="multi-queue"] .jump-latest {
+      bottom: 176px;
+    }
+
+    .insert-draft {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin: 0 14px 7px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    body[data-state="insert"] .insert-draft {
+      display: flex;
+    }
+
+    .insert-draft strong {
+      color: var(--text);
+      font-weight: 850;
+    }
+
+    .insert-draft button {
+      margin-left: auto;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-weight: 750;
+      padding: 0;
+    }
+
+    .composer-box {
+      min-height: 72px;
+      border-radius: 28px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: 0 18px 34px var(--shadow);
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr) 48px;
+      align-items: center;
+      gap: 10px;
+      padding: 9px;
+    }
+
+    body[data-theme="dark"] .composer-box {
+      box-shadow: 0 18px 34px rgba(0, 0, 0, .72);
+    }
+
+    .media-button,
+    .send-button {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font: inherit;
+      font-weight: 850;
+      flex: 0 0 auto;
+    }
+
+    .media-button {
+      border: 1px solid var(--border);
+      background: var(--button);
+      color: var(--text);
+      font-size: 26px;
+    }
+
+    .send-button {
+      border: 1px solid var(--owner-bubble);
+      background: var(--owner-bubble);
+      color: var(--owner-text);
+      font-size: 30px;
+      line-height: 1;
+    }
+
+    .input-copy {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 0 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .input-main,
+    .input-sub {
+      display: inline-block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .input-sub {
+      display: none;
+      margin-left: 10px;
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    body[data-state="queued"] .input-main {
+      color: var(--muted-2);
+    }
+
+    body[data-state="queued"] .input-sub {
+      display: inline;
+    }
+
+    body[data-state="multi-queue"] .input-main {
+      color: var(--muted-2);
+    }
+
+    body[data-state="multi-queue"] .input-sub {
+      display: inline;
+    }
+
+    .model-status {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-weight: 760;
+      flex: 0 0 auto;
+    }
+
+    body[data-state="queued"] .model-status {
+      display: inline-flex;
+    }
+
+    body[data-state="multi-queue"] .model-status {
+      display: inline-flex;
+    }
+
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 3px solid var(--border);
+      border-top-color: var(--text);
+      display: inline-block;
+    }
+
+    .composer-status {
+      min-height: 28px;
+      padding: 10px 16px 0;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ime-accessory {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 48px;
+      margin: 10px 0 0;
+      padding: 0 18px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, .90);
+      color: var(--muted);
+      box-shadow: 0 12px 26px rgba(20, 20, 20, .10);
+      backdrop-filter: blur(16px);
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    body[data-theme="dark"] .ime-accessory {
+      background: rgba(24, 24, 24, .92);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .48);
+    }
+
+    body[data-state="keyboard"] .ime-accessory {
+      display: flex;
+    }
+
+    body[data-state="menu-keyboard"] .ime-accessory {
+      display: flex;
+    }
+
+    body[data-state="keyboard"] .composer-wrap {
+      padding-bottom: 8px;
+    }
+
+    .ime-left {
+      display: inline-flex;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .ime-done {
+      color: var(--text);
+      font-weight: 850;
+    }
+
+    .attachment-menu {
+      position: absolute;
+      left: 0;
+      right: auto;
+      bottom: 110px;
+      width: 268px;
+      padding: 12px 0;
+      border: 1px solid rgba(221, 221, 213, .92);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 14px 42px rgba(20, 20, 20, .12);
+      backdrop-filter: blur(18px);
+    }
+
+    body[data-theme="dark"] .attachment-menu {
+      background: rgba(24, 24, 24, .94);
+      border-color: rgba(54, 54, 54, .9);
+    }
+
+    body[data-theme="dark"] .attachment-menu .icon {
+      color: var(--text);
+    }
+
+    .attachment-menu div {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 680;
+    }
+
+    .attachment-menu .icon {
+      width: 28px;
+      text-align: center;
+      font-size: 20px;
+      color: #111;
+    }
+
+    .passkey-sheet {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 130px;
+      padding: 17px;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, .96);
+      box-shadow: 0 20px 44px rgba(20, 20, 20, .13);
+      display: none;
+      z-index: 6;
+    }
+
+    body[data-theme="dark"] .passkey-sheet {
+      background: rgba(24, 24, 24, .96);
+    }
+
+    body[data-state="passkey"] .passkey-sheet {
+      display: block;
+    }
+
+    .passkey-sheet h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.25;
+    }
+
+    .passkey-sheet p {
+      margin: 0 0 13px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .passkey-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .passkey-actions button {
+      min-height: 44px;
+      border-radius: 15px;
+      border: 1px solid var(--border);
+      background: var(--button);
+      color: var(--text);
+      font: inherit;
+      font-weight: 850;
+    }
+
+    .passkey-actions .primary {
+      background: var(--owner-bubble);
+      color: var(--owner-text);
+      border-color: var(--owner-bubble);
+    }
+
+    .passkey-detail {
+      border-top: 1px solid var(--border);
+      margin-top: 12px;
+      padding-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <div class="screen">
+    <div class="statusbar">
+      <span>12:04</span>
+      <span class="phone-icons">▮▮▮ Wi‑Fi 84</span>
+    </div>
+
+    <header class="topbar">
+      <button class="menu" aria-label="メニュー">≡</button>
+      <div class="thread-title">
+        <h1>VTDD Butler</h1>
+        <span>repo-less main chat ・ dashboard main chat</span>
+      </div>
+    </header>
+
+    <div class="menu-scrim" aria-hidden="true"></div>
+    <aside class="submenu" aria-label="Butler サブメニュー">
+      <div class="submenu-head">
+        <button class="submenu-close" aria-label="閉じる">×</button>
+        <div class="submenu-title">
+          <strong>Butler</strong>
+          <span>チャットから離れずに確認</span>
+        </div>
+      </div>
+
+      <div class="submenu-section">
+        <div class="submenu-section-title">Main</div>
+        <button class="submenu-item active"><span>●</span><span>メインチャット</span><span class="meta">現在</span></button>
+        <button class="submenu-item"><span>◌</span><span>通知センター</span><span class="meta">通知タップで直行</span></button>
+        <button class="submenu-item"><span>◌</span><span>進捗</span><span class="meta">実行中</span></button>
+      </div>
+
+      <div class="submenu-section">
+        <div class="submenu-section-title">Truth</div>
+        <button class="submenu-item"><span>◌</span><span>GitHub truth</span><span class="meta">PR/Issue</span></button>
+        <button class="submenu-item"><span>◌</span><span>VPS truth</span><span class="meta">runner</span></button>
+      </div>
+
+      <div class="submenu-section">
+        <div class="submenu-section-title">Operate</div>
+        <button class="submenu-item"><span>◌</span><span>復旧</span><span class="meta">固定手順</span></button>
+        <button class="submenu-item"><span>◌</span><span>承認履歴</span><span class="meta">passkey</span></button>
+      </div>
+
+      <div class="submenu-section">
+        <div class="submenu-section-title">奥に隠す</div>
+        <button class="submenu-item"><span>◌</span><span>Operations / Debug</span><span class="meta">詳細</span></button>
+      </div>
+
+      <div class="submenu-foot">
+        通知そのものはここに大量表示しない。未読数と入口だけ出し、本文は通知センターで読む。PWA の iOS / iPadOS 通知をタップした時は、チャットではなく通知センターを直接開く。
+      </div>
+    </aside>
+
+    <section class="chat">
+      <article class="butler-text">
+        <p>進めるなら、最低限これだけ残しておくのが安全です。</p>
+        <ul>
+          <li>何を修復したか</li>
+          <li>どの Issue / PR / ランタイム不具合に対応したか</li>
+        </ul>
+        <p>必要な技術詳細はメニューに退避します。</p>
+      </article>
+
+      <div class="actions">
+        <span>01:13</span>
+        <span class="copy">▣</span>
+      </div>
+
+      <article class="owner-message">この見た目のまま、音声と復旧も載せたい。</article>
+
+      <div class="actions">
+        <span>12:04</span>
+        <span class="copy">▣</span>
+      </div>
+
+      <div class="label">BUTLER</div>
+      <section class="status-line">
+        <div class="status-title">進行中</div>
+        <div>仕様整理中。チャットは汚さず、必要な判断だけ短く出します。</div>
+      <div class="inline-tools">
+          <span>作業実況</span>
+          <span>判断要約</span>
+          <span>次の一手</span>
+        </div>
+      </section>
+    </section>
+
+    <div class="composer-wrap">
+      <button class="jump-latest" aria-label="最新のコメントへ移動">↓</button>
+      <div class="followup-stack">
+        <div class="followup-bubble">もしかして、通常会話と開発時の消費量を変えてる？</div>
+        <div class="followup-bubble secondary">差し込みは複数件、現在の実行に順番に渡して。</div>
+        <div class="followup-action-menu" aria-label="follow-up actions">
+          <div class="draft">とにかく、Butler が AI 風な振る舞いをするのを全て無くしてね。</div>
+          <button><span>✎</span><span>メッセージを編集</span></button>
+          <button><span>↳</span><span>代わりにキューに追加</span></button>
+          <button class="danger"><span>⌫</span><span>メッセージをキャンセル</span></button>
+        </div>
+        <div class="change-pill">19件のファイルを変更 <span class="plus">+0</span><span class="minus">−0</span></div>
+        <div class="queue-pill"><span>☰</span><span>続き入力 2件</span><span>…</span></div>
+        <div class="queue-list" aria-label="queued follow-ups">
+          <div><span>1</span><strong>先に昼夜デザインを揃える</strong></div>
+          <div><span>2</span><strong>承認モーダルはチャット上に出す</strong></div>
+        </div>
+        <section class="recovery-panel" aria-label="VPS recovery">
+          <h2>VPS 復旧</h2>
+          <p>Bridge が応答しないため、固定復旧だけを実行します。通常の会話は残します。</p>
+          <div class="recovery-steps">
+            <div><span>1</span><strong>main の状態を確認</strong></div>
+            <div><span>2</span><strong>bridge を再起動</strong></div>
+            <div><span>3</span><strong>この会話へ結果を戻す</strong></div>
+          </div>
+          <div class="recovery-actions">
+            <button>詳細</button>
+            <button class="primary">復旧開始</button>
+          </div>
+        </section>
+        <section class="task-card" aria-label="progress checklist">
+          <h3>5件中4件完了</h3>
+          <ol>
+            <li class="done">仕様と現行UIを照合</li>
+            <li class="done">昼/夜テーマを整理</li>
+            <li class="done">最新へジャンプを追加</li>
+            <li class="done">入力欄を現行に寄せる</li>
+            <li>差し込み状態を確認</li>
+          </ol>
+        </section>
+      </div>
+      <div class="insert-draft">
+        <strong>差し込み中</strong>
+        <span>今の実行に補足します。送信前ならキャンセル。</span>
+        <button>キャンセル</button>
+      </div>
+      <div class="composer-box">
+        <button class="media-button" aria-label="追加">+</button>
+        <div class="input-copy" data-normal-text="Butler V2 にメッセージ..." data-insert-text="この実行、先にデザイン優先で進めて。"><span class="input-main">Butler V2 にメッセージ...</span><span class="model-status"><span class="spinner"></span>5.5 中</span></div>
+        <button class="send-button" aria-label="送信">↑</button>
+      </div>
+      <div class="composer-status">bridge 接続済み。音声・画像・復旧はここから自然に続けます。</div>
+      <div class="ime-accessory" aria-label="keyboard accessory">
+        <div class="ime-left"><span>⌃</span><span>⌄</span></div>
+        <span class="ime-done">✓</span>
+      </div>
+      <section class="passkey-sheet" aria-label="passkey approval">
+        <h2>承認が必要です</h2>
+        <p>VPS の復旧操作を実行します。対象と理由を確認してください。</p>
+        <div class="passkey-actions">
+          <button>キャンセル</button>
+          <button class="primary">承認する</button>
+        </div>
+        <div class="passkey-detail">対象: Butler bridge 復旧 / 内容: 固定手順のみ / 詳細IDは必要時だけ表示</div>
+      </section>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const state = params.get("state");
+    const theme = params.get("theme");
+    const font = params.get("font");
+    const device = params.get("device");
+    if (state) document.body.dataset.state = state;
+    if (theme) document.body.dataset.theme = theme;
+    if (font) document.body.dataset.font = font;
+    if (device) document.body.dataset.device = device;
+    const input = document.querySelector(".input-copy");
+    if (input && state === "insert") input.textContent = input.dataset.insertText;
+    const inputMain = document.querySelector(".input-main");
+    if (inputMain && state === "queued") inputMain.textContent = "フォローアップ";
+    if (inputMain && state === "multi-queue") inputMain.textContent = "フォローアップ";
+    if (inputMain && state === "recovery") inputMain.textContent = "復旧について補足...";
+    if (inputMain && state === "recovery-running") inputMain.textContent = "復旧中...";
+    if (state === "recovery-running") {
+      const panel = document.querySelector(".recovery-panel");
+      if (panel) {
+        panel.querySelector("p").textContent = "固定復旧を実行中です。完了後、この会話に before / after を戻します。";
+        panel.querySelector(".recovery-actions").style.display = "none";
+      }
+    }
+  </script>
+</body>
+</html>

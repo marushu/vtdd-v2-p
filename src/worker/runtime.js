@@ -11361,13 +11361,20 @@ function shortRepositoryName(repository) {
 
 function buildDashboardEventOwnerTargetUrl(event) {
   const record = normalizeDashboardEventRecord(event);
-  if (record.kind === "ai_news_radar") {
-    return "/dashboard/news";
-  }
-  if (record.kind === "owner_action_required" && record.runUrl) {
-    return record.runUrl;
-  }
-  return buildDashboardPullRequestUrl(event) || "/dashboard/notifications";
+  const focus = record.kind === "owner_action_required"
+    ? "owner-action"
+    : record.kind === "ai_news_radar"
+      ? "ai-news"
+      : record.kind === "vps_runner_execution"
+        ? "vps-runner"
+        : record.kind === "github_actions_workflow_run"
+          ? "github-actions"
+          : "";
+  const params = new URLSearchParams();
+  if (focus) params.set("focus", focus);
+  if (record.id) params.set("eventId", String(record.id));
+  const query = params.toString();
+  return query ? `/dashboard/notifications?${query}` : "/dashboard/notifications";
 }
 
 function buildDashboardPullRequestUrl(event) {
@@ -15590,9 +15597,6 @@ function safeDashboardNotificationUrl(value) {
   } catch {
     parsed = new URL("/dashboard/notifications", self.location.origin);
   }
-  if (parsed.origin === "https://github.com" && /^\\/[^/]+\\/[^/]+\\/pull\\/\\d+\\/?$/.test(parsed.pathname)) {
-    return parsed.toString();
-  }
   if (parsed.origin !== self.location.origin) {
     return new URL("/dashboard/notifications", self.location.origin).toString();
   }
@@ -16057,12 +16061,16 @@ export function shouldWrapDashboardChatCodeBlock(text) {
 }
 
 export function shouldSubmitDashboardComposerShortcut(event) {
+  const targetText = String(event?.target?.value || "");
+  const isSingleLine = !targetText.includes("\n");
+  const isMobileComposer = event?.target?.dataset?.mobileComposer === "true";
+  const modifiedSubmit = event.metaKey === true || event.ctrlKey === true;
   return (
     event &&
     event.key === "Enter" &&
     event.shiftKey !== true &&
     event.isComposing !== true &&
-    (event.metaKey === true || event.ctrlKey === true)
+    (modifiedSubmit || (isSingleLine && !isMobileComposer))
   );
 }
 
@@ -16240,7 +16248,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       --owner-code-text: #f7f7f4;
       --owner-code-border: #4a4a4a;
       --shadow: rgba(20, 20, 20, .12);
+      --floating-bg: rgba(247, 247, 244, .82);
+      --drawer-bg: rgba(255, 255, 255, .92);
       --dashboard-drawer-width: min(86vw, 380px);
+      --dashboard-side-width: clamp(228px, 21vw, 286px);
+      --topbar-reserve: 88px;
       color: var(--text);
       background: var(--page-bg);
     }
@@ -16264,6 +16276,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         --owner-code-text: #111111;
         --owner-code-border: #cfcfc8;
         --shadow: rgba(0, 0, 0, .42);
+        --floating-bg: rgba(5, 5, 5, .74);
+        --drawer-bg: rgba(16, 16, 16, .92);
       }
     }
     * { box-sizing: border-box; min-width: 0; }
@@ -16276,8 +16290,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     h3 { font-size: 15px; margin-bottom: 8px; }
     p { line-height: 1.65; color: var(--text); }
     a { color: inherit; }
-    .app-shell { width: 100%; max-width: 100%; height: calc(100dvh - 32px); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; overscroll-behavior-x: none; }
-    .topbar { width: 100%; max-width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
+    .app-shell { position: relative; width: 100%; max-width: 100%; height: calc(100dvh - 32px); min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; overscroll-behavior-x: none; }
+    .topbar { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 16px; right: 16px; z-index: 9; display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 58px; padding: 8px 10px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border), transparent 32%); border-radius: 999px; background: var(--floating-bg); box-shadow: 0 14px 48px var(--shadow); backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15); overscroll-behavior-x: none; touch-action: pan-y; }
     .top-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
@@ -16286,7 +16300,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .thread-title { min-width: 0; max-width: 100%; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 8px clamp(18px, 5vw, 96px) 28px; scroll-padding-bottom: calc(var(--composer-reserve, 112px) + 28px); scrollbar-gutter: stable both-edges; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: calc(var(--topbar-reserve) + 18px) clamp(18px, 5vw, 96px) 28px; scroll-padding-top: calc(var(--topbar-reserve) + 14px); scroll-padding-bottom: calc(var(--composer-reserve, 112px) + 28px); scrollbar-gutter: stable both-edges; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
     .bubble { max-width: 100%; min-width: 0; color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -16358,12 +16372,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @keyframes pulseProgress { 0%, 100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
-    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); overflow: visible; overscroll-behavior-x: none; touch-action: pan-y; }
-    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
+    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 8; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--page-bg) 72%, transparent); overflow: visible; overscroll-behavior-x: none; touch-action: pan-y; }
+    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
     textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; touch-action: pan-y; }
     textarea::placeholder { color: var(--muted); }
     .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .voice-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--text); font: inherit; font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .voice-button[data-listening="true"] { background: var(--button); border-color: var(--border); color: var(--link); }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
+    .send-button[data-mode="stop"] { font-size: 18px; }
+    .send-button[data-mode="stop"]::before { content: "■"; }
+    .send-button[data-mode="stop"] { color: var(--page-bg); }
+    .send-button[data-mode="stop"] span { display: none; }
+    .followup-queue { display: grid; gap: 8px; padding: 0 10px; }
+    .followup-queue[hidden], .followup-draft[hidden] { display: none; }
+    .followup-chip, .followup-draft { width: fit-content; max-width: min(720px, 100%); justify-self: end; border: 1px solid var(--border); border-radius: 18px; background: var(--floating-bg); box-shadow: 0 10px 34px var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text); }
+    .followup-chip { display: grid; gap: 3px; padding: 9px 12px; font-size: 13px; line-height: 1.42; }
+    .followup-chip small { color: var(--muted); font-weight: 800; }
+    .followup-draft { display: grid; gap: 8px; padding: 10px; }
+    .followup-draft p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .followup-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .followup-actions button { min-height: 34px; border: 1px solid var(--border); border-radius: 999px; padding: 0 12px; background: var(--button); color: var(--text); font: inherit; font-size: 13px; font-weight: 800; }
     .pending-media, .message-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; max-width: 100%; overflow: hidden; }
     .pending-media:empty, .message-media:empty { display: none; }
     .composer-progress { display: grid; gap: 4px; min-height: 0; padding: 0 16px; color: var(--muted); font-size: 13px; line-height: 1.5; overflow: hidden; }
@@ -16387,6 +16416,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .media-lightbox-body img, .media-lightbox-body video { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; background: #111; }
     .media-lightbox-body video { max-width: min(100%, 960px); }
     .media-lightbox-meta { min-height: 20px; color: rgba(255, 255, 255, .74); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+    .passkey-modal[hidden] { display: none; }
+    .passkey-modal { position: fixed; inset: 0; z-index: 32; display: grid; place-items: center; padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); background: rgba(0, 0, 0, .28); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .passkey-panel { width: min(100%, 560px); height: min(78dvh, 720px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid var(--border); border-radius: 24px; background: var(--panel); box-shadow: 0 24px 86px var(--shadow); }
+    .passkey-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .passkey-panel-head strong { display: block; }
+    .passkey-panel-head span { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .passkey-frame { width: 100%; height: 100%; border: 0; background: var(--panel); }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
     .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
@@ -16419,13 +16455,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     code { color: var(--text); overflow-wrap: anywhere; }
     .menu-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .mobile-backdrop, .mobile-drawer { display: none; }
-    .mobile-backdrop { position: fixed; inset: 0; z-index: 10; width: 100vw; max-width: 100vw; overflow: hidden; overscroll-behavior-x: none; touch-action: none; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
-    .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(var(--dashboard-drawer-width), 92vw); max-width: 92vw; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; touch-action: pan-y; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
+    .mobile-backdrop { position: fixed; inset: 0; z-index: 10; width: 100vw; max-width: 100vw; overflow: hidden; overscroll-behavior-x: none; touch-action: none; background: rgba(0, 0, 0, .18); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+    .mobile-drawer { position: fixed; top: max(10px, env(safe-area-inset-top)); bottom: max(10px, env(safe-area-inset-bottom)); left: 12px; z-index: 11; width: min(var(--dashboard-drawer-width), calc(100vw - 24px)); max-width: calc(100vw - 24px); overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; touch-action: pan-y; padding: 16px 14px 18px; border: 1px solid color-mix(in srgb, var(--border), transparent 20%); border-radius: 24px; background: var(--drawer-bg); box-shadow: 18px 0 60px var(--shadow); backdrop-filter: blur(20px) saturate(1.08); -webkit-backdrop-filter: blur(20px) saturate(1.08); }
     .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
     .drawer-resize-handle { display: none; }
     .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
     .mobile-drawer-content { display: grid; gap: 12px; }
     .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .desktop-side-nav { display: none; }
     @media (max-width: 900px) {
       main { padding: 14px 14px 0; }
       .app-shell { height: calc(100dvh - 14px); }
@@ -16433,6 +16470,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       .bubble { max-width: 100%; font-size: 16px; }
       .bubble.owner { max-width: min(82%, calc(100vw - 56px)); }
       .topbar { padding-bottom: 18px; }
+    }
+    @media (min-width: 900px) {
+      main { padding: 18px; }
+      .app-shell { grid-template-columns: var(--dashboard-side-width) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 20px; height: calc(100dvh - 36px); }
+      .desktop-side-nav { display: block; grid-row: 1 / span 2; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 18px 14px; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
+      .topbar { left: calc(18px + var(--dashboard-side-width) + 20px); right: 18px; top: 18px; }
+      .mobile-backdrop, .mobile-drawer, .menu-open { display: none !important; }
+      .chat-scroll, .composer { grid-column: 2; }
+      .chat-scroll { padding-left: clamp(22px, 4vw, 72px); padding-right: clamp(22px, 4vw, 72px); }
     }
     @media (max-width: 460px) {
       main { padding: 12px 10px 0; }
@@ -16454,12 +16500,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   <main>
     <section class="app-shell" aria-label="Butler chat shell">
       <input class="menu-toggle" type="checkbox" id="mobile-menu-toggle" aria-hidden="true">
+      <nav class="desktop-side-nav" aria-label="Dashboard メニュー">
+        <span class="eyebrow">Dashboard</span>
+        <div class="surface-list">
+          ${renderDashboardActionList([
+            { label: "Dashboard", href: `${origin}/dashboard` },
+            { label: "通知センター", href: `${origin}/dashboard/notifications` },
+            { label: "AI news", href: `${origin}/dashboard/news` },
+            { label: "Execution progress", href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "", disabledReason: "repo 設定後" },
+            { label: "GitHub truth", href: canonicalRepositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "", disabledReason: "repo 設定後" },
+            { label: "VPS runner", href: canonicalRepositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "", disabledReason: "repo 設定後" }
+          ])}
+        </div>
+        <p class="menu-callout">通知タップ時は通知センターを直接開きます。通常チャットの返信 stream は背後で継続します。</p>
+      </nav>
       <header class="topbar">
         <div class="top-left">
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを開く">≡</label>
           <div class="thread-title">
             <h1>VTDD Butler</h1>
-            <span>${escapeDashboardHtml(dashboardTargetLabel)} ・ dashboard main chat</span>
+            <span>${escapeDashboardHtml(dashboardTargetLabel)} ・ main chat</span>
           </div>
         </div>
       </header>
@@ -16498,6 +16558,19 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             </div>
             <div class="quick-actions">
               ${renderDashboardActionList(cockpitActions)}
+            </div>
+          </div>
+          <div class="lane" data-recovery-section="break-glass">
+            <div class="lane-title"><h3>復旧</h3><span class="pill">固定手順</span></div>
+            <p>Butler が止まった、bridge が怪しい、queue が詰まった時の入口です。任意コマンドではなく、状態確認と固定復旧だけを扱います。</p>
+            <div class="surface-list">
+              <a href="${escapeDashboardHtml(`${origin}/dashboard/notifications?focus=recovery`)}">通知センターで異常を見る</a>
+              ${
+                canonicalRepositoryInput
+                  ? `<a href="${escapeDashboardHtml(`${origin}/dashboard/vps-runner?repository=${encodedRepository}`)}">VPS runner を確認</a>`
+                  : `<span class="disabled-action" aria-disabled="true"><strong>VPS runner を確認</strong><small>repo 境界が必要な時だけ確認</small></span>`
+              }
+              <a href="${escapeDashboardHtml(dashboardSignInUrl)}">パスキー承認を開く</a>
             </div>
           </div>
           <details data-debug-section="dashboard-development-operations">
@@ -16552,9 +16625,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="画像・動画・ファイルを追加" title="画像・動画・ファイルを追加">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
-          <textarea id="butler-message" name="text" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
-          <button class="send-button" type="submit" aria-label="Butler に送信">↑</button>
+          <textarea id="butler-message" name="text" placeholder="Butler にメッセージ..." aria-label="Butler にメッセージ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
+          <button class="voice-button" id="butler-voice-button" type="button" aria-label="音声入力" title="音声入力">◉</button>
+          <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler に送信"><span>↑</span></button>
         </div>
+        <div class="followup-draft" id="butler-followup-draft" hidden>
+          <p id="butler-followup-draft-text"></p>
+          <div class="followup-actions">
+            <button id="butler-followup-cancel" type="button">キャンセル</button>
+            <button id="butler-followup-queue" type="button">キューに追加</button>
+          </div>
+        </div>
+        <div class="followup-queue" id="butler-followup-queue-list" aria-live="polite" hidden></div>
         <div class="composer-status" id="butler-chat-status">接続準備中です。送信できる状態になったら知らせます。</div>
       </form>
       <div class="media-lightbox" id="butler-media-lightbox" role="dialog" aria-modal="true" aria-label="添付プレビュー" hidden>
@@ -16565,6 +16647,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <div class="media-lightbox-body" id="butler-media-lightbox-body"></div>
         <div class="media-lightbox-meta" id="butler-media-lightbox-meta"></div>
       </div>
+      <div class="passkey-modal" id="butler-passkey-modal" role="dialog" aria-modal="true" aria-label="パスキー承認" hidden>
+        <div class="passkey-panel">
+          <div class="passkey-panel-head">
+            <span>
+              <strong>パスキー承認</strong>
+              <span>承認後はこのチャットへ戻って自動継続します。</span>
+            </span>
+            <button class="round-button" id="butler-passkey-close" type="button" aria-label="閉じる">×</button>
+          </div>
+          <iframe class="passkey-frame" id="butler-passkey-frame" title="パスキー承認"></iframe>
+        </div>
+      </div>
     </section>
   </main>
   <script>
@@ -16573,8 +16667,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const log = document.getElementById("butler-chat-log");
       const textarea = document.getElementById("butler-message");
       const status = document.getElementById("butler-chat-status");
+      const sendButton = document.getElementById("butler-send-button");
       const progressPane = document.getElementById("butler-transient-progress");
+      const followupDraft = document.getElementById("butler-followup-draft");
+      const followupDraftText = document.getElementById("butler-followup-draft-text");
+      const followupCancel = document.getElementById("butler-followup-cancel");
+      const followupQueueButton = document.getElementById("butler-followup-queue");
+      const followupQueueList = document.getElementById("butler-followup-queue-list");
       const mediaButton = document.getElementById("butler-media-button");
+      const voiceButton = document.getElementById("butler-voice-button");
       const mediaInput = document.getElementById("butler-media-input");
       const pendingMedia = document.getElementById("butler-pending-media");
       const mediaLightbox = document.getElementById("butler-media-lightbox");
@@ -16582,6 +16683,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const mediaLightboxTitle = document.getElementById("butler-media-lightbox-title");
       const mediaLightboxMeta = document.getElementById("butler-media-lightbox-meta");
       const mediaLightboxClose = document.getElementById("butler-media-lightbox-close");
+      const passkeyModal = document.getElementById("butler-passkey-modal");
+      const passkeyFrame = document.getElementById("butler-passkey-frame");
+      const passkeyClose = document.getElementById("butler-passkey-close");
       const freshnessPill = document.getElementById("dashboard-freshness-pill");
       const freshnessState = document.getElementById("dashboard-freshness-state");
       const refreshCheckButton = document.getElementById("dashboard-refresh-check-button");
@@ -16616,6 +16720,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let latestOwnerReplySource = null;
       let lastMediaLightboxTrigger = null;
       let pendingOwnerSend = null;
+      let activeTurnInProgress = false;
+      let followupQueue = [];
+      let voiceRecognizer = null;
+      let voiceListening = false;
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
       let authReturnResumePromise = null;
@@ -16789,6 +16897,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateComposerReserve();
       }
 
+      function syncComposerShortcutMode() {
+        const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+        const mobileViewport = window.innerWidth < 900;
+        textarea.dataset.mobileComposer = coarsePointer && mobileViewport ? "true" : "false";
+        textarea.enterKeyHint = textarea.dataset.mobileComposer === "true" ? "newline" : "send";
+      }
+
       function normalizeComposerInputText(text) {
         return decodeSafeChatCommandText(String(text || ""));
       }
@@ -16839,6 +16954,192 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             }
           }, 2400);
         }
+      }
+
+      function setSendButtonMode(mode) {
+        if (!sendButton) return;
+        const nextMode = mode === "stop" ? "stop" : "send";
+        sendButton.dataset.mode = nextMode;
+        sendButton.setAttribute("aria-label", nextMode === "stop" ? "現在の実行を停止" : "Butler に送信");
+        sendButton.title = nextMode === "stop" ? "停止" : "送信";
+        if (nextMode !== "stop") {
+          sendButton.replaceChildren(document.createElement("span"));
+          sendButton.firstElementChild.textContent = "↑";
+        }
+      }
+
+      function setActiveTurnInProgress(active) {
+        activeTurnInProgress = active === true;
+        setSendButtonMode(activeTurnInProgress ? "stop" : "send");
+      }
+
+      function clearFollowupDraft() {
+        if (followupDraft) followupDraft.hidden = true;
+        if (followupDraftText) followupDraftText.textContent = "";
+      }
+
+      function renderFollowupQueue() {
+        if (!followupQueueList) return;
+        followupQueueList.replaceChildren();
+        followupQueueList.hidden = followupQueue.length === 0;
+        for (const item of followupQueue) {
+          const chip = document.createElement("div");
+          chip.className = "followup-chip";
+          const label = document.createElement("small");
+          label.textContent = item.status === "sent" ? "差し込み済み" : "キュー待ち";
+          const text = document.createElement("span");
+          text.textContent = item.text;
+          chip.appendChild(label);
+          chip.appendChild(text);
+          followupQueueList.appendChild(chip);
+        }
+        updateComposerReserve();
+      }
+
+      function addFollowupQueueItem(text, options = {}) {
+        const normalized = String(text || "").trim();
+        if (!normalized) return null;
+        const item = {
+          id: createClientMessageId(),
+          text: normalized,
+          status: options.status || "queued",
+          createdAt: new Date().toISOString()
+        };
+        followupQueue.push(item);
+        renderFollowupQueue();
+        return item;
+      }
+
+      function showFollowupDraft(text) {
+        const normalized = String(text || "").trim();
+        if (!normalized || !followupDraft || !followupDraftText) return false;
+        followupDraftText.textContent = normalized;
+        followupDraft.hidden = false;
+        updateComposerReserve();
+        return true;
+      }
+
+      function syncFollowupDraftFromInput() {
+        if (activeTurnInProgress && textarea.value.trim()) {
+          showFollowupDraft(textarea.value.trim());
+        } else {
+          clearFollowupDraft();
+        }
+      }
+
+      function setVoiceListening(active) {
+        voiceListening = active === true;
+        if (!voiceButton) return;
+        voiceButton.dataset.listening = voiceListening ? "true" : "false";
+        voiceButton.setAttribute("aria-pressed", voiceListening ? "true" : "false");
+        voiceButton.setAttribute("aria-label", voiceListening ? "音声入力を停止" : "音声入力");
+      }
+
+      function appendVoiceTranscript(text) {
+        const transcript = normalizeComposerInputText(text).trim();
+        if (!transcript) return;
+        const current = textarea.value.trimEnd();
+        textarea.value = current ? current + "\\n" + transcript : transcript;
+        normalizeComposerInput();
+        syncFollowupDraftFromInput();
+        persistDashboardDraft();
+        textarea.focus({ preventScroll: true });
+      }
+
+      function createVoiceRecognizer() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (typeof SpeechRecognition !== "function") {
+          return null;
+        }
+        const recognizer = new SpeechRecognition();
+        recognizer.lang = "ja-JP";
+        recognizer.continuous = true;
+        recognizer.interimResults = false;
+        recognizer.onstart = () => {
+          setVoiceListening(true);
+          setStatus("音声入力中です。発話は文字として入力欄に残します。", { temporary: true });
+        };
+        recognizer.onend = () => {
+          setVoiceListening(false);
+        };
+        recognizer.onerror = () => {
+          setVoiceListening(false);
+          setStatus("音声入力を継続できませんでした。テキスト入力はそのまま使えます。", { temporary: true });
+        };
+        recognizer.onresult = (event) => {
+          const results = Array.from(event.results || []).slice(Number(event.resultIndex) || 0);
+          const transcript = results
+            .filter((result) => result && result.isFinal !== false)
+            .map((result) => result?.[0]?.transcript || "")
+            .join(" ")
+            .trim();
+          appendVoiceTranscript(transcript);
+        };
+        return recognizer;
+      }
+
+      function toggleVoiceInput() {
+        if (voiceListening && voiceRecognizer) {
+          try {
+            voiceRecognizer.stop();
+          } catch {}
+          setVoiceListening(false);
+          return;
+        }
+        voiceRecognizer = createVoiceRecognizer();
+        if (!voiceRecognizer) {
+          setStatus("このブラウザでは音声入力に未対応です。テキスト入力と画像添付は使えます。", { temporary: true });
+          return;
+        }
+        try {
+          voiceRecognizer.start();
+        } catch {
+          setVoiceListening(false);
+          setStatus("音声入力を開始できませんでした。テキスト入力はそのまま使えます。", { temporary: true });
+        }
+      }
+
+      function flushQueuedFollowups() {
+        if (!isChatSocketOpen()) return;
+        const queued = followupQueue.filter((item) => item.status === "queued");
+        for (const item of queued) {
+          try {
+            chatSocket.send(JSON.stringify({
+              type: "owner_message",
+              threadId,
+              clientMessageId: item.id,
+              repositoryInput,
+              text: item.text,
+              issueNumber,
+              relatedIssue: issueNumber,
+              mediaReferences: [],
+              interruption: true
+            }));
+            item.status = "sent";
+          } catch {
+            break;
+          }
+        }
+        renderFollowupQueue();
+      }
+
+      function requestStopActiveTurn() {
+        if (!activeTurnInProgress) return false;
+        try {
+          if (isChatSocketOpen()) {
+            chatSocket.send(JSON.stringify({
+              type: "owner_control",
+              action: "stop",
+              threadId,
+              requestedAt: new Date().toISOString()
+            }));
+          }
+        } catch {}
+        clearTransientProgress();
+        setActiveTurnInProgress(false);
+        setComposerLocked(false);
+        setStatus("停止をリクエストしました。反映までは同じ thread で状態を確認します。", { temporary: true });
+        return true;
       }
 
       function isLongRunningTransientStatus(statusValue) {
@@ -17129,7 +17430,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setComposerLocked(locked) {
-        textarea.readOnly = locked === true;
+        textarea.readOnly = locked === true && activeTurnInProgress !== true;
         if (mediaButton) mediaButton.disabled = locked === true;
       }
 
@@ -17153,6 +17454,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         const submitButton = form.querySelector("button[type='submit']");
         setComposerLocked(false);
+        setActiveTurnInProgress(false);
         if (submitButton) submitButton.disabled = false;
         setStatus(withFollowUpInstruction(text));
         updateComposerReserve();
@@ -17365,11 +17667,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (!latestConversationMessage) return;
         if (latestConversationMessage.role === "butler") {
           if (latestConversationMessage.status === "replied") {
-            clearTransientProgress();
-            return;
+          clearTransientProgress();
+          setActiveTurnInProgress(false);
+          return;
           }
           if (latestConversationMessage.status === "failed" || latestConversationMessage.status === "stalled") {
             clearTransientProgress();
+            setActiveTurnInProgress(false);
             releaseComposerForFollowUp(latestConversationMessage.text || "応答生成が止まっています。同じ thread で続けられます。");
             return;
           }
@@ -17380,6 +17684,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             thinking: true,
             title: "返信待ち"
           });
+          setActiveTurnInProgress(true);
           setStatus("送信済みです。app-server bridge の返信を待っています。", { thinking: true });
         }
       }
@@ -17697,6 +18002,44 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && mediaLightbox && !mediaLightbox.hidden) closeMediaLightbox();
+        if (event.key === "Escape" && passkeyModal && !passkeyModal.hidden) closePasskeyModal();
+      });
+
+      function openPasskeyModal(href) {
+        if (!passkeyModal || !passkeyFrame || !href) return false;
+        try {
+          const target = new URL(href, window.location.origin);
+          if (target.origin !== window.location.origin || !target.pathname.startsWith("/v2/approval/passkey/operator")) {
+            return false;
+          }
+          passkeyFrame.src = target.toString();
+          passkeyModal.hidden = false;
+          passkeyClose?.focus();
+          setStatus("パスキー承認を開いています。承認後はこのチャットへ戻ります。", { temporary: true });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function closePasskeyModal() {
+        if (!passkeyModal || !passkeyFrame) return;
+        passkeyModal.hidden = true;
+        passkeyFrame.removeAttribute("src");
+        setStatus("パスキー承認画面を閉じました。必要なら同じ操作から再開できます。", { temporary: true });
+      }
+
+      passkeyClose?.addEventListener("click", closePasskeyModal);
+      document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const link = target.closest("a[href]");
+        if (!link) return;
+        const href = link.getAttribute("href") || "";
+        if (!href.includes("/v2/approval/passkey/operator")) return;
+        if (openPasskeyModal(href)) {
+          event.preventDefault();
+        }
       });
 
       function renderMediaReferences(references) {
@@ -18380,6 +18723,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             if (pendingOwnerSend) {
               sendPendingOwnerMessage("接続しました。未送信の入力を送信しています。");
             }
+            flushQueuedFollowups();
           });
         });
         chatSocket.addEventListener("message", (event) => {
@@ -18392,11 +18736,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
                 clearTransientProgress();
+                setActiveTurnInProgress(false);
                 setStatus("返信を受信しました。", { temporary: true });
               } else if (lastMessage?.status === "failed" || lastMessage?.status === "stalled") {
                 clearTransientProgress();
+                setActiveTurnInProgress(false);
                 releaseComposerForFollowUp(lastMessage.text || "応答生成が時間切れになりました。同じ thread で続けられます。");
               } else if (releasedFromThread) {
+                setActiveTurnInProgress(true);
                 setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
               }
             } else if (body.type === "transient_status" && body.ok) {
@@ -18411,6 +18758,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               } else {
                 const transientText = body.text || (isThinking ? "codex app-server が応答を生成しています" : "codex app-server の応答が完了しました。");
                 if (isThinking) {
+                  setActiveTurnInProgress(true);
                   updateTransientProgress(transientText, {
                     status: body.status,
                     thinking: true,
@@ -18418,6 +18766,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
                     snapshot: body.transientProgressSnapshot || null
                   });
                 } else {
+                  setActiveTurnInProgress(false);
                   clearTransientProgress();
                 }
                 if (!isThinking) {
@@ -18429,6 +18778,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               if (clientMessageId) {
                 pendingSendRollbacks.delete(clientMessageId);
                 releasePendingOwnerSend(clientMessageId, { clearComposer: true });
+                setActiveTurnInProgress(true);
                 setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
               }
             } else if (body.type === "error") {
@@ -18476,6 +18826,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
+        if (activeTurnInProgress) {
+          if (!text) {
+            requestStopActiveTurn();
+            textarea.focus({ preventScroll: true });
+            return;
+          }
+          const item = addFollowupQueueItem(text, { status: "queued" });
+          textarea.value = "";
+          resizeComposerInput();
+          persistDashboardDraft();
+          clearFollowupDraft();
+          flushQueuedFollowups();
+          setStatus(item?.status === "sent" ? "差し込みを現在の実行へ送りました。" : "差し込みをキューに追加しました。現在の実行へ反映できる状態になったら送ります。", { temporary: true });
+          textarea.focus({ preventScroll: true });
+          return;
+        }
         if (!text) {
           textarea.focus();
           return;
@@ -18581,6 +18947,36 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateComposerReserve();
       });
 
+      sendButton?.addEventListener("click", (event) => {
+        if (sendButton.dataset.mode !== "stop") return;
+        if (textarea.value.trim()) return;
+        event.preventDefault();
+        requestStopActiveTurn();
+      });
+      followupCancel?.addEventListener("click", () => {
+        textarea.value = "";
+        clearFollowupDraft();
+        resizeComposerInput();
+        persistDashboardDraft();
+        textarea.focus({ preventScroll: true });
+      });
+      followupQueueButton?.addEventListener("click", () => {
+        const text = textarea.value.trim() || followupDraftText?.textContent || "";
+        if (!text) {
+          clearFollowupDraft();
+          return;
+        }
+        addFollowupQueueItem(text, { status: "queued" });
+        textarea.value = "";
+        resizeComposerInput();
+        clearFollowupDraft();
+        flushQueuedFollowups();
+        persistDashboardDraft();
+        setStatus("差し込みをキューに追加しました。", { temporary: true });
+        textarea.focus({ preventScroll: true });
+      });
+      voiceButton?.addEventListener("click", toggleVoiceInput);
+
       if (mediaButton && mediaInput) {
         mediaButton.addEventListener("click", () => mediaInput.click());
         mediaInput.addEventListener("change", async () => {
@@ -18626,6 +19022,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         });
       }
 
+      syncComposerShortcutMode();
       resizeComposerInput();
       restoreDashboardDraft();
       refreshCheckButton?.addEventListener("click", () => {
@@ -18636,6 +19033,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       });
       textarea.addEventListener("input", () => {
         normalizeComposerInput();
+        syncFollowupDraftFromInput();
         persistDashboardDraft();
       });
       textarea.addEventListener("paste", () => {
@@ -18654,7 +19052,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       });
-      window.addEventListener("resize", resizeComposerInput);
+      window.addEventListener("resize", () => {
+        syncComposerShortcutMode();
+        resizeComposerInput();
+      });
       window.addEventListener("online", async () => {
         if (await resumeDashboardSessionAfterAuthReturn("ネットワーク復帰後、再ログイン状態を確認しています。入力は保持しています。")) return;
         setConnectionRecoveryStatus("ネットワーク復帰を検知しました。接続を復帰しています。");

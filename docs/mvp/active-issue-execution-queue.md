@@ -151,16 +151,22 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   driven stale-client refresh. It is a follow-up to Issue #723 and related to
   Issue #590 / Issue #654 / Issue #514, but it is classified as `QUEUE` and
   does not preempt the current root blocker.
+- 2026-06-06 owner input classified Issue #811 as `ROOT`: Dashboard Butler
+  メインチャット体験が小 PR / follow-up PR の集合になり、Issue #590 の
+  progress / silent wait、Issue #528 の ChatGPT iOS 相当 UI、Issue #613 の
+  repo-less / voice-ready main chat が一体の owner-facing workflow として
+  完成しない状態が根本 blocker になっている。Issue #811 moves to `Now`.
+  実装 PR は原則 1 本にし、iPhone / iPad の owner-facing main chat
+  experience が通るまで未完成として扱う。
 
 ## Now
 
-- Issue #590: app-server turn timeout / silent wait recovery. Fixed 2-minute
-  conversation death and durable low-information progress spam are mitigated in
-  production. PR #791 adds request-stall recovery, but the current root blocker
-  remains owner-facing observability and recovery evidence: longer Dashboard
-  Butler work must show readable live progress, avoid low-value transport spam,
-  keep scroll/draft/thread state stable, preserve important evidence links in
-  final summaries, and prove the recovery path in production PWA after deploy.
+- Issue #811: Dashboard Butler V3 メインチャット体験を一体で作り直す。
+  Issue #590 / Issue #528 / Issue #613 を小 PR の集合ではなく
+  owner-facing main chat experience として統合する。実装 PR は原則 1 本で、
+  follow-up PR へ逃がさず、iPhone / iPad / light / dark / notification
+  center direct open / passkey modal / break-glass recovery / interruption
+  queue の E2E evidence が揃うまで未完成として扱う。
 
 ## Next
 
