@@ -1,5 +1,17 @@
 # Issue #723 Dashboard Self Refresh Strategy
 
+## 2026-06-07 follow-up: drawer navigation force reload
+
+Owner 観測: iPhone で 8時間超過後に passkey で Butler を開くと、チャットが先頭状態で開く。iPad では同じ症状が出ていない。原因はまだ断定しないが、iPhone PWA の page lifecycle / auth return / service worker cache / visual viewport / scroll restoration のどれかで、長時間経過後に chat shell が再生成され、`chat-scroll` の表示位置が最新メッセージ側へ復元されない可能性が高い。
+
+この follow-up の完了体験は、iPhone でもドロワーを開いた直後に「強制キャッシュ削除リロード」を見つけられること。既存の freshness panel 内ボタンは維持しつつ、ドロワーのナビゲーション領域に同じ復旧 action を追加する。Owner が古い PWA や stale service worker を疑った時、進行中パネルを探さずに復旧できる。
+
+Scope は Issue #723 の self-refresh owner-facing 導線改善に限定する。iPhone 8時間後のスクロール復元、passkey return 後の latest-message anchoring、sleep 復帰時の lifecycle telemetry は別 follow-up 候補として残し、この PR では根治扱いにしない。deploy、bridge restart、credential、permission mutation は実行しない。
+
+改修見積もり: `src/worker/runtime.js` の mobile drawer navigation HTML / CSS / client event binding に、nav-level force refresh button を追加する。`test/worker.test.js` は drawer nav button と event binding を確認する。`worker.js` は `npm run build:worker` で生成更新する。E2E は既存 mobile drawer scenario でボタンの可視性を追加確認し、実クリックは reload を起こすため unit assertion へ寄せる。
+
+停止条件: 既存の `forceDashboardRefresh()` だけで流用できず cache clear semantics を変える必要が出た場合、または chat scroll restoration まで同時に直さないと owner-facing に説明不能だと分かった場合は停止して #723 ではなく別 Issue 境界に切る。
+
 ## 完了体験
 
 Owner が Dashboard Butler で「古いままかもしれない」と感じた時、Mac Codex を開かずに同じ PWA から現在の client / service worker / runtime / bridge の手掛かりを確認できる。

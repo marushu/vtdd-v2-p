@@ -72558,7 +72558,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .freshness-panel button:disabled { opacity: .55; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .quick-actions a, .surface-list a, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .quick-actions a, .surface-list a, .surface-list button, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font: inherit; font-weight: 750; font-size: 13px; text-align: center; }
+    .surface-list button { width: 100%; cursor: pointer; }
+    .surface-list button:disabled { opacity: .55; cursor: progress; }
     .disabled-action { flex-direction: column; gap: 2px; color: var(--muted); background: transparent; cursor: not-allowed; }
     .disabled-action strong { font-size: 13px; }
     .disabled-action small { font-size: 11px; font-weight: 650; line-height: 1.2; }
@@ -72652,6 +72654,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="mobile-drawer-content">
           <p class="menu-callout">\u901A\u77E5\u3001\u9032\u6357\u3001repo \u304C\u5FC5\u8981\u306A\u958B\u767A/\u904B\u7528\u78BA\u8A8D\u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u901A\u5E38\u30C1\u30E3\u30C3\u30C8\u306F repo \u672A\u6307\u5B9A\u306E\u307E\u307E\u59CB\u3081\u3089\u308C\u307E\u3059\u3002</p>
+          <div class="surface-list" aria-label="\u5FA9\u65E7\u30CA\u30D3\u30B2\u30FC\u30B7\u30E7\u30F3">
+            <button id="dashboard-drawer-force-refresh-button" type="button">\u5F37\u5236\u30AD\u30E3\u30C3\u30B7\u30E5\u524A\u9664\u30EA\u30ED\u30FC\u30C9</button>
+          </div>
           <div class="lane">
             <div class="lane-title"><h3>${repositoryInput ? "\u3053\u306E\u4F5C\u696D\u306E\u5BFE\u8C61 repo" : "repo-less main chat"}</h3><span class="pill">${repositoryInput ? "active" : "main"}</span></div>
             ${targetStatusMarkup}
@@ -72804,6 +72809,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const freshnessState = document.getElementById("dashboard-freshness-state");
       const refreshCheckButton = document.getElementById("dashboard-refresh-check-button");
       const forceRefreshButton = document.getElementById("dashboard-force-refresh-button");
+      const drawerForceRefreshButton = document.getElementById("dashboard-drawer-force-refresh-button");
       if (!form || !log || !textarea || !status) return;
 
       const socketEndpoint = form.dataset.socketEndpoint;
@@ -72974,6 +72980,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setFreshnessPill("\u66F4\u65B0\u4E2D", null);
         setStatus("\u5F37\u5236\u30AD\u30E3\u30C3\u30B7\u30E5\u524A\u9664\u30EA\u30ED\u30FC\u30C9\u3092\u6E96\u5099\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u5B58\u3057\u307E\u3059\u3002\u6DFB\u4ED8\u306F\u518D\u9078\u629E\u304C\u5FC5\u8981\u306A\u5834\u5408\u304C\u3042\u308A\u307E\u3059\u3002", { thinking: true });
         if (forceRefreshButton) forceRefreshButton.disabled = true;
+        if (drawerForceRefreshButton) drawerForceRefreshButton.disabled = true;
         if (refreshCheckButton) refreshCheckButton.disabled = true;
         try {
           const snapshot = await readDashboardFreshnessSnapshot();
@@ -75511,6 +75518,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         refreshDashboardFreshnessStatus({ visibleStatus: true, pill: "\u78BA\u8A8D\u6E08\u307F" });
       });
       forceRefreshButton?.addEventListener("click", () => {
+        forceDashboardRefresh();
+      });
+      drawerForceRefreshButton?.addEventListener("click", () => {
         forceDashboardRefresh();
       });
       textarea.addEventListener("input", () => {

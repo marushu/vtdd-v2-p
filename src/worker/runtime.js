@@ -16464,7 +16464,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .freshness-panel button:disabled { opacity: .55; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .quick-actions a, .surface-list a, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .quick-actions a, .surface-list a, .surface-list button, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font: inherit; font-weight: 750; font-size: 13px; text-align: center; }
+    .surface-list button { width: 100%; cursor: pointer; }
+    .surface-list button:disabled { opacity: .55; cursor: progress; }
     .disabled-action { flex-direction: column; gap: 2px; color: var(--muted); background: transparent; cursor: not-allowed; }
     .disabled-action strong { font-size: 13px; }
     .disabled-action small { font-size: 11px; font-weight: 650; line-height: 1.2; }
@@ -16558,6 +16560,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="mobile-drawer-content">
           <p class="menu-callout">通知、進捗、repo が必要な開発/運用確認はここから開きます。通常チャットは repo 未指定のまま始められます。</p>
+          <div class="surface-list" aria-label="復旧ナビゲーション">
+            <button id="dashboard-drawer-force-refresh-button" type="button">強制キャッシュ削除リロード</button>
+          </div>
           <div class="lane">
             <div class="lane-title"><h3>${repositoryInput ? "この作業の対象 repo" : "repo-less main chat"}</h3><span class="pill">${repositoryInput ? "active" : "main"}</span></div>
             ${targetStatusMarkup}
@@ -16714,6 +16719,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const freshnessState = document.getElementById("dashboard-freshness-state");
       const refreshCheckButton = document.getElementById("dashboard-refresh-check-button");
       const forceRefreshButton = document.getElementById("dashboard-force-refresh-button");
+      const drawerForceRefreshButton = document.getElementById("dashboard-drawer-force-refresh-button");
       if (!form || !log || !textarea || !status) return;
 
       const socketEndpoint = form.dataset.socketEndpoint;
@@ -16884,6 +16890,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setFreshnessPill("更新中", null);
         setStatus("強制キャッシュ削除リロードを準備しています。入力は保存します。添付は再選択が必要な場合があります。", { thinking: true });
         if (forceRefreshButton) forceRefreshButton.disabled = true;
+        if (drawerForceRefreshButton) drawerForceRefreshButton.disabled = true;
         if (refreshCheckButton) refreshCheckButton.disabled = true;
         try {
           const snapshot = await readDashboardFreshnessSnapshot();
@@ -19421,6 +19428,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         refreshDashboardFreshnessStatus({ visibleStatus: true, pill: "確認済み" });
       });
       forceRefreshButton?.addEventListener("click", () => {
+        forceDashboardRefresh();
+      });
+      drawerForceRefreshButton?.addEventListener("click", () => {
         forceDashboardRefresh();
       });
       textarea.addEventListener("input", () => {
