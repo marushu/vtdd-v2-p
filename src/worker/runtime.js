@@ -16743,6 +16743,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let voiceWakeLock = null;
       let voiceWakeLockRetryTimer = null;
       let voiceWakeLockNoticeShown = false;
+      let voiceSpeaking = false;
+      let voiceExplicitlyStopped = false;
+      let voiceSubmitPending = false;
+      const pendingVoiceReplyClientMessageIds = new Set();
       const spokenButlerReplyKeys = new Set();
       const voiceExitPhrases = ["ボイスモード終了"];
       let retryClientMessageId = "";
@@ -17146,6 +17150,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function submitVoiceTranscript(text) {
         if (!appendVoiceTranscript(text)) return;
+        voiceSubmitPending = true;
         window.requestAnimationFrame(() => {
           form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
         });
@@ -17165,6 +17170,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function cancelVoiceSpeech() {
+        voiceSpeaking = false;
         try {
           if (window.speechSynthesis && typeof window.speechSynthesis.cancel === "function") {
             window.speechSynthesis.cancel();
@@ -17180,8 +17186,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         ].join("\\u001f");
       }
 
+      function markPendingVoiceReply(clientMessageId) {
+        const id = String(clientMessageId || "").trim();
+        if (!id) return false;
+        pendingVoiceReplyClientMessageIds.add(id);
+        voiceExplicitlyStopped = false;
+        return true;
+      }
+
+      function hasPendingVoiceReply() {
+        return pendingVoiceReplyClientMessageIds.size > 0;
+      }
+
+      function shouldSpeakFinalButlerReply(message) {
+        if (!message || message.role !== "butler" || message.status !== "replied") return false;
+        if (voiceExplicitlyStopped) return false;
+        return voiceModeActive || hasPendingVoiceReply();
+      }
+
       function speakFinalButlerReply(message) {
-        if (!voiceModeActive || !message || message.role !== "butler" || message.status !== "replied") return false;
+        if (!shouldSpeakFinalButlerReply(message)) return false;
         const text = normalizeMessageDisplayText(message.text || "").trim();
         if (!text) return false;
         const key = voiceReplyKey(message);
@@ -17195,13 +17219,52 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         try {
           const utterance = new SpeechSynthesisUtterance(text);
           utterance.lang = "ja-JP";
+          voiceSpeaking = true;
+          utterance.onend = () => {
+            voiceSpeaking = false;
+          };
+          utterance.onerror = () => {
+            voiceSpeaking = false;
+          };
           window.speechSynthesis.speak(utterance);
+          pendingVoiceReplyClientMessageIds.clear();
           setStatus("Butler の返信を読み上げています。", { temporary: true });
           return true;
         } catch {
+          voiceSpeaking = false;
           setStatus("返信の読み上げを開始できませんでした。文字の返信は表示済みです。", { temporary: true });
           return false;
         }
+      }
+
+      function isLikelyAmbientVoiceFragment(text, confidence) {
+        const normalized = normalizeComposerInputText(text).replace(/[\\s、。.!！?？]/g, "").trim();
+        if (!normalized) return true;
+        if (containsVoiceExitPhrase(normalized)) return false;
+        if (normalized.length < 4) return true;
+        if (typeof confidence === "number" && confidence > 0 && confidence < 0.45) return true;
+        return false;
+      }
+
+      async function handleVoiceInterruptCandidate(text, options = {}) {
+        const transcript = normalizeComposerInputText(text).trim();
+        if (!transcript) return false;
+        if (containsVoiceExitPhrase(transcript)) {
+          stopVoiceMode("合言葉を確認しました。音声モードを終了します。");
+          return true;
+        }
+        if (isLikelyAmbientVoiceFragment(transcript, options.confidence)) {
+          setStatus("短い周囲音らしい音声は差し込みに入れませんでした。", { temporary: true });
+          return false;
+        }
+        cancelVoiceSpeech();
+        voiceModeActive = true;
+        const item = await addFollowupQueueItemFromComposer(transcript, { status: "queued" });
+        if (!item) return false;
+        clearFollowupDraft();
+        flushQueuedFollowups();
+        setStatus(item.status === "sent" ? "読み上げを止め、差し込みを現在の実行へ送りました。" : "読み上げを止め、差し込みをキューに追加しました。", { temporary: true });
+        return true;
       }
 
       function releaseVoiceWakeLock() {
@@ -17260,6 +17323,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function stopVoiceMode(message = "音声モードを終了しました。") {
         voiceModeActive = false;
+        voiceSpeaking = false;
+        voiceExplicitlyStopped = true;
+        voiceSubmitPending = false;
+        pendingVoiceReplyClientMessageIds.clear();
         clearVoiceTimers();
         cancelVoiceSpeech();
         releaseVoiceWakeLock();
@@ -17310,6 +17377,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             .join(" ")
             .trim();
           if (!transcript) return;
+          const confidence = finalResults
+            .map((result) => Number(result?.[0]?.confidence))
+            .find((value) => Number.isFinite(value) && value > 0);
+          if (voiceSpeaking) {
+            handleVoiceInterruptCandidate(transcript, { confidence }).catch(() => {});
+            return;
+          }
           if (containsVoiceExitPhrase(transcript)) {
             stopVoiceMode("合言葉を確認しました。音声モードを終了します。");
             return;
@@ -17326,6 +17400,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           setStatus("このブラウザでは音声入力に未対応です。テキスト入力と画像添付は使えます。", { temporary: true });
           return;
         }
+        voiceExplicitlyStopped = false;
         try {
           if (!options.restarting) {
             setStatus("音声モードを開始しています。マイク許可が出たら許可してください。", { temporary: true });
@@ -17352,6 +17427,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         voiceModeActive = true;
         acquireVoiceWakeLock();
         startVoiceMode();
+      }
+
+      if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+        window.__vtddDashboardVoiceTest = {
+          suspendWithoutExplicitStop() {
+            voiceModeActive = false;
+            setVoiceListening(false);
+          },
+          isSpeaking() {
+            return voiceSpeaking;
+          }
+        };
       }
 
       function flushQueuedFollowups() {
@@ -19082,6 +19169,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
+        const isVoiceSubmit = voiceSubmitPending === true;
+        voiceSubmitPending = false;
         if (activeTurnInProgress) {
           if (!text) {
             requestStopActiveTurn();
@@ -19128,6 +19217,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             pendingSendRollbacks.delete(pendingOwnerSend.clientMessageId);
           }
           const clientMessageId = createClientMessageId();
+          if (isVoiceSubmit) {
+            markPendingVoiceReply(clientMessageId);
+          }
           pendingSendRollbacks.set(clientMessageId, []);
           pendingOwnerSend = {
             clientMessageId,
@@ -19159,9 +19251,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
+        if (isVoiceSubmit) {
+          markPendingVoiceReply(clientMessageId);
+        }
         try {
           mediaReferences = await uploadPendingMedia(clientMessageId);
         } catch (error) {
+          pendingVoiceReplyClientMessageIds.delete(clientMessageId);
           setStatus((error && error.message) || "添付の保存に失敗しました。");
           setComposerLocked(false);
           if (submitButton) submitButton.disabled = false;

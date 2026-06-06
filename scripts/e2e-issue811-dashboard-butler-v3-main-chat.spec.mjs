@@ -296,8 +296,8 @@ async function installFakeSpeechRecognition(page) {
       stop() {
         this.onend?.();
       }
-      emitTranscript(text) {
-        const result = [{ transcript: text }];
+      emitTranscript(text, confidence = 0.92) {
+        const result = [{ transcript: text, confidence }];
         result.isFinal = true;
         this.onresult?.({ resultIndex: 0, results: [result] });
       }
@@ -405,7 +405,27 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
       }
     });
   })).toBe(true);
+  const voiceClientMessageId = await page.evaluate(() => {
+    const sent = window.__vtddFakeSockets?.[0]?.sent || [];
+    for (const entry of sent) {
+      try {
+        const parsed = JSON.parse(entry);
+        if (parsed.type === "owner_message" && parsed.text === "音声から追加したメモ") {
+          return parsed.clientMessageId || "";
+        }
+      } catch {}
+    }
+    return "";
+  });
+  await page.evaluate((clientMessageId) => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "owner_message_accepted",
+      ok: true,
+      clientMessageId
+    });
+  }, voiceClientMessageId);
   await expect.poll(async () => page.evaluate(() => window.__vtddWakeLockRequests || [])).toContain("screen");
+  await page.evaluate(() => window.__vtddDashboardVoiceTest?.suspendWithoutExplicitStop());
   await page.evaluate(() => {
     window.__vtddFakeSockets?.[0]?.emit({
       type: "transient_status",
@@ -436,6 +456,39 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
       lang: "ja-JP"
     }
   ]);
+  await page.evaluate(() => {
+    window.__vtddFakeSockets?.[0]?.emit({
+      type: "thread",
+      ok: true,
+      messages: [
+        {
+          messageId: "issue-814-voice-final-reply",
+          role: "butler",
+          status: "replied",
+          text: "音声モード中だけ、この Butler の最終返信を読み上げます。",
+          createdAt: "2026-06-06T09:10:00.000Z"
+        }
+      ]
+    });
+  });
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisSpoken?.length || 0)).toBe(1);
+  const sentBeforeAmbient = await page.evaluate(() => window.__vtddFakeSockets?.[0]?.sent?.length || 0);
+  await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("あ", 0.2));
+  await expect.poll(async () => page.evaluate(() => window.__vtddFakeSockets?.[0]?.sent?.length || 0)).toBe(sentBeforeAmbient);
+  await expect(page.locator("#butler-chat-status")).toContainText("短い周囲音らしい音声");
+  await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("今の説明に追加して、先に差し込み確認して", 0.95));
+  await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisCancelled || 0)).toBeGreaterThan(0);
+  await expect.poll(async () => page.evaluate(() => {
+    const sent = window.__vtddFakeSockets?.[0]?.sent || [];
+    return sent.some((entry) => {
+      try {
+        const parsed = JSON.parse(entry);
+        return parsed.type === "owner_message" && parsed.interruption === true && parsed.text.includes("先に差し込み確認");
+      } catch {
+        return false;
+      }
+    });
+  })).toBe(true);
   await page.evaluate(() => window.__vtddSpeechRecognition?.emitTranscript("ボイスモード終了"));
   await expect(page.locator("#butler-voice-button")).toHaveAttribute("data-listening", "false");
   await expect.poll(async () => page.evaluate(() => window.__vtddSpeechSynthesisCancelled || 0)).toBeGreaterThan(0);

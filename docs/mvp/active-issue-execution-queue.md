@@ -35,7 +35,7 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   Issue #620, Issue #634, Issue #637, Issue #651, Issue #654, Issue #657,
   Issue #667, Issue #670, Issue #689, Issue #698, Issue #703, Issue #716,
   Issue #717, Issue #722, Issue #723, Issue #741, Issue #744, Issue #745,
-  Issue #748, Issue #793, Issue #811, Issue #814, Issue #816.
+  Issue #748, Issue #793, Issue #811, Issue #814, Issue #816, Issue #818.
 - Recently closed as completed with evidence and owner approval: Issue #573,
   Issue #565, Issue #577, Issue #580, Issue #601, Issue #609.
 - Open PRs read before this queue refresh PR was opened: none.
@@ -171,19 +171,27 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   Issue #816 moves to `Now`; Issue #814 pauses as the next automatic lane and
   resumes after #816 evidence is merged. Issue #811 remains the parent root and
   is not downscoped or completed by this slice alone.
+- 2026-06-07 owner input classified Issue #818 as `NEXT` / experiment support
+  for Issue #814: voice input 由来の reply は `voiceModeActive=false` へ落ちた
+  後も一度だけ読み上げ、読み上げ中の owner 発話は speechSynthesis を止めて
+  interrupt candidate gate に通す必要がある。Issue #816 PR #817 が未 merge
+  のため、Issue #818 implementation は #816 上に stacked し、#811 / #814 /
+  #816 completion とは扱わない。
 
 ## Now
 
-- Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする。
-  Issue #814 の voice mode 実装前に、実行中差し込み queue が
-  `mediaReferences: []` 固定送信で添付を失う欠陥を直す。差し込み queue
-  item は upload 済み media reference を保持し、送信時に Dashboard thread
-  と codex app-server bridge turn input へ渡す。Issue #811 は parent root
-  として active のまま残り、この PR だけで #811 / #814 completion とは
-  扱わない。
+- Issue #818: Dashboard Butler voice mode の返信読み上げと割り込み gate。
+  Issue #816 PR #817 の上に stacked して、voice input 由来 reply の
+  pending readback と読み上げ中 interrupt candidate gate を実験実装する。
+  通常 text reply の勝手な読み上げ、明示終了後の読み上げ、短い周囲音の
+  差し込み送信は regression として扱う。Issue #816 は prerequisite PR として
+  active のまま残り、この PR だけで #811 / #814 / #816 completion とは扱わない。
 
 ## Next
 
+- Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする。
+  PR #817 が open / checks success / clean。Issue #818 はこの PR 上に stacked
+  しているため、merge / rebase order を PR body で明記する。
 - Issue #814: Dashboard Butler voice mode で VPS 返信を読み上げる。
   Issue #816 が merged / verified された後に、発話 transcript、VPS
   handoff、返信読み上げ、Wake Lock、終了時 cleanup の owner-facing workflow
