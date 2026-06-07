@@ -3325,23 +3325,21 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.equal(approvedResponse.status, 202);
   const approvedBody = await approvedResponse.json();
   assert.equal(approvedBody.ok, true);
-  assert.equal(approvedBody.execution.status, "queued_for_vps_helper_execution");
-  assert.equal(approvedBody.execution.queue.dashboardThreadId, "dashboard-main-unresolved");
-  assert.equal(approvedBody.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(approvedBody.execution.status, "blocked");
+  assert.equal(approvedBody.execution.queue.status, "blocked");
+  assert.equal(approvedBody.execution.queue.transport, "vps_local_helper_queue");
+  assert.equal(approvedBody.execution.runtimeTruth.helperQueueReached, false);
   assert.equal(approvedBody.execution.runtimeTruth.dashboardThreadIdIncluded, true);
+  assert.equal(approvedBody.execution.runtimeTruth.queueCommentPosted, false);
+  assert.equal(approvedBody.execution.runtimeTruth.disabledTransport, "github_issue_comment_queue");
   assert.equal(approvedBody.execution.runtimeTruth.rootExecutionStarted, false);
   assert.equal(approvedBody.execution.runtimeTruth.helperExecutionStarted, false);
   assert.equal(approvedBody.messages[1].role, "butler");
-  assert.equal(approvedBody.messages[1].status, "sent");
-  assert.match(approvedBody.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
-  assert.match(approvedBody.messages[1].text, /bounded handoff/);
+  assert.equal(approvedBody.messages[1].status, "blocked");
+  assert.match(approvedBody.messages[1].text, /vps_local_helper_queue_unavailable/);
+  assert.match(approvedBody.messages[1].text, /Issue comment queue transport is disabled/);
   assert.match(approvedBody.messages[1].text, /rootExecutionStarted=false/);
-  assert.equal(githubCalls.length, 1);
-  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:issue637-dashboard-natural-chat"), true);
-  assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
-  assert.equal(queueCommentBody.includes('"dashboardThreadId": "dashboard-main-unresolved"'), true);
-  assert.equal(queueCommentBody.includes('"handoff"'), true);
+  assert.equal(githubCalls.length, 0);
 });
 
 test("worker allows VPS passkey operator continuation without Cloudflare Access dashboard session", async () => {
@@ -3436,13 +3434,13 @@ test("worker allows VPS passkey operator continuation without Cloudflare Access 
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.execution.status, "queued_for_vps_helper_execution");
-  assert.equal(body.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(body.execution.status, "blocked");
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, false);
+  assert.equal(body.execution.runtimeTruth.queueCommentPosted, false);
+  assert.equal(body.execution.runtimeTruth.disabledTransport, "github_issue_comment_queue");
   assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.execution.runtimeTruth.helperExecutionStarted, false);
-  assert.equal(githubCalls.length, 1);
-  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes("dashboard_bridge_unresolved_deploy_sync_restart"), true);
+  assert.equal(githubCalls.length, 0);
 });
 
 test("worker treats approvalGrantId and vpsProposalId as VPS continuation intent", async () => {
@@ -3537,11 +3535,12 @@ test("worker treats approvalGrantId and vpsProposalId as VPS continuation intent
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.execution.status, "queued_for_vps_helper_execution");
-  assert.equal(body.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(body.execution.status, "blocked");
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, false);
+  assert.equal(body.execution.runtimeTruth.queueCommentPosted, false);
   assert.equal(body.messages.length, 2);
-  assert.equal(body.messages[1].status, "sent");
-  assert.equal(githubCalls.length, 1);
+  assert.equal(body.messages[1].status, "blocked");
+  assert.equal(githubCalls.length, 0);
 });
 
 test("worker returns blocked VPS continuation execution instead of dropping it", async () => {
@@ -3621,8 +3620,8 @@ test("worker returns blocked VPS continuation execution instead of dropping it",
   assert.equal(body.execution.vpsProposalId, proposalBody.vpsProposalId);
   assert.equal(body.messages.length, 2);
   assert.equal(body.messages[1].status, "blocked");
-  assert.match(body.messages[1].text, /github_write_unavailable/);
-  assert.match(body.messages[1].text, /GitHub App installation token is unavailable/);
+  assert.match(body.messages[1].text, /vps_local_helper_queue_unavailable/);
+  assert.match(body.messages[1].text, /Issue comment queue transport is disabled/);
 });
 
 test("worker rejects VPS continuation context that does not match the stored proposal", async () => {
@@ -3822,22 +3821,20 @@ test("worker maps Dashboard Butler VPS runner status text to the low-risk preset
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.execution.status, "queued_for_vps_helper_execution");
+  assert.equal(body.execution.status, "blocked");
   assert.equal(body.execution.approvalScope.vpsCapabilityId, "systemd.user.runner.status");
   assert.equal(body.execution.approvalScope.vpsOperation, "review");
   assert.equal(body.execution.runtimeTruth.approvalRequired, false);
   assert.equal(body.execution.runtimeTruth.approvalBypassReason, "low_risk_read");
-  assert.equal(body.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, false);
+  assert.equal(body.execution.runtimeTruth.queueCommentPosted, false);
+  assert.equal(body.execution.runtimeTruth.disabledTransport, "github_issue_comment_queue");
   assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
-  assert.equal(body.messages[1].status, "sent");
-  assert.match(body.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
-  assert.match(body.messages[1].text, /low-risk read/);
+  assert.equal(body.messages[1].status, "blocked");
+  assert.match(body.messages[1].text, /vps_local_helper_queue_unavailable/);
+  assert.match(body.messages[1].text, /Issue comment queue transport is disabled/);
   assert.doesNotMatch(body.messages[1].text, /approval URL/);
-  assert.equal(githubCalls.length, 1);
-  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:"), true);
-  assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
-  assert.equal(queueCommentBody.includes('"approvalBypassReason": "low_risk_read"'), true);
+  assert.equal(githubCalls.length, 0);
 
   const records = await provider.retrieve({ ids: [body.execution.vpsProposalId] });
   const proposalRecord = records[0];
@@ -3886,20 +3883,18 @@ test("worker detects app-server bridge recovery intent without internal VPS help
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.execution.status, "queued_for_vps_helper_execution");
+  assert.equal(body.execution.status, "blocked");
   assert.equal(body.execution.approvalScope.vpsCapabilityId, "systemd.user.app.server.bridge.status");
   assert.equal(body.execution.approvalScope.vpsOperation, "review");
   assert.equal(body.execution.runtimeTruth.approvalRequired, false);
   assert.equal(body.execution.runtimeTruth.approvalBypassReason, "low_risk_read");
-  assert.equal(body.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, false);
+  assert.equal(body.execution.runtimeTruth.queueCommentPosted, false);
   assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
-  assert.equal(body.messages[1].status, "sent");
-  assert.match(body.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
-  assert.match(body.messages[1].text, /low-risk read/);
+  assert.equal(body.messages[1].status, "blocked");
+  assert.match(body.messages[1].text, /vps_local_helper_queue_unavailable/);
   assert.doesNotMatch(body.messages[1].text, /approval URL/);
-  assert.equal(githubCalls.length, 1);
-  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes('"approvalBypassReason": "low_risk_read"'), true);
+  assert.equal(githubCalls.length, 0);
 
   const records = await provider.retrieve({ ids: [body.execution.vpsProposalId] });
   const proposalRecord = records[0];
@@ -3958,13 +3953,7 @@ test("DashboardChatRoom queues repo-less low-risk VPS runner status when reposit
   );
 
   assert.equal(bridgeSocket.sent.length, 0);
-  assert.equal(githubCalls.length, 1);
-  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:"), true);
-  assert.equal(queueCommentBody.includes('"repository": "marushu/vtdd-v2-p"'), true);
-  assert.equal(queueCommentBody.includes('"issueNumber": 637'), true);
-  assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
-  assert.equal(queueCommentBody.includes('"approvalBypassReason": "low_risk_read"'), true);
+  assert.equal(githubCalls.length, 0);
 
   const finalBroadcast = dashboardSocket.sent.map((message) => JSON.parse(message)).findLast((message) => message.type === "thread");
   assert.equal(finalBroadcast.type, "thread");
@@ -3973,9 +3962,8 @@ test("DashboardChatRoom queues repo-less low-risk VPS runner status when reposit
   assert.equal(finalBroadcast.messages[0].repository, "marushu/vtdd-v2-p");
   assert.equal(finalBroadcast.messages[0].relatedIssue, 637);
   assert.equal(finalBroadcast.messages[1].role, "butler");
-  assert.equal(finalBroadcast.messages[1].status, "sent");
-  assert.match(finalBroadcast.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
-  assert.match(finalBroadcast.messages[1].text, /low-risk read/);
+  assert.equal(finalBroadcast.messages[1].status, "blocked");
+  assert.match(finalBroadcast.messages[1].text, /vps_local_helper_queue_unavailable/);
   assert.doesNotMatch(finalBroadcast.messages[1].text, /approval URL/);
 });
 
@@ -4862,11 +4850,10 @@ test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal be
   assert.equal(finalBroadcast.messages.length, 2);
   assert.equal(finalBroadcast.messages[0].role, "owner");
   assert.equal(finalBroadcast.messages[1].role, "butler");
-  assert.equal(finalBroadcast.messages[1].status, "sent");
-  assert.match(finalBroadcast.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
-  assert.match(finalBroadcast.messages[1].text, /low-risk read/);
+  assert.equal(finalBroadcast.messages[1].status, "blocked");
+  assert.match(finalBroadcast.messages[1].text, /vps_local_helper_queue_unavailable/);
   assert.doesNotMatch(finalBroadcast.messages[1].text, /approval URL/);
-  assert.equal(githubCalls.length, 1);
+  assert.equal(githubCalls.length, 0);
 
   const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
   const proposalRecord = records.find((record) => record.content?.kind === "vps_privileged_maintenance_approval_proposal");
@@ -4972,11 +4959,10 @@ test("DashboardChatRoom routes VPS maintenance owner turns without an app-server
   assert.equal(finalBroadcast.messages.length, 2);
   assert.equal(finalBroadcast.messages[0].role, "owner");
   assert.equal(finalBroadcast.messages[1].role, "butler");
-  assert.equal(finalBroadcast.messages[1].status, "sent");
-  assert.match(finalBroadcast.messages[1].text, /VPS runner へ復旧依頼を渡しました/);
-  assert.match(finalBroadcast.messages[1].text, /low-risk read/);
+  assert.equal(finalBroadcast.messages[1].status, "blocked");
+  assert.match(finalBroadcast.messages[1].text, /vps_local_helper_queue_unavailable/);
   assert.doesNotMatch(finalBroadcast.messages[1].text, /approval URL/);
-  assert.equal(githubCalls.length, 1);
+  assert.equal(githubCalls.length, 0);
 
   const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
   const proposalRecord = records.find((record) => record.content?.kind === "vps_privileged_maintenance_approval_proposal");
@@ -12053,25 +12039,22 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
     }
   );
 
-  assert.equal(queueResponse.status, 200);
+  assert.equal(queueResponse.status, 503);
   const queueBody = await queueResponse.json();
-  assert.equal(queueBody.ok, true);
+  assert.equal(queueBody.ok, false);
+  assert.equal(queueBody.error, "vps_local_helper_queue_unavailable");
   assert.equal(queueBody.execution.executionId, "vps-maint-test-637");
-  assert.equal(queueBody.execution.transport, "vps_privileged_maintenance_helper");
+  assert.equal(queueBody.execution.transport, "vps_local_helper_queue");
   assert.equal(queueBody.execution.dashboardThreadId, "dashboard-main-marushu-vtdd-v2-p");
-  assert.equal(queueBody.execution.queueCommentId, 63701);
+  assert.equal(queueBody.execution.queueCommentId, null);
   assert.equal(queueBody.runtimeTruth.kind, "vps_privileged_maintenance_helper_execution_queue");
-  assert.equal(queueBody.runtimeTruth.status, "queued_for_vps_helper_execution");
+  assert.equal(queueBody.runtimeTruth.status, "vps_local_helper_queue_unavailable");
   assert.equal(queueBody.runtimeTruth.dashboardThreadIdIncluded, true);
+  assert.equal(queueBody.runtimeTruth.queueCommentPosted, false);
+  assert.equal(queueBody.runtimeTruth.disabledTransport, "github_issue_comment_queue");
   assert.equal(queueBody.runtimeTruth.rootExecutionStarted, false);
   assert.equal(queueBody.runtimeTruth.helperExecutionStarted, false);
-  assert.equal(githubCalls.length, 1);
-  assert.equal(githubCalls[0].url.includes("/repos/marushu/vtdd-v2-p/issues/637/comments"), true);
-  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:vps-maint-test-637"), true);
-  assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
-  assert.equal(queueCommentBody.includes('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"'), true);
-  assert.equal(queueCommentBody.includes('"helperExecutionInput"'), true);
+  assert.equal(githubCalls.length, 0);
 });
 
 test("worker retrieves VPS maintenance install inventory without root execution", async () => {

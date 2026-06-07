@@ -6683,74 +6683,44 @@ async function createVpsPrivilegedMaintenanceHelperExecutionQueue({ payload, env
       payload?.threadId ||
       payload?.thread_id
   );
-  const queueCommentBody = buildVpsPrivilegedMaintenanceQueueComment({
-    executionId,
-    repository,
-    issueNumber,
-    dashboardThreadId,
-    approvalActor: payload?.approvalActor,
-    executionEnvelope: envelope
-  });
-  const writeResult = await executeGitHubWritePlane({
-    operation: "issue_comment_create",
-    repository,
-    issueNumber,
-    body: queueCommentBody,
-    approvalPhrase: "GO",
-    targetConfirmed: true,
-    approvalScopeMatched: true,
-    env
-  });
-  if (!writeResult.ok) {
-    const body = {
-      ok: false,
-      error: writeResult.error || "vps_privileged_maintenance_queue_post_failed",
-      reason: writeResult.reason,
-      issues: writeResult.issues ?? [],
-      runtimeTruth: {
-        kind: "vps_privileged_maintenance_helper_execution_queue",
-        status: "failed",
-        rootExecutionStarted: false,
-        helperExecutionStarted: false,
-        queueCommentPosted: false,
-        redacted: true
-      }
-    };
-    return {
-      ok: false,
-      status: writeResult.status ?? 503,
-      error: body.error,
-      reason: body.reason,
-      issues: body.issues,
-      body
-    };
-  }
 
   const body = {
-    ok: true,
+    ok: false,
+    error: "vps_local_helper_queue_unavailable",
+    reason:
+      "GitHub Issue comments are no longer accepted as the VPS privileged maintenance helper execution queue.",
+    issues: [
+      "Issue comment queue transport is disabled to avoid unbounded comment accumulation and silent pickup gaps.",
+      "A bounded VPS-local helper queue/state/log transport must be connected before this execution can be queued."
+    ],
     execution: {
       executionId,
-      transport: "vps_privileged_maintenance_helper",
+      transport: "vps_local_helper_queue",
       repository,
       issueNumber,
       dashboardThreadId: dashboardThreadId || null,
-      queueCommentId: writeResult.write?.commentId || null,
-      queueCommentUrl: writeResult.write?.url || null,
-      status: "queued"
+      queueCommentId: null,
+      queueCommentUrl: null,
+      status: "blocked"
     },
     runtimeTruth: {
       kind: "vps_privileged_maintenance_helper_execution_queue",
-      status: "queued_for_vps_helper_execution",
+      status: "vps_local_helper_queue_unavailable",
       rootExecutionStarted: false,
       helperExecutionStarted: false,
-      queueCommentPosted: true,
+      queueCommentPosted: false,
       dashboardThreadIdIncluded: Boolean(dashboardThreadId),
-      nextAction: "VPS runner must pick up the vtdd:vps-privileged-maintenance-execution queue comment and invoke the root-owned helper"
+      requiredTransport: "vps_local_helper_queue",
+      disabledTransport: "github_issue_comment_queue",
+      nextAction: "Connect a bounded VPS-local helper queue/state/log transport before retrying this maintenance execution."
     }
   };
   return {
-    ok: true,
-    status: 200,
+    ok: false,
+    status: 503,
+    error: body.error,
+    reason: body.reason,
+    issues: body.issues,
     body
   };
 }
@@ -12800,7 +12770,12 @@ async function buildDashboardChatTurn(payload, options = {}) {
 
 function shouldDashboardVpsMaintenanceFlowStayInWorker(flow = null, options = {}) {
   const status = normalizeText(flow?.execution?.status || flow?.messageStatus);
+  const runtimeTruth = flow?.execution?.runtimeTruth || {};
   return ["approval_required", "queued_for_vps_helper_execution", "sent"].includes(status) ||
+    (status === "blocked" &&
+      (normalizeText(runtimeTruth.requiredTransport) === "vps_local_helper_queue" ||
+        normalizeText(runtimeTruth.disabledTransport) === "github_issue_comment_queue" ||
+        normalizeText(runtimeTruth.status) === "vps_local_helper_queue_unavailable")) ||
     (options.approvalContinuation === true && status === "blocked");
 }
 
@@ -13042,7 +13017,8 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
         relatedIssue,
         error: queue.error,
         reason: queue.reason,
-        issues: queue.issues
+        issues: queue.issues,
+        nextAction: queue.body?.runtimeTruth?.nextAction
       });
 
   return {
@@ -13178,7 +13154,8 @@ async function queueDashboardVpsMaintenanceLowRiskRead({
         relatedIssue,
         error: queue.error,
         reason: queue.reason,
-        issues: queue.issues
+        issues: queue.issues,
+        nextAction: queue.body?.runtimeTruth?.nextAction
       });
 
   return {

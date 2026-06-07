@@ -183,20 +183,30 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   appear above the composer, not keep accumulating below it, and must expose
   queue / guide / edit / cancel choices. This keeps Issue #816 as `Now` until
   PR #817 is updated.
+- 2026-06-07 owner input classified Issue #741 as `ROOT`: deploy 後 bridge
+  restart / VPS helper handoff が GitHub Issue comment queue に戻っており、
+  Issue #741 に実行依頼コメントが溜まり続け、VPS runner pickup も silent
+  drop していた。これは Issue #637 privileged maintenance、Issue #413 runtime
+  truth、Issue #450 app-server path を横断して壊すため、pagination 修正で
+  延命せず、Issue comment helper queue を止める safety slice が `Now` に
+  preempt する。Issue #816 / #814 / #811 は active のまま、#741 safety slice
+  の後に再開する。
 
 ## Now
 
-- Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする。
-  Issue #814 の voice mode 実装前に、実行中差し込み queue が
-  `mediaReferences: []` 固定送信で添付を失う欠陥と、入力欄の下へ
-  差し込みを積み続ける UX 欠陥を直す。差し込み queue item は upload 済み
-  media reference を保持し、composer 上に queue / guide / edit / cancel を
-  owner-facing に出し、送信時に Dashboard thread と codex app-server bridge
-  turn input へ渡す。Issue #811 は parent root として active のまま残り、
-  この PR だけで #811 / #814 / #818 completion とは扱わない。
+- Issue #741: GitHub Issue comment を VPS privileged maintenance helper
+  execution queue として使う旧経路を止める。pagination 修正ではなく、
+  Dashboard Butler / passkey operator continuation は Issue comment を作らず
+  `vps_local_helper_queue_unavailable` blocked を返し、root/helper execution
+  を開始しない。これは safety slice であり、VPS local queue/state/log consumer
+  の接続、bridge restart 完了、watchdog live install/enable、Issue #741 close は
+  次 slice に残る。
 
 ## Next
 
+- Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする。
+  Issue #741 の Issue comment helper queue safety slice 後に、実行中差し込み
+  queue の添付保持と composer 上 queue UI を再開する。
 - Issue #814: Dashboard Butler voice mode で VPS 返信を読み上げる。
   Issue #816 が merged / verified された後に、発話 transcript、VPS
   handoff、返信読み上げ、Wake Lock、終了時 cleanup の owner-facing workflow

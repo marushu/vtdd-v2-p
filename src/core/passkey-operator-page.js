@@ -858,7 +858,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
         const repositoryInput = readRequiredRepositoryInput();
         const issueNumber = Number(document.getElementById("issue-input").value || 0) || null;
-        setApproveOutput("パスキー承認済み。Dashboard Butler へ戻して VPS helper queue へ進めています...", {
+        setApproveOutput("パスキー承認済み。Dashboard Butler へ戻して VPS helper queue 接続状態を確認しています...", {
           show: shouldShowApproveOutput("status")
         });
         const continueResponse = await fetch("${apiBase}/dashboard/chat/messages", {
@@ -880,9 +880,13 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
         const runtimeTruth = continueBody?.execution?.runtimeTruth || {};
         if (continueBody?.execution?.status !== "queued_for_vps_helper_execution") {
+          const executionStatus = continueBody?.execution?.status || "blocked";
+          const errorText = continueBody?.error || continueBody?.execution?.runtimeTruth?.status || executionStatus;
+          const nextAction = continueBody?.execution?.runtimeTruth?.nextAction || continueBody?.runtimeTruth?.nextAction || "";
           throw new Error(
-            "VPS helper queue handoff did not queue. "
-            + (runtimeTruth.status || continueBody?.execution?.status || "unknown")
+            "VPS helper queue handoff blocked. "
+            + errorText
+            + (nextAction ? ". next action: " + nextAction : "")
           );
         }
         setApproveOutput("VPS helper queue へ渡しました。Dashboard Butler と通知で進捗を確認してください。", {
