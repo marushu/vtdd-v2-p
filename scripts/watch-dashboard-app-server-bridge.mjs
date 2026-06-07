@@ -226,7 +226,7 @@ export async function runDashboardBridgeWatchdog({
       fsImpl,
       nowMs
     });
-    const restartSucceeded = Boolean(afterRestart.activeState === "active" && afterRestart.subState === "running" && afterRestart.mainPid);
+    const restartSucceeded = Boolean(afterRestart.healthy);
     result = {
       ok: restartSucceeded,
       status: restartSucceeded ? "self_healed" : "restart_failed",
@@ -272,10 +272,10 @@ export async function readBridgeHealth({
       .map((line) => line.split("="))
       .filter((parts) => parts.length === 2)
   );
-  const heartbeat = await readHeartbeat({ heartbeatFile, fsImpl, nowMs, staleHeartbeatMs });
   const activeState = properties.ActiveState || active || "";
   const subState = properties.SubState || "";
   const mainPid = properties.MainPID || properties.ExecMainPID || "";
+  const heartbeat = await readHeartbeat({ heartbeatFile, fsImpl, nowMs, staleHeartbeatMs, expectedPid: mainPid });
   const processHealthy = activeState === "active" && subState === "running" && Boolean(mainPid) && mainPid !== "0";
   const heartbeatHealthy = heartbeat.status === "fresh" || heartbeat.status === "disabled";
   const healthy = processHealthy && heartbeatHealthy;
@@ -292,7 +292,13 @@ export async function readBridgeHealth({
   };
 }
 
-export async function readHeartbeat({ heartbeatFile = "", fsImpl = fs, nowMs = () => Date.now(), staleHeartbeatMs = DEFAULT_STALE_HEARTBEAT_MS } = {}) {
+export async function readHeartbeat({
+  heartbeatFile = "",
+  fsImpl = fs,
+  nowMs = () => Date.now(),
+  staleHeartbeatMs = DEFAULT_STALE_HEARTBEAT_MS,
+  expectedPid = ""
+} = {}) {
   if (!heartbeatFile) {
     return { status: "disabled" };
   }
@@ -300,12 +306,23 @@ export async function readHeartbeat({ heartbeatFile = "", fsImpl = fs, nowMs = (
     const stat = await fsImpl.stat(heartbeatFile);
     const ageMs = Math.max(0, Number(nowMs()) - Number(stat.mtimeMs || 0));
     const staleMs = Math.max(1, Number(staleHeartbeatMs) || DEFAULT_STALE_HEARTBEAT_MS);
+    const payload = await readHeartbeatPayload({ heartbeatFile, fsImpl });
+    const payloadStatus = normalizeWatchdogText(payload?.status);
+    const payloadPid = normalizeWatchdogText(payload?.pid);
+    const pidMatches = !expectedPid || !payloadPid || payloadPid === normalizeWatchdogText(expectedPid);
+    const pongConfirmed = payloadStatus === "pong_received";
+    const freshByTime = ageMs <= staleMs;
     return {
-      status: ageMs <= staleMs ? "fresh" : "stale",
+      status: freshByTime && pongConfirmed && pidMatches ? "fresh" : "stale",
       path: heartbeatFile,
       mtimeMs: Number(stat.mtimeMs || 0),
       ageMs,
-      staleHeartbeatMs: staleMs
+      staleHeartbeatMs: staleMs,
+      payloadStatus,
+      payloadPid,
+      expectedPid: normalizeWatchdogText(expectedPid),
+      pongConfirmed,
+      pidMatches
     };
   } catch {
     return {
@@ -316,9 +333,19 @@ export async function readHeartbeat({ heartbeatFile = "", fsImpl = fs, nowMs = (
   }
 }
 
+async function readHeartbeatPayload({ heartbeatFile, fsImpl = fs } = {}) {
+  try {
+    return JSON.parse(await fsImpl.readFile(heartbeatFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function buildHealthReason({ processHealthy, heartbeat }) {
   if (!processHealthy) return "systemd service is not active/running";
   if (heartbeat?.status === "missing") return "bridge heartbeat file is missing";
+  if (heartbeat?.pongConfirmed === false) return "bridge heartbeat is not pong-confirmed";
+  if (heartbeat?.pidMatches === false) return "bridge heartbeat pid does not match systemd MainPID";
   if (heartbeat?.status === "stale") return "bridge heartbeat is stale";
   return "bridge heartbeat is unavailable";
 }
@@ -544,7 +571,13 @@ async function isStaleLock({ lockDir, fsImpl = fs, nowMs = Date.now(), ttlMs = D
     const ageMs = Math.max(0, Number(nowMs) - Number(stat.mtimeMs || 0));
     return ageMs > Math.max(1, Number(ttlMs) || DEFAULT_LOCK_TTL_MS);
   } catch {
-    return false;
+    try {
+      const stat = await fsImpl.stat(lockDir);
+      const ageMs = Math.max(0, Number(nowMs) - Number(stat.mtimeMs || 0));
+      return ageMs > Math.max(1, Number(ttlMs) || DEFAULT_LOCK_TTL_MS);
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -564,6 +597,10 @@ function safeIdentifier(value = "") {
     .replace(/[^a-z0-9_.-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "watchdog";
+}
+
+function normalizeWatchdogText(value) {
+  return String(value ?? "").trim();
 }
 
 async function main() {

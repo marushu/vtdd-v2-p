@@ -11,7 +11,7 @@ Dashboard Butler から VPS Codex CLI へ投げる経路は app-server bridge �
 - restart 対象は `vtdd-dashboard-app-server-bridge-unresolved.service` だけ。
 - default では deploy、credential mutation、permission mutation、root 操作をしない。
 - lock directory で同時実行を避ける。
-- lock 親ディレクトリは初回起動時に作成し、stale lock は TTL 後に破棄して復旧する。
+- lock 親ディレクトリは初回起動時に作成し、`lock.json` がある stale lock だけでなく、異常終了で `lockDir` だけ残った stale lock も TTL 後に破棄して復旧する。
 - `maxAttempts` / `attemptWindowMs` で retry budget を超えたら `circuit_open` にして止める。
 - state は直近件数だけ保持する。
 - local log は追記無制限ではなく直近行数だけ保持する。
@@ -44,7 +44,7 @@ Dashboard Butler から VPS Codex CLI へ投げる経路は app-server bridge �
 
 `VTDD_DASHBOARD_BRIDGE_WATCHDOG_REPOSITORY`、`VTDD_RUNTIME_URL`、`VTDD_GATEWAY_BEARER_TOKEN` のいずれかがない場合、自動復旧と bounded local state/log は動くが Dashboard への事後報告は `unconfigured` になる。routine healthy check は default で `skipped_healthy` になり、Dashboard event の洪水を避ける。
 
-heartbeat は bridge が ping を送った時点ではなく、Worker からの `pong` を受けた時点で fresh 化する。これにより、送信側だけが動いている stale WebSocket を healthy と誤判定しにくくする。
+heartbeat は bridge が ping を送った時点ではなく、Worker からの `pong` を受けた時点で fresh 化する。watchdog は heartbeat の `pid` が systemd `MainPID` と一致することも確認する。これにより、送信側だけが動いている stale WebSocket や restart 前の古い heartbeat を healthy と誤判定しにくくする。
 
 ## 手動検証
 

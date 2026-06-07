@@ -25,6 +25,9 @@ test("dashboard bridge watchdog treats fresh heartbeat and active systemd servic
       mainPid: "700812"
     }),
     fsImpl: memoryFs({
+      files: {
+        "/tmp/bridge-heartbeat.json": heartbeatPayload("700812")
+      },
       stats: {
         "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
       }
@@ -56,6 +59,9 @@ test("dashboard bridge watchdog restarts the fixed bridge service when inactive"
       })(command, args);
     },
     fsImpl: memoryFs({
+      files: {
+        "/tmp/bridge-heartbeat.json": heartbeatPayload("700900")
+      },
       stats: {
         "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
       }
@@ -146,6 +152,9 @@ test("dashboard bridge watchdog creates the lock parent before first lock acquis
     }),
     fsImpl: {
       ...memoryFs({
+        files: {
+          "/tmp/bridge-heartbeat.json": heartbeatPayload("700812")
+        },
         stats: {
           "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
         }
@@ -177,6 +186,9 @@ test("dashboard bridge watchdog recovers stale lock directories", async () => {
     }),
     fsImpl: {
       ...memoryFs({
+        files: {
+          "/tmp/bridge-heartbeat.json": heartbeatPayload("700812")
+        },
         stats: {
           "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 },
           "/tmp/watchdog.lock/lock.json": { mtimeMs: NOW - 120_000 }
@@ -202,6 +214,45 @@ test("dashboard bridge watchdog recovers stale lock directories", async () => {
   assert.equal(mkdirs.filter((entry) => entry.target === "/tmp/watchdog.lock").length, 2);
 });
 
+test("dashboard bridge watchdog recovers stale lock directories without lock metadata", async () => {
+  const rms = [];
+  let lockExists = true;
+  const result = await runDashboardBridgeWatchdog({
+    options: baseOptions({ lockTtlMs: 60_000 }),
+    nowMs: () => NOW,
+    runner: systemctlRunner({
+      activeState: "active",
+      subState: "running",
+      mainPid: "700812"
+    }),
+    fsImpl: {
+      ...memoryFs({
+        files: {
+          "/tmp/bridge-heartbeat.json": heartbeatPayload("700812")
+        },
+        stats: {
+          "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 },
+          "/tmp/watchdog.lock": { mtimeMs: NOW - 120_000 }
+        }
+      }),
+      async mkdir(target) {
+        if (target === "/tmp/watchdog.lock" && lockExists) {
+          const error = new Error("exists");
+          error.code = "EEXIST";
+          throw error;
+        }
+      },
+      async rm(target, options) {
+        rms.push({ target, options });
+        lockExists = false;
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(rms[0].target, "/tmp/watchdog.lock");
+});
+
 test("dashboard bridge watchdog skips Dashboard report for routine healthy checks", async () => {
   const fetchCalls = [];
   const result = await runDashboardBridgeWatchdog({
@@ -218,6 +269,9 @@ test("dashboard bridge watchdog skips Dashboard report for routine healthy check
       mainPid: "700812"
     }),
     fsImpl: memoryFs({
+      files: {
+        "/tmp/bridge-heartbeat.json": heartbeatPayload("700812")
+      },
       stats: {
         "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
       }
@@ -257,6 +311,9 @@ test("dashboard bridge watchdog report requires explicit repository and hides be
       })(command, args);
     },
     fsImpl: memoryFs({
+      files: {
+        "/tmp/bridge-heartbeat.json": heartbeatPayload("700900")
+      },
       stats: {
         "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
       }
@@ -326,6 +383,42 @@ test("dashboard bridge watchdog heartbeat reader marks stale files unhealthy", a
 
   assert.equal(heartbeat.status, "stale");
   assert.equal(heartbeat.ageMs, 120_000);
+});
+
+test("dashboard bridge watchdog heartbeat reader requires pong confirmation and matching PID", async () => {
+  const unconfirmed = await readHeartbeat({
+    heartbeatFile: "/tmp/bridge-heartbeat.json",
+    nowMs: () => NOW,
+    staleHeartbeatMs: 90_000,
+    expectedPid: "700812",
+    fsImpl: memoryFs({
+      files: {
+        "/tmp/bridge-heartbeat.json": JSON.stringify({ status: "connected", pid: "700812" })
+      },
+      stats: {
+        "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
+      }
+    })
+  });
+  assert.equal(unconfirmed.status, "stale");
+  assert.equal(unconfirmed.pongConfirmed, false);
+
+  const pidMismatch = await readHeartbeat({
+    heartbeatFile: "/tmp/bridge-heartbeat.json",
+    nowMs: () => NOW,
+    staleHeartbeatMs: 90_000,
+    expectedPid: "700812",
+    fsImpl: memoryFs({
+      files: {
+        "/tmp/bridge-heartbeat.json": heartbeatPayload("700900")
+      },
+      stats: {
+        "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
+      }
+    })
+  });
+  assert.equal(pidMismatch.status, "stale");
+  assert.equal(pidMismatch.pidMatches, false);
 });
 
 test("dashboard bridge watchdog attempt budget counts only the current window", () => {
@@ -405,6 +498,14 @@ function systemctlRunner({ calls = [], activeState = "active", subState = "runni
     }
     return { status: 0, stdout: "", stderr: "" };
   };
+}
+
+function heartbeatPayload(pid) {
+  return JSON.stringify({
+    kind: "dashboard_app_server_bridge_heartbeat",
+    status: "pong_received",
+    pid
+  });
 }
 
 function memoryFs({ files = {}, stats = {} } = {}) {
