@@ -28101,19 +28101,51 @@ function renderPasskeyOperatorPage(input = {}) {
           throw responseError(continueBody, "VPS helper queue handoff failed");
         }
         const runtimeTruth = continueBody?.execution?.runtimeTruth || {};
-        if (continueBody?.execution?.status !== "queued_for_vps_helper_execution") {
+        if (!isVpsHelperQueueHandoffLaunchAcknowledged(continueBody)) {
           const executionStatus = continueBody?.execution?.status || "blocked";
-          const errorText = continueBody?.error || continueBody?.execution?.runtimeTruth?.status || executionStatus;
+          const issues = Array.isArray(continueBody?.execution?.runtimeTruth?.issues)
+            ? continueBody.execution.runtimeTruth.issues
+            : Array.isArray(continueBody?.issues)
+              ? continueBody.issues
+              : [];
+          const errorText =
+            continueBody?.error ||
+            continueBody?.reason ||
+            continueBody?.execution?.runtimeTruth?.status ||
+            continueBody?.execution?.runtimeTruth?.reason ||
+            continueBody?.execution?.queue?.status ||
+            executionStatus;
           const nextAction = continueBody?.execution?.runtimeTruth?.nextAction || continueBody?.runtimeTruth?.nextAction || "";
           throw new Error(
             "VPS helper queue handoff blocked. "
             + errorText
+            + (issues.length > 0 ? ". issues: " + issues.join("; ") : "")
             + (nextAction ? ". next action: " + nextAction : "")
           );
         }
-        setApproveOutput("VPS helper queue \u3078\u6E21\u3057\u307E\u3057\u305F\u3002Dashboard Butler \u3068\u901A\u77E5\u3067\u9032\u6357\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002", {
+        setApproveOutput(buildVpsHelperQueueLaunchAcknowledgedText(continueBody), {
           show: shouldShowApproveOutput("status")
         });
+      }
+
+      function isVpsHelperQueueHandoffLaunchAcknowledged(body) {
+        const executionStatus = String(body?.execution?.status || "");
+        const queueStatus = String(body?.execution?.queue?.status || "");
+        const runtimeStatus = String(body?.execution?.runtimeTruth?.status || body?.runtimeTruth?.status || "");
+        if (executionStatus === "queued_for_vps_helper_execution") return true;
+        if (runtimeStatus !== "vps_local_helper_queue_control_sent") return false;
+        if (executionStatus === "sent_to_bridge") return true;
+        if (queueStatus === "sent_to_bridge" && runtimeStatus === "vps_local_helper_queue_control_sent") return true;
+        if (executionStatus !== "" && executionStatus !== "blocked") return true;
+        return false;
+      }
+
+      function buildVpsHelperQueueLaunchAcknowledgedText(body) {
+        const runtimeStatus = String(body?.execution?.runtimeTruth?.status || body?.runtimeTruth?.status || "");
+        if (runtimeStatus === "vps_local_helper_queue_control_sent") {
+          return "VPS helper queue \u3078\u306E\u5F15\u304D\u6E21\u3057\u8981\u6C42\u3092 app-server bridge \u3078\u9001\u308A\u307E\u3057\u305F\u3002\u3053\u308C\u306F queue \u4FDD\u5B58\u5B8C\u4E86\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002Dashboard Butler \u3068\u901A\u77E5\u3067 local queue \u306E\u4FDD\u5B58\u7D50\u679C\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+        }
+        return "VPS helper queue handoff \u306E\u8D77\u52D5\u5FDC\u7B54\u3092\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002\u3053\u308C\u306F\u5B8C\u4E86\u7D50\u679C\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002Dashboard Butler \u3068\u901A\u77E5\u3067 local queue \u306E\u4FDD\u5B58\u7D50\u679C\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
       }
 
       if (copyApprovalGrantButton) {
