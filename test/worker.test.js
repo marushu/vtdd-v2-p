@@ -730,7 +730,7 @@ async function createTestVapidEnv(extra = {}) {
   };
 }
 
-function createMockDashboardChatRoomNamespace() {
+function createMockDashboardChatRoomNamespace({ controlResponse = null } = {}) {
   const calls = [];
   return {
     calls,
@@ -741,6 +741,13 @@ function createMockDashboardChatRoomNamespace() {
             calls.push({ name, input, init });
             if (String(input || "").endsWith("/app-server-control")) {
               const payload = JSON.parse(init?.body || "{}");
+              if (controlResponse) {
+                const body = typeof controlResponse === "function" ? controlResponse({ payload, name, input, init }) : controlResponse;
+                return new Response(JSON.stringify(body), {
+                  status: 202,
+                  headers: { "content-type": "application/json" }
+                });
+              }
               return new Response(
                 JSON.stringify({
                   ok: true,
@@ -7761,6 +7768,87 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(notificationsBody.includes("直近5分"), false);
   assert.equal(notificationsBody.includes("Web Push: push service accepted 1/1"), true);
   assert.equal(notificationsBody.includes("PWA受信確認: 未確認"), true);
+});
+
+test("worker reports deploy bridge duplicate control distinctly from blocked", async () => {
+  const store = createInMemoryDashboardEventStore();
+  const chatStore = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const rooms = createMockDashboardChatRoomNamespace({
+    controlResponse: ({ payload }) => ({
+      ok: true,
+      control: {
+        status: "duplicate",
+        attempted: false,
+        reason: "deploy bridge restart control was already claimed",
+        requestId: payload.message?.requestId || "test-control-request",
+        messageType: payload.message?.type || "unknown",
+        deployRunId: payload.message?.deployRunId || ""
+      }
+    })
+  });
+  await provider.store({
+    id: "approval:deploy-duplicate-test",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:deploy-duplicate-test",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-20T00:09:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "deploy_production",
+        highRiskKind: "deploy_production",
+        repositoryInput: "marushu/vtdd-v2-p"
+      }
+    },
+    metadata: { source: "deploy-duplicate-test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-20T00:09:00.000Z"
+  });
+
+  const eventResponse = await worker.fetch(
+    new Request("https://example.com/v2/events/github-actions", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133044458",
+        status: "completed",
+        conclusion: "success",
+        headSha: "ef55709c4f52b54f436417acc239ec03a0c999fd",
+        headBranch: "main",
+        displayTitle: "deploy duplicate test (#741)",
+        updatedAt: "2026-05-20T00:10:01Z",
+        approvalGrantId: "approval:deploy-duplicate-test"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: store,
+      DASHBOARD_CHAT_STORE: chatStore,
+      DASHBOARD_CHAT_ROOMS: rooms.namespace,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(eventResponse.status, 202);
+  const eventBody = await eventResponse.json();
+  assert.equal(eventBody.deployBridgeFollowup.status, "bridge_control_duplicate");
+  assert.equal(eventBody.deployBridgeFollowup.bridgeControlSent, false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.bridgeControlDuplicate, true);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.queueCommentPosted, false);
+  assert.equal(eventBody.messages[1].status, "sent");
+  assert.equal(eventBody.messages[1].text.includes("status=bridge_control_duplicate"), true);
+  assert.equal(eventBody.messages[1].text.includes("成功とは扱いません"), true);
+  const controlCalls = rooms.calls.filter((call) => String(call.input || "").endsWith("/app-server-control"));
+  assert.equal(controlCalls.length, 1);
+  const controlPayload = JSON.parse(controlCalls[0].init.body);
+  assert.equal(controlPayload.message.requestId, "deploy-bridge-restart:26133044458");
+  assert.equal(controlPayload.message.deployRunId, "26133044458");
 });
 
 test("worker records dashboard PWA push receive ack only for authenticated owner session", async () => {

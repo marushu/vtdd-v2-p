@@ -516,6 +516,26 @@ test("dashboard app-server bridge deploy restart control dedupes repeated reques
   assert.equal(duplicate.attempted, false);
   assert.equal(spawnCalls.length, 1);
   assert.equal(processedRequests.size, 1);
+
+  const explicitRetry = await executeDeployBridgeSyncRestartRequest({
+    request: {
+      ...request,
+      requestId: "deploy-bridge-restart:test-retry"
+    },
+    processedRequests,
+    now: (() => {
+      const values = ["2026-06-07T00:00:04.000Z", "2026-06-07T00:00:05.000Z"];
+      return () => values.shift() || "2026-06-07T00:00:05.000Z";
+    })(),
+    spawnImpl(commandName, args, options) {
+      spawnCalls.push({ command: commandName, args, options });
+      return { unref() {} };
+    }
+  });
+
+  assert.equal(explicitRetry.status, "launch_started");
+  assert.equal(spawnCalls.length, 2);
+  assert.equal(processedRequests.size, 2);
 });
 
 test("dashboard app-server bridge wraps repository traffic-control context into turn input", () => {

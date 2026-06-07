@@ -58746,14 +58746,12 @@ var DashboardChatRoom = class {
   }
   deployBridgeControlIdempotencyKey(message) {
     const repository = normalizeCanonicalRepositoryInput(message?.repository);
-    const deployRunId = normalizeDashboardEventText(message?.deployRunId);
     const requestId = normalizeDashboardEventText(message?.requestId);
     const normalizedThreadId = normalizeDashboardThreadId(message?.threadId);
-    const identity = deployRunId || requestId;
-    if (!repository || !identity) {
+    if (!repository || !requestId) {
       return "";
     }
-    return `deploy_bridge_control_once:${normalizedThreadId}:${repository}:${identity}`;
+    return `deploy_bridge_control_once:${normalizedThreadId}:${repository}:${requestId}`;
   }
   async claimDeployBridgeControlOnce(message) {
     const key = this.deployBridgeControlIdempotencyKey(message);
@@ -62656,7 +62654,7 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
     threadId,
     message: controlMessage
   });
-  if (!control.ok || control.control?.status !== "sent") {
+  if (!control.ok) {
     return {
       status: "blocked",
       proposalCreated: false,
@@ -62678,6 +62676,87 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
             repository,
             relatedIssue,
             issues: control.issues || [control.reason || control.control?.reason || "app-server bridge control unavailable"]
+          }),
+          createdAt: record2.updatedAt || record2.createdAt
+        },
+        { threadId }
+      )
+    };
+  }
+  if (control.control?.status === "duplicate") {
+    return {
+      status: "bridge_control_duplicate",
+      proposalCreated: false,
+      queueCreated: false,
+      bridgeControlSent: false,
+      error: "",
+      reason: control.control?.reason || "deploy bridge restart control was already claimed",
+      issues: [],
+      execution: {
+        executionId,
+        transport: "dashboard_app_server_bridge_control",
+        repository,
+        issueNumber: relatedIssue,
+        dashboardThreadId: threadId,
+        status: "duplicate"
+      },
+      runtimeTruth: {
+        kind: "dashboard_bridge_deploy_sync_restart",
+        status: "bridge_control_duplicate",
+        deployApprovalValidated: true,
+        deployStandardPostStep: "dashboard_bridge_unresolved_deploy_sync_restart",
+        helperQueueReached: false,
+        queueCommentPosted: false,
+        bridgeControlSent: false,
+        bridgeControlDuplicate: true,
+        bridgeControlRequestId: control.control?.requestId || controlMessage.requestId,
+        bridgeControlMessageType: control.control?.messageType || controlMessage.type,
+        rootExecutionStarted: false,
+        helperExecutionStarted: false
+      },
+      message: normalizeDashboardChatMessage(
+        {
+          threadId,
+          messageId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: "sent",
+          text: buildDeployBridgeFollowupDuplicateMessage({
+            record: record2,
+            repository,
+            relatedIssue,
+            executionId,
+            control
+          }),
+          createdAt: record2.updatedAt || record2.createdAt
+        },
+        { threadId }
+      )
+    };
+  }
+  if (control.control?.status !== "sent") {
+    return {
+      status: "blocked",
+      proposalCreated: false,
+      queueCreated: false,
+      bridgeControlSent: false,
+      error: "deploy_bridge_control_unavailable",
+      reason: control.control?.reason,
+      issues: control.issues || [control.control?.reason || "app-server bridge control unavailable"],
+      message: normalizeDashboardChatMessage(
+        {
+          threadId,
+          messageId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: "blocked",
+          text: buildDeployBridgeFollowupBlockedMessage({
+            record: record2,
+            repository,
+            relatedIssue,
+            issues: control.issues || [control.control?.reason || "app-server bridge control unavailable"]
           }),
           createdAt: record2.updatedAt || record2.createdAt
         },
@@ -62733,10 +62812,11 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
   };
 }
 function buildDeployBridgeFollowupControlMessage({ record: record2, executionId, repository, relatedIssue, threadId } = {}) {
+  const runIdentity = safeIdentifier(record2?.runId) || createDashboardRequestId("deploy");
   return {
     type: DASHBOARD_DEPLOY_BRIDGE_CONTROL_TYPE,
     schema: "vtdd.dashboard.app_server_bridge.v1",
-    requestId: createDashboardRequestId("deploy-bridge-restart"),
+    requestId: `deploy-bridge-restart:${runIdentity}`,
     executionId,
     threadId,
     repository,
@@ -62954,6 +63034,24 @@ function buildDeployBridgeFollowupControlMessageText({ record: record2, reposito
     "- runtime truth: status=bridge_control_sent, queueCommentPosted=false, rootExecutionStarted=false, helperExecutionStarted=true",
     "",
     "bridge \u518D\u63A5\u7D9A\u307E\u305F\u306F VPS journal \u306E before/after truth \u304C\u623B\u308B\u307E\u3067\u3001live restart \u5B8C\u4E86\u3068\u306F\u6271\u3044\u307E\u305B\u3093\u3002"
+  ].join("\n");
+}
+function buildDeployBridgeFollowupDuplicateMessage({ record: record2, repository, relatedIssue, executionId, control } = {}) {
+  return [
+    "deploy \u5F8C bridge sync/restart \u306F\u3001\u540C\u3058 deploy follow-up \u3068\u3057\u3066\u65E2\u306B\u53D7\u3051\u4ED8\u3051\u6E08\u307F\u3067\u3059\u3002",
+    "",
+    `- repo: ${repository || "\u672A\u78BA\u8A8D"}`,
+    `- related Issue: #${relatedIssue || 741}`,
+    `- deploy run: ${record2?.runId || "\u672A\u78BA\u8A8D"}`,
+    `- deploy sha: ${record2?.headSha ? record2.headSha.slice(0, 12) : "\u672A\u78BA\u8A8D"}`,
+    "- \u5BFE\u8C61: repo-less Dashboard app-server bridge",
+    `- executionId: ${executionId || "\u672A\u751F\u6210"}`,
+    `- bridgeControlRequestId: ${control?.control?.requestId || "\u672A\u53D6\u5F97"}`,
+    `- reason: ${control?.control?.reason || "deploy bridge restart control was already claimed"}`,
+    "- persistence: GitHub Issue comment queue \u306F\u4F5C\u6210\u3057\u307E\u305B\u3093\u3002",
+    "- runtime truth: status=bridge_control_duplicate, queueCommentPosted=false, rootExecutionStarted=false, helperExecutionStarted=false",
+    "",
+    "\u3053\u308C\u306F\u91CD\u8907\u9632\u6B62\u306E\u7D50\u679C\u3067\u3042\u308A\u3001app-server bridge restart \u306E\u6210\u529F\u3068\u306F\u6271\u3044\u307E\u305B\u3093\u3002"
   ].join("\n");
 }
 function buildDeployBridgeFollowupBlockedMessage({ record: record2, repository, relatedIssue, issues } = {}) {

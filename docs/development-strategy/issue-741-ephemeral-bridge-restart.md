@@ -110,6 +110,8 @@ fallback reviewer は、bridge が detached child を起動した直後に `star
 - validation: focused DO app-server control/result tests、bridge restart control tests、`npm run build:worker`、`npm run verify:worker`。
 - stop condition: restart 完了 after state を Dashboard result として返すには bridge self-restart 後の sidecar callback が必要になる場合。この PR では queue 蓄積破棄と launch truth に限定し、完了 after truth 接続は次 Issue/PR に分ける。
 
+追加補正: fallback reviewer 第4指摘により、`/app-server-control` の `duplicate` は `blocked` に丸めず Dashboard thread と runtimeTruth で `bridge_control_duplicate` として出す。deploy event 由来の requestId は `deploy-bridge-restart:<deployRunId>` に固定し、同一 deploy event の重複は拒否する。一方で idempotency key は requestId 単位にし、同じ deployRunId でも別 requestId の明示 retry は bridge 側で受け付ける。これは detached child の post-launch failure callback を実装したものではなく、retry 不能状態を deployRunId 固定の 24h guard で悪化させないための境界調整である。
+
 ## 実装候補と捨てた案
 
 採用: deploy success event から接続中 bridge へ one-shot WebSocket control request を送る。

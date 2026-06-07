@@ -621,9 +621,8 @@ export async function executeDeployBridgeSyncRestartRequest({
 
 export function buildDeployBridgeSyncRestartIdempotencyKey(request = {}) {
   const repository = normalizeBridgeText(request.repository);
-  const deployRunId = normalizeBridgeText(request.deployRunId);
   const requestId = normalizeBridgeText(request.requestId);
-  return `deploy_bridge_sync_restart:${repository}:${deployRunId || requestId}`;
+  return `deploy_bridge_sync_restart:${repository}:${requestId}`;
 }
 
 export function claimDeployBridgeSyncRestartRequest({
