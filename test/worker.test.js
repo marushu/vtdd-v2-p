@@ -5179,6 +5179,42 @@ test("DashboardChatRoom records deploy bridge restart result and releases failed
   assert.equal(bridgeSocket.sent.length, 2);
 });
 
+test("DashboardChatRoom does not persist deploy bridge restart launch-only result", async () => {
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const store = createInMemoryDashboardChatStore();
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "deploy_bridge_sync_restart_result",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-123",
+      deployRunId: "123",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 741,
+      status: "launch_started",
+      completedAt: "2026-06-07T00:00:01.000Z"
+    })
+  );
+
+  const messages = await store.listThread("dashboard-main-marushu-vtdd-v2-p", { limit: 10 });
+  assert.equal(messages.length, 0);
+  const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
+  assert.equal(sentPayloads.some((message) => message.type === "transient_status"), false);
+  assert.equal(JSON.stringify(sentPayloads).includes("起動結果であり"), false);
+});
+
 test("DashboardChatRoom attaches execution queue preflight to repository app-server turns", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
@@ -7826,7 +7862,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(eventBody.chatAppendStatus, "appended");
   assert.equal(eventBody.chatAppendError, null);
   assert.equal(eventBody.chatAppendReason, null);
-  assert.equal(eventBody.messages.length, 2);
+  assert.equal(eventBody.messages.length, 1);
   assert.equal(eventBody.messages[0].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458");
   assert.equal(eventBody.messages[0].role, "system");
   assert.equal(eventBody.messages[0].repository, "marushu/vtdd-v2-p");
@@ -7834,18 +7870,11 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(eventBody.messages[0].status, "replied");
   assert.equal(eventBody.messages[0].text.includes("デプロイ完了イベントを受信しました。"), true);
   assert.equal(eventBody.messages[0].text.includes("- PR: PR #552"), true);
-  assert.equal(eventBody.messages[0].text.includes("deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送ります。"), true);
+  assert.equal(eventBody.messages[0].text.includes("deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送ります。"), false);
   assert.equal(eventBody.messages[0].text.includes("- production E2E / runtime truth を確認します。"), true);
   assert.equal(eventBody.messages[0].text.includes("merge / deploy / credential / permission"), true);
-  assert.equal(eventBody.messages[1].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458:deploy-bridge-followup");
-  assert.equal(eventBody.messages[1].role, "system");
-  assert.equal(eventBody.messages[1].status, "sent");
-  assert.equal(eventBody.messages[1].relatedIssue, 741);
-  assert.equal(eventBody.messages[1].text.includes("deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送りました。"), true);
-  assert.equal(eventBody.messages[1].text.includes("vtdd-dashboard-app-server-bridge-unresolved.service"), true);
-  assert.equal(eventBody.messages[1].text.includes("追加 passkey は不要です。"), true);
-  assert.equal(eventBody.messages[1].text.includes("GitHub Issue comment queue は作成しません。"), true);
-  assert.equal(eventBody.messages[1].text.includes("status=bridge_control_sent, queueCommentPosted=false"), true);
+  assert.equal(JSON.stringify(eventBody.messages).includes("bridge 再接続または VPS journal"), false);
+  assert.equal(JSON.stringify(eventBody.messages).includes("status=bridge_control_sent"), false);
   assert.equal(eventBody.deployBridgeFollowup.status, "bridge_control_sent");
   assert.equal(eventBody.deployBridgeFollowup.proposalCreated, false);
   assert.equal(eventBody.deployBridgeFollowup.queueCreated, false);
@@ -7906,13 +7935,13 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   );
   assert.equal(chatResponse.status, 200);
   const chatBody = await chatResponse.json();
-  assert.equal(chatBody.messages.length, 2);
+  assert.equal(chatBody.messages.length, 1);
   assert.equal(chatBody.messages[0].role, "system");
   assert.equal(chatBody.messages[0].text.includes("デプロイ完了イベントを受信しました。"), true);
   assert.equal(chatBody.messages[0].text.includes("- PR: PR #552"), true);
   assert.equal(chatBody.messages[0].text.includes("bare #552"), false);
-  assert.equal(chatBody.messages[1].text.includes("approval URL:"), false);
-  assert.equal(chatBody.messages[1].text.includes("追加 passkey は不要です。"), true);
+  assert.equal(JSON.stringify(chatBody.messages).includes("approval URL:"), false);
+  assert.equal(JSON.stringify(chatBody.messages).includes("追加 passkey は不要です。"), false);
 
   const duplicateResponse = await worker.fetch(
     new Request("https://example.com/v2/events/github-actions", {
@@ -7958,7 +7987,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: chatStore }
   );
   const duplicateChatBody = await duplicateChat.json();
-  assert.equal(duplicateChatBody.messages.length, 2);
+  assert.equal(duplicateChatBody.messages.length, 1);
   assert.equal(duplicateChatBody.messages[0].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458");
   assert.equal(duplicateBody.deployBridgeFollowup.status, "duplicate_event_skipped");
   const approvalRecordsAfterDuplicate = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 20 });
