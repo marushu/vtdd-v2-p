@@ -31,6 +31,8 @@ const DEBUG_SLOW_TURN_MAX_SECONDS = 10 * 60;
 const DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS = 30 * 1000;
 const DEFAULT_REPO_SYNC_BASE_REF = "main";
 const KNOWN_BRIDGE_UNTRACKED_ARTIFACT_PREFIXES = [".tmp/", "test-results/"];
+const DEPLOY_BRIDGE_SYNC_RESTART_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
+const deployBridgeSyncRestartProcessedRequests = new Map();
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -463,6 +465,197 @@ export async function executeVpsRunnerWakeup({
       });
     });
   });
+}
+
+export function buildDeployBridgeSyncRestartCommand({ logPath = "" } = {}) {
+  const safeLogPath =
+    normalizeBridgeText(logPath) ||
+    path.join(os.homedir(), "vtdd-runner", "logs", "dashboard-bridge-restart.log");
+  const fixedCommand =
+    "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main";
+  const script = [
+    "set -eu",
+    'mkdir -p "$HOME/vtdd-runner/logs"',
+    `printf '\\n[%s] deploy bridge sync/restart requested\\n' "$(date -Is)" >> ${JSON.stringify(safeLogPath)}`,
+    `${fixedCommand} >> ${JSON.stringify(safeLogPath)} 2>&1`
+  ].join("\n");
+  return {
+    command: "sh",
+    args: ["-lc", script],
+    shell: false,
+    detached: true,
+    logPath: safeLogPath,
+    fixedCommand
+  };
+}
+
+export async function executeDeployBridgeSyncRestartRequest({
+  request = {},
+  spawnImpl = spawn,
+  now = () => new Date().toISOString(),
+  processedRequests = deployBridgeSyncRestartProcessedRequests
+} = {}) {
+  const startedAt = now();
+  const command = buildDeployBridgeSyncRestartCommand();
+  const issues = [];
+  if (normalizeBridgeText(request.commandClass) !== "dashboard_bridge_unresolved_deploy_sync_restart") {
+    issues.push("commandClass must be dashboard_bridge_unresolved_deploy_sync_restart");
+  }
+  if (normalizeBridgeText(request.service) !== "vtdd-dashboard-app-server-bridge-unresolved.service") {
+    issues.push("service must be vtdd-dashboard-app-server-bridge-unresolved.service");
+  }
+  if (normalizeBridgeText(request.ref) !== "origin/main") {
+    issues.push("ref must be origin/main");
+  }
+  if (!normalizeBridgeText(request.repository)) {
+    issues.push("repository is required");
+  }
+  if (!normalizeBridgeText(request.deployRunId)) {
+    issues.push("deployRunId is required");
+  }
+  if (!normalizeBridgeText(request.requestId)) {
+    issues.push("requestId is required");
+  }
+  if (issues.length > 0) {
+    return {
+      type: "deploy_bridge_sync_restart_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(request.executionId),
+      status: "blocked",
+      attempted: false,
+      issues,
+      startedAt,
+      completedAt: now()
+    };
+  }
+  const idempotencyKey = buildDeployBridgeSyncRestartIdempotencyKey(request);
+  const duplicate = claimDeployBridgeSyncRestartRequest({
+    processedRequests,
+    idempotencyKey,
+    nowMs: Date.parse(startedAt)
+  });
+  if (!duplicate.ok) {
+    return {
+      type: "deploy_bridge_sync_restart_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(request.executionId),
+      deployRunId: normalizeBridgeText(request.deployRunId),
+      repository: normalizeBridgeText(request.repository),
+      relatedIssue: Number(request.relatedIssue || 0) || null,
+      status: "duplicate",
+      attempted: false,
+      idempotencyKey,
+      reason: duplicate.reason,
+      startedAt,
+      completedAt: now()
+    };
+  }
+  try {
+    const child = spawnImpl(command.command, command.args, {
+      shell: false,
+      detached: true,
+      stdio: "ignore"
+    });
+    if (typeof child?.unref === "function") {
+      child.unref();
+    }
+    return {
+      type: "deploy_bridge_sync_restart_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(request.executionId),
+      deployRunId: normalizeBridgeText(request.deployRunId),
+      repository: normalizeBridgeText(request.repository),
+      relatedIssue: Number(request.relatedIssue || 0) || null,
+      status: "launch_started",
+      attempted: true,
+      command: {
+        command: command.command,
+        args: command.args,
+        shell: command.shell,
+        detached: command.detached,
+        fixedCommand: command.fixedCommand,
+        logPath: command.logPath
+      },
+      startedAt,
+      completedAt: now(),
+      idempotencyKey,
+      persistence: {
+        githubIssueCommentQueue: false,
+        vpsLocalLogPath: command.logPath,
+        systemdJournal: "vtdd-dashboard-app-server-bridge-unresolved.service"
+      }
+    };
+  } catch (error) {
+    if (processedRequests && typeof processedRequests.delete === "function") {
+      processedRequests.delete(idempotencyKey);
+    }
+    return {
+      type: "deploy_bridge_sync_restart_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(request.executionId),
+      status: "launch_failed",
+      attempted: true,
+      command: {
+        command: command.command,
+        args: command.args,
+        shell: command.shell,
+        detached: command.detached,
+        fixedCommand: command.fixedCommand,
+        logPath: command.logPath
+      },
+      startedAt,
+      completedAt: now(),
+      idempotencyKey,
+      reason: normalizeBridgeText(error?.message || "failed to start deploy bridge sync/restart").slice(0, 240)
+    };
+  }
+}
+
+export function buildDeployBridgeSyncRestartIdempotencyKey(request = {}) {
+  const repository = normalizeBridgeText(request.repository);
+  const requestId = normalizeBridgeText(request.requestId);
+  return `deploy_bridge_sync_restart:${repository}:${requestId}`;
+}
+
+export function claimDeployBridgeSyncRestartRequest({
+  processedRequests = deployBridgeSyncRestartProcessedRequests,
+  idempotencyKey = "",
+  nowMs = Date.now()
+} = {}) {
+  const key = normalizeBridgeText(idempotencyKey);
+  if (!key || !processedRequests || typeof processedRequests.get !== "function" || typeof processedRequests.set !== "function") {
+    return {
+      ok: false,
+      reason: "deploy bridge restart idempotency state unavailable"
+    };
+  }
+  const numericNow = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  for (const [existingKey, record] of processedRequests.entries()) {
+    const expiresAt = Number(record?.expiresAt || 0);
+    if (expiresAt > 0 && expiresAt <= numericNow) {
+      processedRequests.delete(existingKey);
+    }
+  }
+  if (processedRequests.has(key)) {
+    return {
+      ok: false,
+      reason: "deploy bridge restart request was already processed"
+    };
+  }
+  processedRequests.set(key, {
+    status: "claimed",
+    createdAt: new Date(numericNow).toISOString(),
+    expiresAt: numericNow + DEPLOY_BRIDGE_SYNC_RESTART_REQUEST_TTL_MS
+  });
+  return { ok: true };
 }
 
 async function materializeDashboardMediaReference({ reference, runtimeUrl, token, fetchImpl, tmpRoot }) {
@@ -2691,6 +2884,9 @@ export async function connectDashboardAppServerBridgeOnce({
     }
     if (payload?.type === "runner_wakeup_requested") {
       executeVpsRunnerWakeup({ request: payload }).then((result) => safeSend(result));
+    }
+    if (payload?.type === "deploy_bridge_sync_restart_requested") {
+      executeDeployBridgeSyncRestartRequest({ request: payload }).then((result) => safeSend(result));
     }
   });
 

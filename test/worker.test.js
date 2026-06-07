@@ -730,7 +730,7 @@ async function createTestVapidEnv(extra = {}) {
   };
 }
 
-function createMockDashboardChatRoomNamespace() {
+function createMockDashboardChatRoomNamespace({ controlResponse = null } = {}) {
   const calls = [];
   return {
     calls,
@@ -739,6 +739,31 @@ function createMockDashboardChatRoomNamespace() {
         return {
           async fetch(input, init) {
             calls.push({ name, input, init });
+            if (String(input || "").endsWith("/app-server-control")) {
+              const payload = JSON.parse(init?.body || "{}");
+              if (controlResponse) {
+                const body = typeof controlResponse === "function" ? controlResponse({ payload, name, input, init }) : controlResponse;
+                return new Response(JSON.stringify(body), {
+                  status: 202,
+                  headers: { "content-type": "application/json" }
+                });
+              }
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  control: {
+                    status: "sent",
+                    attempted: true,
+                    requestId: payload.message?.requestId || "test-control-request",
+                    messageType: payload.message?.type || "unknown"
+                  }
+                }),
+                {
+                  status: 202,
+                  headers: { "content-type": "application/json" }
+                }
+              );
+            }
             return new Response(JSON.stringify({ ok: true, name }), {
               status: 202,
               headers: { "content-type": "application/json" }
@@ -761,8 +786,8 @@ function createMockDurableObjectStorage() {
     async get(key) {
       return values.get(key);
     },
-    async put(key, value) {
-      putCalls.push({ key, value });
+    async put(key, value, options) {
+      putCalls.push({ key, value, options });
       values.set(key, value);
     },
     async delete(key) {
@@ -4750,6 +4775,169 @@ test("DashboardChatRoom sends runner wakeup requests only to connected app-serve
   assert.equal(wakeup.queueCommentUrl, "https://github.com/marushu/vtdd-v2-p/issues/717#issuecomment-1");
 });
 
+test("DashboardChatRoom app-server control only sends fixed deploy bridge restart once", async () => {
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore() }
+  );
+  const payload = {
+    threadId: "dashboard-main-marushu-vtdd-v2-p",
+    message: {
+      type: "deploy_bridge_sync_restart_requested",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-123",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repository: "marushu/vtdd-v2-p",
+      deployRunId: "123",
+      commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+      service: "vtdd-dashboard-app-server-bridge-unresolved.service",
+      ref: "origin/main"
+    }
+  };
+
+  const first = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+  );
+  const firstBody = await first.json();
+  assert.equal(first.status, 202);
+  assert.equal(firstBody.control.status, "sent");
+  assert.equal(firstBody.control.deployRunId, "123");
+  assert.equal(bridgeSocket.sent.length, 1);
+  assert.equal(JSON.parse(bridgeSocket.sent[0]).type, "deploy_bridge_sync_restart_requested");
+  assert.equal(storage.putCalls.at(-1).options.expirationTtl, 86400);
+
+  const duplicate = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+  );
+  const duplicateBody = await duplicate.json();
+  assert.equal(duplicate.status, 202);
+  assert.equal(duplicateBody.control.status, "duplicate");
+  assert.equal(duplicateBody.control.attempted, false);
+  assert.equal(bridgeSocket.sent.length, 1);
+});
+
+test("DashboardChatRoom app-server control rejects generic bridge messages", async () => {
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore() }
+  );
+
+  const response = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        message: {
+          type: "runner_wakeup_requested",
+          requestId: "unsafe",
+          commandClass: "anything",
+          service: "other.service",
+          ref: "feature"
+        }
+      })
+    })
+  );
+  const body = await response.json();
+  assert.equal(response.status, 422);
+  assert.equal(body.error, "deploy_bridge_control_invalid");
+  assert.equal(bridgeSocket.sent.length, 0);
+});
+
+test("DashboardChatRoom records deploy bridge restart result and releases failed claim", async () => {
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const storage = createMockDurableObjectStorage();
+  const store = createInMemoryDashboardChatStore();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const payload = {
+    threadId: "dashboard-main-marushu-vtdd-v2-p",
+    message: {
+      type: "deploy_bridge_sync_restart_requested",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-123",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 741,
+      deployRunId: "123",
+      commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+      service: "vtdd-dashboard-app-server-bridge-unresolved.service",
+      ref: "origin/main"
+    }
+  };
+
+  const first = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+  );
+  assert.equal((await first.json()).control.status, "sent");
+  assert.equal(bridgeSocket.sent.length, 1);
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "deploy_bridge_sync_restart_result",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-123",
+      deployRunId: "123",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 741,
+      status: "launch_failed",
+      reason: "spawn failed",
+      completedAt: "2026-06-07T00:00:01.000Z"
+    })
+  );
+  const messages = await store.listThread("dashboard-main-marushu-vtdd-v2-p", { limit: 10 });
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].status, "failed");
+  assert.equal(messages[0].text.includes("bridge 実行結果を受信しました"), true);
+  assert.equal(messages[0].text.includes("retry guard は解放します"), true);
+  assert.equal(storage.deleteCalls.length, 1);
+
+  const retry = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+  );
+  assert.equal((await retry.json()).control.status, "sent");
+  assert.equal(bridgeSocket.sent.length, 2);
+});
+
 test("DashboardChatRoom attaches execution queue preflight to repository app-server turns", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
@@ -7405,36 +7593,41 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(eventBody.messages[0].status, "replied");
   assert.equal(eventBody.messages[0].text.includes("デプロイ完了イベントを受信しました。"), true);
   assert.equal(eventBody.messages[0].text.includes("- PR: PR #552"), true);
-  assert.equal(eventBody.messages[0].text.includes("deploy 後 bridge sync/restart helper queue handoff を同じ chat に出します。"), true);
+  assert.equal(eventBody.messages[0].text.includes("deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送ります。"), true);
   assert.equal(eventBody.messages[0].text.includes("- production E2E / runtime truth を確認します。"), true);
   assert.equal(eventBody.messages[0].text.includes("merge / deploy / credential / permission"), true);
   assert.equal(eventBody.messages[1].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458:deploy-bridge-followup");
   assert.equal(eventBody.messages[1].role, "system");
   assert.equal(eventBody.messages[1].status, "sent");
   assert.equal(eventBody.messages[1].relatedIssue, 741);
-  assert.equal(eventBody.messages[1].text.includes("deploy 後 bridge sync/restart を VPS helper queue へ渡しました。"), true);
+  assert.equal(eventBody.messages[1].text.includes("deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送りました。"), true);
   assert.equal(eventBody.messages[1].text.includes("vtdd-dashboard-app-server-bridge-unresolved.service"), true);
   assert.equal(eventBody.messages[1].text.includes("追加 passkey は不要です。"), true);
-  assert.equal(eventBody.messages[1].text.includes("status=queued_for_vps_helper_execution, rootExecutionStarted=false, helperExecutionStarted=false"), true);
-  assert.equal(eventBody.deployBridgeFollowup.status, "queued_for_vps_helper_execution");
+  assert.equal(eventBody.messages[1].text.includes("GitHub Issue comment queue は作成しません。"), true);
+  assert.equal(eventBody.messages[1].text.includes("status=bridge_control_sent, queueCommentPosted=false"), true);
+  assert.equal(eventBody.deployBridgeFollowup.status, "bridge_control_sent");
   assert.equal(eventBody.deployBridgeFollowup.proposalCreated, false);
-  assert.equal(eventBody.deployBridgeFollowup.queueCreated, true);
-  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperQueueReached, true);
+  assert.equal(eventBody.deployBridgeFollowup.queueCreated, false);
+  assert.equal(eventBody.deployBridgeFollowup.bridgeControlSent, true);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperQueueReached, false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.queueCommentPosted, false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.bridgeControlSent, true);
   assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.rootExecutionStarted, false);
-  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperExecutionStarted, false);
-  assert.equal(queueCalls.length, 1);
-  const queueCommentBody = JSON.parse(queueCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:deploy-bridge-followup-26133044458"), true);
-  assert.equal(queueCommentBody.includes('"commandClass": "dashboard_bridge_unresolved_deploy_sync_restart"'), true);
-  assert.equal(queueCommentBody.includes("sync-dashboard-app-server-bridge-after-deploy.mjs"), true);
-  assert.equal(queueCommentBody.includes("deploy-approval-verified-redacted"), true);
-  assert.equal(queueCommentBody.includes("approval:must-not-persist"), false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperExecutionStarted, true);
+  assert.equal(queueCalls.length, 0);
   assert.equal(JSON.stringify(eventBody.messages).includes("approval:must-not-persist"), false);
   assert.equal(JSON.stringify(eventBody.deployBridgeFollowup).includes("approval:must-not-persist"), false);
   assert.equal(JSON.stringify(eventBody.messages).includes("secret-must-not-persist"), false);
   assert.equal(eventBody.webSocketBroadcast, true);
-  assert.equal(rooms.calls.length, 1);
+  assert.equal(rooms.calls.length, 2);
   assert.equal(rooms.calls[0].name, "dashboard-main-unresolved");
+  assert.equal(String(rooms.calls[0].input).endsWith("/app-server-control"), true);
+  const controlPayload = JSON.parse(rooms.calls[0].init.body);
+  assert.equal(controlPayload.message.type, "deploy_bridge_sync_restart_requested");
+  assert.equal(controlPayload.message.commandClass, "dashboard_bridge_unresolved_deploy_sync_restart");
+  assert.equal(controlPayload.message.service, "vtdd-dashboard-app-server-bridge-unresolved.service");
+  assert.equal(controlPayload.message.ref, "origin/main");
+  assert.equal(rooms.calls[1].name, "dashboard-main-unresolved");
   assert.equal(pushCalls.length, 1);
   assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
   assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
@@ -7575,6 +7768,87 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(notificationsBody.includes("直近5分"), false);
   assert.equal(notificationsBody.includes("Web Push: push service accepted 1/1"), true);
   assert.equal(notificationsBody.includes("PWA受信確認: 未確認"), true);
+});
+
+test("worker reports deploy bridge duplicate control distinctly from blocked", async () => {
+  const store = createInMemoryDashboardEventStore();
+  const chatStore = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const rooms = createMockDashboardChatRoomNamespace({
+    controlResponse: ({ payload }) => ({
+      ok: true,
+      control: {
+        status: "duplicate",
+        attempted: false,
+        reason: "deploy bridge restart control was already claimed",
+        requestId: payload.message?.requestId || "test-control-request",
+        messageType: payload.message?.type || "unknown",
+        deployRunId: payload.message?.deployRunId || ""
+      }
+    })
+  });
+  await provider.store({
+    id: "approval:deploy-duplicate-test",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:deploy-duplicate-test",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-20T00:09:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "deploy_production",
+        highRiskKind: "deploy_production",
+        repositoryInput: "marushu/vtdd-v2-p"
+      }
+    },
+    metadata: { source: "deploy-duplicate-test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-20T00:09:00.000Z"
+  });
+
+  const eventResponse = await worker.fetch(
+    new Request("https://example.com/v2/events/github-actions", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133044458",
+        status: "completed",
+        conclusion: "success",
+        headSha: "ef55709c4f52b54f436417acc239ec03a0c999fd",
+        headBranch: "main",
+        displayTitle: "deploy duplicate test (#741)",
+        updatedAt: "2026-05-20T00:10:01Z",
+        approvalGrantId: "approval:deploy-duplicate-test"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: store,
+      DASHBOARD_CHAT_STORE: chatStore,
+      DASHBOARD_CHAT_ROOMS: rooms.namespace,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(eventResponse.status, 202);
+  const eventBody = await eventResponse.json();
+  assert.equal(eventBody.deployBridgeFollowup.status, "bridge_control_duplicate");
+  assert.equal(eventBody.deployBridgeFollowup.bridgeControlSent, false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.bridgeControlDuplicate, true);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.queueCommentPosted, false);
+  assert.equal(eventBody.messages[1].status, "sent");
+  assert.equal(eventBody.messages[1].text.includes("status=bridge_control_duplicate"), true);
+  assert.equal(eventBody.messages[1].text.includes("成功とは扱いません"), true);
+  const controlCalls = rooms.calls.filter((call) => String(call.input || "").endsWith("/app-server-control"));
+  assert.equal(controlCalls.length, 1);
+  const controlPayload = JSON.parse(controlCalls[0].init.body);
+  assert.equal(controlPayload.message.requestId, "deploy-bridge-restart:26133044458");
+  assert.equal(controlPayload.message.deployRunId, "26133044458");
 });
 
 test("worker records dashboard PWA push receive ack only for authenticated owner session", async () => {
