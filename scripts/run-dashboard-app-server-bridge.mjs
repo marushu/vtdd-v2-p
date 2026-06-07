@@ -707,6 +707,13 @@ export async function executeVpsLocalHelperQueueEnqueueRequest({
       fallbackUsed: wakeup.fallbackUsed,
       reason: wakeup.reason || null
     },
+    restartCompletion: {
+      status: "pending_vps_runner_completion",
+      terminal: false,
+      completionSource: "vps_local_helper_queue_state",
+      stateFile: enqueueResult.stateFile,
+      note: "enqueue and runner wake are launch truth only; restart completion requires local helper queue completed/failed state"
+    },
     persistence: {
       githubIssueCommentQueue: false,
       vpsLocalQueueFile: enqueueResult.queueFile,

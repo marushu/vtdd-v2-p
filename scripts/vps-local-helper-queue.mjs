@@ -291,6 +291,7 @@ async function ensureQueueDirectories(paths) {
 }
 
 function summarizeState(record) {
+  const resultSummary = summarizeResult(record.result);
   return {
     executionId: record.executionId,
     transport: record.transport,
@@ -302,8 +303,38 @@ function summarizeState(record) {
     queuedAt: record.lifecycle?.queuedAt || null,
     runningAt: record.lifecycle?.runningAt || null,
     completedAt: record.lifecycle?.completedAt || null,
-    updatedAt: record.lifecycle?.updatedAt || null
+    updatedAt: record.lifecycle?.updatedAt || null,
+    result: resultSummary
   };
+}
+
+function summarizeResult(result) {
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+  const runtimeTruth = result.runtimeTruth && typeof result.runtimeTruth === "object" ? result.runtimeTruth : {};
+  const helperResult = result.helperResult && typeof result.helperResult === "object" ? result.helperResult : {};
+  const rawFailure = result.rawFailure && typeof result.rawFailure === "object" ? result.rawFailure : {};
+  const summary = {
+    rootExecutionStarted: result.rootExecutionStarted === true,
+    helperExecutionStarted: result.helperExecutionStarted === true,
+    runtimeStatus: normalizeText(runtimeTruth.status),
+    helperStatus: normalizeText(helperResult.status),
+    serviceRestarted: runtimeTruth.serviceRestarted === true,
+    restartVerified: runtimeTruth.restartVerified === true,
+    syncVerified: runtimeTruth.syncVerified === true,
+    beforeSha: normalizeText(runtimeTruth.beforeSha),
+    afterSha: normalizeText(runtimeTruth.afterSha),
+    targetRefSha: normalizeText(runtimeTruth.targetRefSha),
+    beforeServiceMainPid: normalizeText(runtimeTruth.beforeServiceMainPid),
+    afterServiceMainPid: normalizeText(runtimeTruth.afterServiceMainPid),
+    beforeServiceActiveEnterTimestamp: normalizeText(runtimeTruth.beforeServiceActiveEnterTimestamp),
+    afterServiceActiveEnterTimestamp: normalizeText(runtimeTruth.afterServiceActiveEnterTimestamp),
+    failureReason: normalizeText(runtimeTruth.reason || rawFailure.reason)
+  };
+  return Object.fromEntries(
+    Object.entries(summary).filter(([, value]) => value !== "" && value !== null && value !== false)
+  );
 }
 
 async function writeJsonAtomic(filePath, value, mode) {

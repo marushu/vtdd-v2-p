@@ -102,6 +102,21 @@ function readServiceState({ cwd, service, runner }) {
   };
 }
 
+function isServiceActive(serviceState = {}) {
+  return serviceState.active === "active" || serviceState.activeState === "active";
+}
+
+function serviceRestartChanged({ beforeService = {}, afterService = {} } = {}) {
+  const beforePid = String(beforeService.mainPid || "");
+  const afterPid = String(afterService.mainPid || "");
+  const beforeEntered = String(beforeService.activeEnterTimestamp || "");
+  const afterEntered = String(afterService.activeEnterTimestamp || "");
+  if (!beforePid && !beforeEntered) {
+    return true;
+  }
+  return Boolean((beforePid && afterPid && beforePid !== afterPid) || (beforeEntered && afterEntered && beforeEntered !== afterEntered));
+}
+
 export async function runDeployBridgeSyncRestart({
   cwd = process.cwd(),
   service = DEFAULT_SERVICE,
@@ -142,6 +157,57 @@ export async function runDeployBridgeSyncRestart({
   const afterGit = readGitState({ cwd, runner });
   const afterService = readServiceState({ cwd, service, runner });
   const afterMatchesTargetRef = Boolean(afterGit.head && afterGit.originMain && afterGit.head === afterGit.originMain);
+  const afterServiceActive = isServiceActive(afterService);
+  const restartVerified = afterServiceActive && serviceRestartChanged({ beforeService, afterService });
+  const commonRuntimeTruth = {
+    kind: "dashboard_bridge_deploy_sync_restart",
+    rootExecutionStarted: false,
+    helperExecutionStarted: true,
+    targetRef: ref,
+    targetRefSha: afterGit.originMain,
+    syncVerified: afterMatchesTargetRef,
+    afterMatchesTargetRef,
+    beforeSha: beforeGit.head,
+    afterSha: afterGit.head,
+    beforeServiceActiveState: beforeService.activeState || beforeService.active,
+    afterServiceActiveState: afterService.activeState || afterService.active,
+    beforeServiceMainPid: beforeService.mainPid,
+    afterServiceMainPid: afterService.mainPid,
+    beforeServiceActiveEnterTimestamp: beforeService.activeEnterTimestamp,
+    afterServiceActiveEnterTimestamp: afterService.activeEnterTimestamp,
+    restartVerified,
+    checkedAt: now()
+  };
+  if (!afterMatchesTargetRef || !restartVerified) {
+    return {
+      ok: false,
+      status: !afterMatchesTargetRef ? "sync_unverified" : "restart_unverified",
+      cwd,
+      service,
+      ref,
+      before: {
+        git: beforeGit,
+        service: beforeService
+      },
+      commands: {
+        fetch,
+        pull,
+        restart
+      },
+      after: {
+        git: afterGit,
+        service: afterService
+      },
+      runtimeTruth: {
+        ...commonRuntimeTruth,
+        status: !afterMatchesTargetRef ? "sync_unverified" : "restart_unverified",
+        serviceRestarted: false,
+        reason: !afterMatchesTargetRef
+          ? "after git HEAD does not match origin/main"
+          : "service restart did not change MainPID or ActiveEnterTimestamp"
+      }
+    };
+  }
   return {
     ok: true,
     status: "synced_and_restarted",
@@ -162,21 +228,10 @@ export async function runDeployBridgeSyncRestart({
       service: afterService
     },
     runtimeTruth: {
-      kind: "dashboard_bridge_deploy_sync_restart",
+      ...commonRuntimeTruth,
       status: "synced_and_restarted",
-      rootExecutionStarted: false,
-      helperExecutionStarted: true,
       serviceRestarted: true,
-      targetRef: ref,
-      targetRefSha: afterGit.originMain,
-      syncVerified: afterMatchesTargetRef,
-      afterMatchesTargetRef,
-      beforeSha: beforeGit.head,
-      afterSha: afterGit.head,
-      beforeServiceActiveState: beforeService.activeState || beforeService.active,
-      afterServiceActiveState: afterService.activeState || afterService.active,
-      afterServiceMainPid: afterService.mainPid,
-      checkedAt: now()
+      restartVerified: true
     }
   };
 }

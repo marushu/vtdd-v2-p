@@ -39,7 +39,7 @@ import {
   selectPendingVpsPrivilegedMaintenanceExecutions,
   selectPendingVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
-import { enqueueVpsLocalHelperExecution } from "../scripts/vps-local-helper-queue.mjs";
+import { completeVpsLocalHelperExecution, enqueueVpsLocalHelperExecution } from "../scripts/vps-local-helper-queue.mjs";
 
 function developmentStrategyFixture() {
   return {
@@ -204,6 +204,83 @@ test("VPS runner dry-run selects VPS local helper queue before GitHub Issue comm
   assert.match(result.message, /Dry run selected local privileged maintenance vps-maint-local-dry-run/);
   const pending = await fs.readFile(path.join(queueRoot, "pending", "vps-maint-local-dry-run.json"), "utf8");
   assert.equal(JSON.parse(pending).lifecycle.status, "pending");
+  await fs.rm(tmpRoot, { recursive: true, force: true });
+});
+
+test("VPS local helper queue state keeps compact restart completion truth", async () => {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-local-state-"));
+  const queueRoot = path.join(tmpRoot, "queue");
+  await enqueueVpsLocalHelperExecution({
+    queueRoot,
+    payload: {
+      executionId: "vps-maint-local-complete",
+      transport: "vps_privileged_maintenance_helper",
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 741,
+      dashboardThreadId: "dashboard-main-unresolved",
+      approvalScopeMatched: true,
+      executionEnvelope: {
+        kind: "vps_privileged_maintenance_helper_execution_envelope",
+        status: "ready_for_vps_helper_execution",
+        repository: "sample-org/vtdd-v2",
+        requestId: "helper-request-local-complete",
+        capabilityId: "dashboard.bridge.unresolved.deploy.sync.restart",
+        mode: "execute",
+        helperInvocation: {
+          executable: "sudo",
+          args: ["-n", "/usr/local/sbin/vtdd-vps-maintenance-helper", "--execute", "--input", "<helper-execution-input-json>"],
+          shell: false,
+          inputFile: "helperExecutionInput"
+        },
+        helperExecutionInput: { mode: "execute", helperRequest: { requestId: "helper-request-local-complete" } },
+        rootExecutionStarted: false,
+        helperExecutionStarted: false
+      }
+    },
+    now: () => "2026-06-07T01:00:00.000Z"
+  });
+  await fs.rename(
+    path.join(queueRoot, "pending", "vps-maint-local-complete.json"),
+    path.join(queueRoot, "running", "vps-maint-local-complete.json")
+  );
+
+  await completeVpsLocalHelperExecution({
+    queueRoot,
+    executionId: "vps-maint-local-complete",
+    status: "completed",
+    result: {
+      rootExecutionStarted: true,
+      helperExecutionStarted: true,
+      runtimeTruth: {
+        status: "synced_and_restarted",
+        serviceRestarted: true,
+        restartVerified: true,
+        syncVerified: true,
+        beforeSha: "before-sha",
+        afterSha: "after-sha",
+        targetRefSha: "after-sha",
+        beforeServiceMainPid: "1234",
+        afterServiceMainPid: "5678",
+        beforeServiceActiveEnterTimestamp: "Thu 2026-06-04 15:00:46 JST",
+        afterServiceActiveEnterTimestamp: "Thu 2026-06-04 18:23:12 JST"
+      },
+      helperResult: {
+        status: "completed",
+        redactedLogSummary: "this must not be copied into state"
+      }
+    },
+    now: () => "2026-06-07T01:02:00.000Z"
+  });
+
+  const state = JSON.parse(await fs.readFile(path.join(queueRoot, "state", "vps-maint-local-complete.json"), "utf8"));
+  assert.equal(state.status, "completed");
+  assert.equal(state.result.runtimeStatus, "synced_and_restarted");
+  assert.equal(state.result.helperStatus, "completed");
+  assert.equal(state.result.serviceRestarted, true);
+  assert.equal(state.result.restartVerified, true);
+  assert.equal(state.result.beforeServiceMainPid, "1234");
+  assert.equal(state.result.afterServiceMainPid, "5678");
+  assert.equal(JSON.stringify(state).includes("redactedLogSummary"), false);
   await fs.rm(tmpRoot, { recursive: true, force: true });
 });
 
