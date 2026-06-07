@@ -882,36 +882,43 @@ test("VPS runner event reads dashboard runtime URL from default vault manifest w
 });
 
 test("VPS runner event records missing runtime dashboard delivery configuration", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-missing-runtime-"));
   const calls = [];
-  await postVpsRunnerEvent({
-    githubFetch: async (url, init = {}) => {
-      calls.push({ url, init });
-      return { id: 45004 };
-    },
-    payload: {
-      executionId: "exec-dashboard-missing-runtime",
-      repository: "marushu/vtdd-v2-p",
-      issueNumber: 450,
-      handoff: {
-        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+  try {
+    await postVpsRunnerEvent({
+      githubFetch: async (url, init = {}) => {
+        calls.push({ url, init });
+        return { id: 45004 };
+      },
+      payload: {
+        executionId: "exec-dashboard-missing-runtime",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 450,
+        handoff: {
+          dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+        }
+      },
+      event: {
+        status: "completed",
+        lastEvent: "branch_pushed",
+        currentStep: "branch_pushed",
+        message: "完了"
+      },
+      env: {
+        VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST: path.join(tempDir, "missing-manifest.json")
       }
-    },
-    event: {
-      status: "completed",
-      lastEvent: "branch_pushed",
-      currentStep: "branch_pushed",
-      message: "完了"
-    },
-    env: {}
-  });
+    });
 
-  const parsed = parseVpsRunnerEventComment(calls[0].init.body.body);
-  assert.equal(parsed.ok, true);
-  assert.equal(parsed.event.dashboardDelivery.status, "skipped");
-  assert.equal(
-    parsed.event.dashboardDelivery.reason,
-    "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing"
-  );
+    const parsed = parseVpsRunnerEventComment(calls[0].init.body.body);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.event.dashboardDelivery.status, "skipped");
+    assert.equal(
+      parsed.event.dashboardDelivery.reason,
+      "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing"
+    );
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("VPS runner milestone event mentions queue comment author", () => {
@@ -2029,15 +2036,22 @@ test("VPS runner actor identity incident starts with Japanese owner notification
 });
 
 test("VPS runner role App token resolution fails closed when role credentials are missing", async () => {
-  const result = await resolveRoleGitHubAppInstallationToken({
-    role: "codex_fallback_reviewer",
-    env: {},
-    apiBaseUrl: "https://api.github.com"
-  });
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-missing-role-vault-"));
+  try {
+    const result = await resolveRoleGitHubAppInstallationToken({
+      role: "codex_fallback_reviewer",
+      env: {
+        VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST: path.join(tempDir, "missing-manifest.json")
+      },
+      apiBaseUrl: "https://api.github.com"
+    });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.reason.includes("VTDD Codex Fallback Reviewer"), true);
-  assert.equal(result.reason.includes("missing app id, private key, installation id"), true);
+    assert.equal(result.ok, false);
+    assert.equal(result.reason.includes("VTDD Codex Fallback Reviewer"), true);
+    assert.equal(result.reason.includes("missing app id, private key, installation id"), true);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("VPS runner role App token resolution can read role credentials from vault manifest", async () => {
