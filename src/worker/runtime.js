@@ -190,6 +190,56 @@ export class DashboardChatRoom {
       });
     }
 
+    if (request.method === "POST" && url.pathname === "/app-server-control") {
+      const payload = await readJson(request);
+      const threadId = normalizeDashboardThreadId(payload.threadId || payload.thread_id);
+      if (!threadId) {
+        return json(422, {
+          ok: false,
+          error: "thread_id_required",
+          reason: "threadId is required"
+        });
+      }
+      const bridgeSockets = this.connectedAppServerBridgeSockets(threadId);
+      if (bridgeSockets.length === 0) {
+        return json(202, {
+          ok: true,
+          control: {
+            status: "unavailable",
+            attempted: false,
+            reason: "app-server bridge socket is not connected"
+          }
+        });
+      }
+      const message =
+        payload.message && typeof payload.message === "object"
+          ? {
+              ...payload.message,
+              threadId,
+              schema: "vtdd.dashboard.app_server_bridge.v1",
+              createdAt: normalizeIsoTimestamp(payload.message.createdAt || payload.message.created_at) || new Date().toISOString()
+            }
+          : null;
+      if (!message?.type) {
+        return json(422, {
+          ok: false,
+          error: "app_server_control_message_required",
+          reason: "message.type is required"
+        });
+      }
+      const sent = this.sendSocket(bridgeSockets[0], message);
+      return json(202, {
+        ok: true,
+        control: {
+          status: sent ? "sent" : "unavailable",
+          attempted: sent,
+          reason: sent ? "app-server bridge control message sent" : "failed to send app-server bridge control message",
+          requestId: normalizeDashboardEventText(message.requestId),
+          messageType: normalizeDashboardEventText(message.type)
+        }
+      });
+    }
+
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return json(426, {
         ok: false,
@@ -5144,16 +5194,12 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
     normalizePositiveInteger(env?.VTDD_DASHBOARD_DEPLOY_BRIDGE_FOLLOWUP_ISSUE) ||
     741;
   const messageId = `dashboard-event:${record.id}:deploy-bridge-followup`;
-  const workingDirectory = normalizeText(env?.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR);
-  const host = normalizeDashboardVpsMaintenanceHost({ env });
   const provider = resolveMemoryProvider(env);
   const memoryValidation = validateMemoryProvider(provider);
-  if (!memoryValidation.ok || !repository || !host || !workingDirectory) {
+  if (!memoryValidation.ok || !repository) {
     const issues = [
       !memoryValidation.ok ? "memory_provider_unavailable" : "",
-      !repository ? "repository_required" : "",
-      !host ? "VTDD_DASHBOARD_VPS_MAINTENANCE_HOST required" : "",
-      !workingDirectory ? "VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR required" : ""
+      !repository ? "repository_required" : ""
     ].filter(Boolean);
     return {
       status: "blocked",
@@ -5214,33 +5260,27 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
   }
 
   const executionId = `deploy-bridge-followup-${safeIdentifier(record.runId) || createDashboardRequestId("deploy")}`;
-  const helperRequest = buildDeployBridgeFollowupHelperRequest({
+  const controlMessage = buildDeployBridgeFollowupControlMessage({
     record,
+    executionId,
     repository,
     relatedIssue,
-    host,
-    workingDirectory,
+    threadId
+  });
+  const control = await requestDashboardAppServerBridgeControl({
+    env,
     threadId,
-    deployApproval: deployApproval.approvalGrant
+    message: controlMessage
   });
-  const manifest = buildDashboardVpsMaintenanceManifest({
-    helperRequest,
-    now: record.updatedAt || record.createdAt
-  });
-  const execution = createVpsPrivilegedMaintenanceHelperExecution({
-    payload: {
-      manifest,
-      helperRequest,
-      now: record.updatedAt || record.createdAt
-    }
-  });
-  if (!execution.ok) {
+  if (!control.ok || control.control?.status !== "sent") {
     return {
       status: "blocked",
       proposalCreated: false,
       queueCreated: false,
-      error: execution.error,
-      issues: execution.issues || [],
+      bridgeControlSent: false,
+      error: control.error || "deploy_bridge_control_unavailable",
+      reason: control.reason || control.control?.reason,
+      issues: control.issues || [control.reason || control.control?.reason || "app-server bridge control unavailable"],
       message: normalizeDashboardChatMessage(
         {
           threadId,
@@ -5253,46 +5293,7 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
             record,
             repository,
             relatedIssue,
-            issues: execution.issues || [execution.error || "execution_handoff_failed"]
-          }),
-          createdAt: record.updatedAt || record.createdAt
-        },
-        { threadId }
-      )
-    };
-  }
-  const queue = await createVpsPrivilegedMaintenanceHelperExecutionQueue({
-    payload: {
-      repository,
-      issueNumber: relatedIssue,
-      executionId,
-      dashboardThreadId: threadId,
-      approvalActor: "Dashboard deploy approval",
-      executionEnvelope: execution.body.executionEnvelope
-    },
-    env
-  });
-  if (!queue.ok) {
-    return {
-      status: "blocked",
-      proposalCreated: false,
-      queueCreated: false,
-      error: queue.error,
-      reason: queue.reason,
-      issues: queue.issues || [],
-      message: normalizeDashboardChatMessage(
-        {
-          threadId,
-          messageId,
-          role: "system",
-          repository,
-          relatedIssue,
-          status: "blocked",
-          text: buildDeployBridgeFollowupBlockedMessage({
-            record,
-            repository,
-            relatedIssue,
-            issues: queue.issues || [queue.reason || queue.error || "queue_handoff_failed"]
+            issues: control.issues || [control.reason || control.control?.reason || "app-server bridge control unavailable"]
           }),
           createdAt: record.updatedAt || record.createdAt
         },
@@ -5301,17 +5302,30 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
     };
   }
   return {
-    status: "queued_for_vps_helper_execution",
+    status: "bridge_control_sent",
     proposalCreated: false,
-    queueCreated: true,
-    execution: queue.body.execution,
+    queueCreated: false,
+    bridgeControlSent: true,
+    execution: {
+      executionId,
+      transport: "dashboard_app_server_bridge_control",
+      repository,
+      issueNumber: relatedIssue,
+      dashboardThreadId: threadId,
+      status: "sent"
+    },
     runtimeTruth: {
-      ...(queue.body.runtimeTruth || {}),
+      kind: "dashboard_bridge_deploy_sync_restart",
+      status: "bridge_control_sent",
       deployApprovalValidated: true,
       deployStandardPostStep: "dashboard_bridge_unresolved_deploy_sync_restart",
-      helperQueueReached: true,
+      helperQueueReached: false,
+      queueCommentPosted: false,
+      bridgeControlSent: true,
+      bridgeControlRequestId: control.control?.requestId || controlMessage.requestId,
+      bridgeControlMessageType: control.control?.messageType || controlMessage.type,
       rootExecutionStarted: false,
-      helperExecutionStarted: false
+      helperExecutionStarted: true
     },
     message: normalizeDashboardChatMessage(
       {
@@ -5321,16 +5335,36 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
         repository,
         relatedIssue,
         status: "sent",
-        text: buildDeployBridgeFollowupQueuedMessage({
+        text: buildDeployBridgeFollowupControlMessageText({
           record,
           repository,
           relatedIssue,
-          queue: queue.body
+          executionId,
+          control
         }),
         createdAt: record.updatedAt || record.createdAt
       },
       { threadId }
     )
+  };
+}
+
+function buildDeployBridgeFollowupControlMessage({ record, executionId, repository, relatedIssue, threadId } = {}) {
+  return {
+    type: "deploy_bridge_sync_restart_requested",
+    schema: "vtdd.dashboard.app_server_bridge.v1",
+    requestId: createDashboardRequestId("deploy-bridge-restart"),
+    executionId,
+    threadId,
+    repository,
+    relatedIssue,
+    deployRunId: normalizeDashboardEventText(record?.runId),
+    deployRunUrl: normalizeDashboardUrl(record?.runUrl),
+    headSha: normalizeDashboardEventText(record?.headSha),
+    commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+    service: "vtdd-dashboard-app-server-bridge-unresolved.service",
+    ref: "origin/main",
+    createdAt: record?.updatedAt || record?.createdAt || new Date().toISOString()
   };
 }
 
@@ -5400,10 +5434,9 @@ function buildDeployBridgeFollowupHelperRequest({ record, repository, relatedIss
   };
 }
 
-function buildDeployBridgeFollowupQueuedMessage({ record, repository, relatedIssue, queue } = {}) {
-  const execution = queue?.execution || {};
+function buildDeployBridgeFollowupControlMessageText({ record, repository, relatedIssue, executionId, control } = {}) {
   return [
-    "deploy 後 bridge sync/restart を VPS helper queue へ渡しました。",
+    "deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送りました。",
     "",
     `- repo: ${repository || "未確認"}`,
     `- related Issue: #${relatedIssue || 741}`,
@@ -5411,13 +5444,14 @@ function buildDeployBridgeFollowupQueuedMessage({ record, repository, relatedIss
     `- deploy sha: ${record.headSha ? record.headSha.slice(0, 12) : "未確認"}`,
     "- 対象: repo-less Dashboard app-server bridge",
     "- service: vtdd-dashboard-app-server-bridge-unresolved.service",
-    `- executionId: ${execution.executionId || "未生成"}`,
-    `- queueCommentUrl: ${execution.queueCommentUrl || "未取得"}`,
+    `- executionId: ${executionId || "未生成"}`,
+    `- bridgeControlRequestId: ${control?.control?.requestId || "未取得"}`,
     "- authority: deploy approval に含まれる標準後処理です。追加 passkey は不要です。",
+    "- persistence: GitHub Issue comment queue は作成しません。実行証跡は VPS local log / systemd journal 側に残します。",
     "- restart guard: Dashboard の pending owner messages は保存済み queue から bridge reconnect 後に再送します。",
-    "- runtime truth: status=queued_for_vps_helper_execution, rootExecutionStarted=false, helperExecutionStarted=false",
+    "- runtime truth: status=bridge_control_sent, queueCommentPosted=false, rootExecutionStarted=false, helperExecutionStarted=true",
     "",
-    "VPS runner pickup の before/after truth が戻るまで、live restart 完了とは扱いません。"
+    "bridge 再接続または VPS journal の before/after truth が戻るまで、live restart 完了とは扱いません。"
   ].join("\n");
 }
 
@@ -5429,8 +5463,8 @@ function buildDeployBridgeFollowupBlockedMessage({ record, repository, relatedIs
     `- related Issue: #${relatedIssue || 741}`,
     `- deploy run: ${record?.runId || "未確認"}`,
     `- reason: ${(issues || []).join("; ") || "configuration required"}`,
-    "- runtime truth: status=blocked, rootExecutionStarted=false, helperExecutionStarted=false",
-    "- next action: runtime config と memory provider を確認してから、同じ chat で VPS maintenance approval URL を再提示します。"
+    "- runtime truth: status=blocked, queueCommentPosted=false, rootExecutionStarted=false, helperExecutionStarted=false",
+    "- next action: app-server bridge 接続または deploy approval truth を確認してから、同じ chat で再試行します。"
   ].join("\n");
 }
 
@@ -10506,6 +10540,39 @@ async function notifyDashboardChatRoom({ env, threadId, messages }) {
   }
 }
 
+async function requestDashboardAppServerBridgeControl({ env, threadId, message }) {
+  const room = resolveDashboardChatRoomStub(env, threadId);
+  if (!room || typeof room.fetch !== "function") {
+    return {
+      ok: false,
+      error: "dashboard_chat_room_unavailable",
+      reason: "DASHBOARD_CHAT_ROOMS Durable Object binding is not configured"
+    };
+  }
+  try {
+    const response = await room.fetch("https://dashboard-chat-room.internal/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId,
+        message
+      })
+    });
+    const body = await response.json().catch(() => ({}));
+    return {
+      ok: response.ok && body?.ok !== false,
+      status: response.status,
+      ...body
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: "dashboard_app_server_bridge_control_failed",
+      reason: normalizeDashboardEventText(error?.message || "failed to send app-server bridge control")
+    };
+  }
+}
+
 function extractCanonicalRepositoryTokenFromDashboardChatText(value) {
   const text = sanitizeDashboardChatText(decodeSafeDashboardChatCommandText(value));
   if (!text) {
@@ -14419,7 +14486,7 @@ function buildGitHubActionsDashboardChatMessageText(event) {
   }
   lines.push("", "次:");
   if (isDeploy && conclusion === "success") {
-    lines.push("- deploy 後 bridge sync/restart helper queue handoff を同じ chat に出します。");
+    lines.push("- deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送ります。");
     lines.push("- production E2E / runtime truth を確認します。");
   } else if (conclusion === "failure" || conclusion === "cancelled" || conclusion === "timed_out") {
     lines.push("- deploy / Actions の失敗原因を確認し、blocker と次 action を出します。");

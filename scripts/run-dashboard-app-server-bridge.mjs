@@ -465,6 +465,119 @@ export async function executeVpsRunnerWakeup({
   });
 }
 
+export function buildDeployBridgeSyncRestartCommand({ logPath = "" } = {}) {
+  const safeLogPath =
+    normalizeBridgeText(logPath) ||
+    path.join(os.homedir(), "vtdd-runner", "logs", "dashboard-bridge-restart.log");
+  const fixedCommand =
+    "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main";
+  const script = [
+    "set -eu",
+    'mkdir -p "$HOME/vtdd-runner/logs"',
+    `printf '\\n[%s] deploy bridge sync/restart requested\\n' "$(date -Is)" >> ${JSON.stringify(safeLogPath)}`,
+    `${fixedCommand} >> ${JSON.stringify(safeLogPath)} 2>&1`
+  ].join("\n");
+  return {
+    command: "sh",
+    args: ["-lc", script],
+    shell: false,
+    detached: true,
+    logPath: safeLogPath,
+    fixedCommand
+  };
+}
+
+export async function executeDeployBridgeSyncRestartRequest({
+  request = {},
+  spawnImpl = spawn,
+  now = () => new Date().toISOString()
+} = {}) {
+  const startedAt = now();
+  const command = buildDeployBridgeSyncRestartCommand();
+  const issues = [];
+  if (normalizeBridgeText(request.commandClass) !== "dashboard_bridge_unresolved_deploy_sync_restart") {
+    issues.push("commandClass must be dashboard_bridge_unresolved_deploy_sync_restart");
+  }
+  if (normalizeBridgeText(request.service) !== "vtdd-dashboard-app-server-bridge-unresolved.service") {
+    issues.push("service must be vtdd-dashboard-app-server-bridge-unresolved.service");
+  }
+  if (normalizeBridgeText(request.ref) !== "origin/main") {
+    issues.push("ref must be origin/main");
+  }
+  if (issues.length > 0) {
+    return {
+      type: "deploy_bridge_sync_restart_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(request.executionId),
+      status: "blocked",
+      attempted: false,
+      issues,
+      startedAt,
+      completedAt: now()
+    };
+  }
+  try {
+    const child = spawnImpl(command.command, command.args, {
+      shell: false,
+      detached: true,
+      stdio: "ignore"
+    });
+    if (typeof child?.unref === "function") {
+      child.unref();
+    }
+    return {
+      type: "deploy_bridge_sync_restart_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(request.executionId),
+      deployRunId: normalizeBridgeText(request.deployRunId),
+      repository: normalizeBridgeText(request.repository),
+      relatedIssue: Number(request.relatedIssue || 0) || null,
+      status: "started",
+      attempted: true,
+      command: {
+        command: command.command,
+        args: command.args,
+        shell: command.shell,
+        detached: command.detached,
+        fixedCommand: command.fixedCommand,
+        logPath: command.logPath
+      },
+      startedAt,
+      completedAt: now(),
+      persistence: {
+        githubIssueCommentQueue: false,
+        vpsLocalLogPath: command.logPath,
+        systemdJournal: "vtdd-dashboard-app-server-bridge-unresolved.service"
+      }
+    };
+  } catch (error) {
+    return {
+      type: "deploy_bridge_sync_restart_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(request.executionId),
+      status: "failed",
+      attempted: true,
+      command: {
+        command: command.command,
+        args: command.args,
+        shell: command.shell,
+        detached: command.detached,
+        fixedCommand: command.fixedCommand,
+        logPath: command.logPath
+      },
+      startedAt,
+      completedAt: now(),
+      reason: normalizeBridgeText(error?.message || "failed to start deploy bridge sync/restart").slice(0, 240)
+    };
+  }
+}
+
 async function materializeDashboardMediaReference({ reference, runtimeUrl, token, fetchImpl, tmpRoot }) {
   const normalized = normalizeDashboardMediaReferenceForBridge(reference);
   if (!normalized.mediaId) {
@@ -2691,6 +2804,9 @@ export async function connectDashboardAppServerBridgeOnce({
     }
     if (payload?.type === "runner_wakeup_requested") {
       executeVpsRunnerWakeup({ request: payload }).then((result) => safeSend(result));
+    }
+    if (payload?.type === "deploy_bridge_sync_restart_requested") {
+      executeDeployBridgeSyncRestartRequest({ request: payload }).then((result) => safeSend(result));
     }
   });
 

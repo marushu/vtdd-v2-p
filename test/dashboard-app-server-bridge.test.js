@@ -24,11 +24,13 @@ import {
   buildDashboardBridgeLiveProgressFallbackEvent,
   buildDashboardBridgeResumeStatusEvent,
   buildDashboardBridgeTurnStartedStatusEvent,
+  buildDeployBridgeSyncRestartCommand,
   buildDashboardTurnInputText,
   collectDashboardBridgeRepoSyncStatus,
   connectDashboardAppServerBridgeOnce,
   createDashboardAppServerClientSelector,
   ensureDashboardBridgeRepoSynced,
+  executeDeployBridgeSyncRestartRequest,
   executeVpsRunnerWakeup,
   extractDashboardAppServerUnsupportedModel,
   extractAppServerNotificationTurnId,
@@ -394,6 +396,80 @@ test("dashboard app-server bridge runner wakeup uses only fixed user systemd sta
   assert.equal(result.fallback, "vtdd-vps-runner.timer");
   assert.equal(result.threadId, "dashboard-main");
   assert.equal(result.executionId, "remote-codex-issue717");
+});
+
+test("dashboard app-server bridge deploy restart control uses only fixed sync script", async () => {
+  const command = buildDeployBridgeSyncRestartCommand({ logPath: "/tmp/vtdd-dashboard-bridge-restart.log" });
+  assert.equal(command.command, "sh");
+  assert.equal(command.shell, false);
+  assert.equal(command.detached, true);
+  assert.equal(command.fixedCommand, "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main");
+  assert.equal(command.args.length, 2);
+  assert.equal(command.args[0], "-lc");
+  assert.equal(command.args[1].includes("vtdd-dashboard-app-server-bridge-unresolved.service"), true);
+  assert.equal(command.args[1].includes("--ref origin/main"), true);
+  assert.equal(command.args[1].includes("/tmp/vtdd-dashboard-bridge-restart.log"), true);
+
+  const spawnCalls = [];
+  const result = await executeDeployBridgeSyncRestartRequest({
+    request: {
+      threadId: "dashboard-main-unresolved",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-123",
+      deployRunId: "123",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 741,
+      commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+      service: "vtdd-dashboard-app-server-bridge-unresolved.service",
+      ref: "origin/main"
+    },
+    now: (() => {
+      const values = ["2026-06-07T00:00:00.000Z", "2026-06-07T00:00:01.000Z"];
+      return () => values.shift() || "2026-06-07T00:00:01.000Z";
+    })(),
+    spawnImpl(commandName, args, options) {
+      spawnCalls.push({ command: commandName, args, options });
+      return {
+        unref() {
+          spawnCalls[0].unrefCalled = true;
+        }
+      };
+    }
+  });
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "sh");
+  assert.equal(spawnCalls[0].args[0], "-lc");
+  assert.deepEqual(spawnCalls[0].options, { shell: false, detached: true, stdio: "ignore" });
+  assert.equal(spawnCalls[0].unrefCalled, true);
+  assert.equal(result.type, "deploy_bridge_sync_restart_result");
+  assert.equal(result.status, "started");
+  assert.equal(result.persistence.githubIssueCommentQueue, false);
+  assert.equal(result.persistence.systemdJournal, "vtdd-dashboard-app-server-bridge-unresolved.service");
+});
+
+test("dashboard app-server bridge deploy restart control rejects mutable target", async () => {
+  const spawnCalls = [];
+  const result = await executeDeployBridgeSyncRestartRequest({
+    request: {
+      threadId: "dashboard-main-unresolved",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-unsafe",
+      commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+      service: "other.service",
+      ref: "feature"
+    },
+    spawnImpl(commandName, args, options) {
+      spawnCalls.push({ command: commandName, args, options });
+      return {};
+    }
+  });
+
+  assert.equal(spawnCalls.length, 0);
+  assert.equal(result.status, "blocked");
+  assert.equal(result.attempted, false);
+  assert.equal(result.issues.includes("service must be vtdd-dashboard-app-server-bridge-unresolved.service"), true);
+  assert.equal(result.issues.includes("ref must be origin/main"), true);
 });
 
 test("dashboard app-server bridge wraps repository traffic-control context into turn input", () => {

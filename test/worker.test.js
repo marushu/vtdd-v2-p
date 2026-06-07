@@ -739,6 +739,24 @@ function createMockDashboardChatRoomNamespace() {
         return {
           async fetch(input, init) {
             calls.push({ name, input, init });
+            if (String(input || "").endsWith("/app-server-control")) {
+              const payload = JSON.parse(init?.body || "{}");
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  control: {
+                    status: "sent",
+                    attempted: true,
+                    requestId: payload.message?.requestId || "test-control-request",
+                    messageType: payload.message?.type || "unknown"
+                  }
+                }),
+                {
+                  status: 202,
+                  headers: { "content-type": "application/json" }
+                }
+              );
+            }
             return new Response(JSON.stringify({ ok: true, name }), {
               status: 202,
               headers: { "content-type": "application/json" }
@@ -7405,36 +7423,41 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(eventBody.messages[0].status, "replied");
   assert.equal(eventBody.messages[0].text.includes("デプロイ完了イベントを受信しました。"), true);
   assert.equal(eventBody.messages[0].text.includes("- PR: PR #552"), true);
-  assert.equal(eventBody.messages[0].text.includes("deploy 後 bridge sync/restart helper queue handoff を同じ chat に出します。"), true);
+  assert.equal(eventBody.messages[0].text.includes("deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送ります。"), true);
   assert.equal(eventBody.messages[0].text.includes("- production E2E / runtime truth を確認します。"), true);
   assert.equal(eventBody.messages[0].text.includes("merge / deploy / credential / permission"), true);
   assert.equal(eventBody.messages[1].messageId, "dashboard-event:github-actions:marushu/vtdd-v2-p:deploy-production:26133044458:deploy-bridge-followup");
   assert.equal(eventBody.messages[1].role, "system");
   assert.equal(eventBody.messages[1].status, "sent");
   assert.equal(eventBody.messages[1].relatedIssue, 741);
-  assert.equal(eventBody.messages[1].text.includes("deploy 後 bridge sync/restart を VPS helper queue へ渡しました。"), true);
+  assert.equal(eventBody.messages[1].text.includes("deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送りました。"), true);
   assert.equal(eventBody.messages[1].text.includes("vtdd-dashboard-app-server-bridge-unresolved.service"), true);
   assert.equal(eventBody.messages[1].text.includes("追加 passkey は不要です。"), true);
-  assert.equal(eventBody.messages[1].text.includes("status=queued_for_vps_helper_execution, rootExecutionStarted=false, helperExecutionStarted=false"), true);
-  assert.equal(eventBody.deployBridgeFollowup.status, "queued_for_vps_helper_execution");
+  assert.equal(eventBody.messages[1].text.includes("GitHub Issue comment queue は作成しません。"), true);
+  assert.equal(eventBody.messages[1].text.includes("status=bridge_control_sent, queueCommentPosted=false"), true);
+  assert.equal(eventBody.deployBridgeFollowup.status, "bridge_control_sent");
   assert.equal(eventBody.deployBridgeFollowup.proposalCreated, false);
-  assert.equal(eventBody.deployBridgeFollowup.queueCreated, true);
-  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperQueueReached, true);
+  assert.equal(eventBody.deployBridgeFollowup.queueCreated, false);
+  assert.equal(eventBody.deployBridgeFollowup.bridgeControlSent, true);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperQueueReached, false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.queueCommentPosted, false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.bridgeControlSent, true);
   assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.rootExecutionStarted, false);
-  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperExecutionStarted, false);
-  assert.equal(queueCalls.length, 1);
-  const queueCommentBody = JSON.parse(queueCalls[0].init.body).body;
-  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:deploy-bridge-followup-26133044458"), true);
-  assert.equal(queueCommentBody.includes('"commandClass": "dashboard_bridge_unresolved_deploy_sync_restart"'), true);
-  assert.equal(queueCommentBody.includes("sync-dashboard-app-server-bridge-after-deploy.mjs"), true);
-  assert.equal(queueCommentBody.includes("deploy-approval-verified-redacted"), true);
-  assert.equal(queueCommentBody.includes("approval:must-not-persist"), false);
+  assert.equal(eventBody.deployBridgeFollowup.runtimeTruth.helperExecutionStarted, true);
+  assert.equal(queueCalls.length, 0);
   assert.equal(JSON.stringify(eventBody.messages).includes("approval:must-not-persist"), false);
   assert.equal(JSON.stringify(eventBody.deployBridgeFollowup).includes("approval:must-not-persist"), false);
   assert.equal(JSON.stringify(eventBody.messages).includes("secret-must-not-persist"), false);
   assert.equal(eventBody.webSocketBroadcast, true);
-  assert.equal(rooms.calls.length, 1);
+  assert.equal(rooms.calls.length, 2);
   assert.equal(rooms.calls[0].name, "dashboard-main-unresolved");
+  assert.equal(String(rooms.calls[0].input).endsWith("/app-server-control"), true);
+  const controlPayload = JSON.parse(rooms.calls[0].init.body);
+  assert.equal(controlPayload.message.type, "deploy_bridge_sync_restart_requested");
+  assert.equal(controlPayload.message.commandClass, "dashboard_bridge_unresolved_deploy_sync_restart");
+  assert.equal(controlPayload.message.service, "vtdd-dashboard-app-server-bridge-unresolved.service");
+  assert.equal(controlPayload.message.ref, "origin/main");
+  assert.equal(rooms.calls[1].name, "dashboard-main-unresolved");
   assert.equal(pushCalls.length, 1);
   assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
   assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
