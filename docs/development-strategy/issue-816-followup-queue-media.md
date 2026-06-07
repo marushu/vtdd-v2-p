@@ -75,3 +75,10 @@ production Dashboard Butler PWA で、実行中 turn に画像を添付して差
 ## 停止条件
 
 Worker media validation が差し込み payload を拒否する、upload 済み media reference の sourceEventId / rollback 境界が曖昧で添付を安全に保持できない、または既存 #811 / #814 の E2E と衝突して voice workflow を壊す場合は実装を止め、Issue #816 に blocker として戻す。
+
+## 2026-06-07 owner blocker: 直接差し込み導線と reload recovery
+
+- 観測: production PWA で draft panel に `キューに追加` しか出ず、owner は「差し込みできない」と判断した。さらに reload で queued follow-up が消える。
+- 判断: production E2E 以前の UX/state blocker。#817 の範囲内で、draft panel に `差し込む` / `キューに追加` / `キャンセル` を出し、`差し込む` は即 `interruption: true` で送る。
+- reload recovery: queued follow-up は `sessionStorage` に thread 単位で保存し、reload/reconnect 後も queue chip を復元する。未 upload の local file はブラウザ仕様上復元できないため、既存 draft text 復元と「添付は再選択」表示に留める。
+- validation: source guard と local Playwright E2E に、初期 draft panel の `差し込む` button、直接差し込み payload、queued follow-up reload persistence を追加する。

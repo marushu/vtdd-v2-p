@@ -1362,10 +1362,16 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('cancelButton.textContent = "キャンセル"'), true);
   assert.equal(body.includes('function flushFollowupQueueItem(itemId)'), true);
   assert.equal(body.includes('function editFollowupQueueItem(itemId)'), true);
-  assert.equal(body.includes('AI の作業が終わるか停止した時に送ります'), true);
+  assert.equal(body.includes('現在の実行が終わるか、キューの誘導するを押した時に送ります'), true);
+  assert.equal(body.includes('id="butler-followup-insert"'), true);
+  assert.equal(body.includes("const followupQueueStorageKey = \"vtdd.dashboard.followupQueue:\""), true);
+  assert.equal(body.includes("function persistFollowupQueue()"), true);
+  assert.equal(body.includes("function restoreFollowupQueue()"), true);
   assert.equal(body.includes("function addFollowupQueueItem(text, options = {})"), true);
   assert.equal(body.includes("async function addFollowupQueueItemFromComposer(text, options = {})"), true);
-  assert.equal(body.includes("function flushQueuedFollowups()"), true);
+  assert.equal(body.includes("async function insertFollowupFromComposer(text)"), true);
+  assert.equal(body.includes("function flushFollowupQueueItem(itemId)"), true);
+  assert.equal(body.includes("function flushQueuedFollowups(options = {})"), true);
   assert.equal(body.includes("mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : []"), true);
   assert.equal(body.includes('media.textContent = "添付 " + mediaReferences.length + "件"'), true);
   assert.equal(body.includes("添付なしでは差し込みを送信しません"), true);
