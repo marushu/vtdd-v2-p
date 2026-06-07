@@ -879,7 +879,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           throw responseError(continueBody, "VPS helper queue handoff failed");
         }
         const runtimeTruth = continueBody?.execution?.runtimeTruth || {};
-        if (!isVpsHelperQueueHandoffAccepted(continueBody)) {
+        if (!isVpsHelperQueueHandoffLaunchAcknowledged(continueBody)) {
           const executionStatus = continueBody?.execution?.status || "blocked";
           const issues = Array.isArray(continueBody?.execution?.runtimeTruth?.issues)
             ? continueBody.execution.runtimeTruth.issues
@@ -901,27 +901,29 @@ export function renderPasskeyOperatorPage(input = {}) {
             + (nextAction ? ". next action: " + nextAction : "")
           );
         }
-        setApproveOutput(buildVpsHelperQueueAcceptedText(continueBody), {
+        setApproveOutput(buildVpsHelperQueueLaunchAcknowledgedText(continueBody), {
           show: shouldShowApproveOutput("status")
         });
       }
 
-      function isVpsHelperQueueHandoffAccepted(body) {
+      function isVpsHelperQueueHandoffLaunchAcknowledged(body) {
         const executionStatus = String(body?.execution?.status || "");
         const queueStatus = String(body?.execution?.queue?.status || "");
         const runtimeStatus = String(body?.execution?.runtimeTruth?.status || body?.runtimeTruth?.status || "");
-        if (executionStatus === "queued_for_vps_helper_execution" || executionStatus === "sent_to_bridge") return true;
+        if (executionStatus === "queued_for_vps_helper_execution") return true;
+        if (runtimeStatus !== "vps_local_helper_queue_control_sent") return false;
+        if (executionStatus === "sent_to_bridge") return true;
         if (queueStatus === "sent_to_bridge" && runtimeStatus === "vps_local_helper_queue_control_sent") return true;
-        if (runtimeStatus === "vps_local_helper_queue_control_sent" && executionStatus !== "blocked") return true;
+        if (executionStatus !== "" && executionStatus !== "blocked") return true;
         return false;
       }
 
-      function buildVpsHelperQueueAcceptedText(body) {
+      function buildVpsHelperQueueLaunchAcknowledgedText(body) {
         const runtimeStatus = String(body?.execution?.runtimeTruth?.status || body?.runtimeTruth?.status || "");
         if (runtimeStatus === "vps_local_helper_queue_control_sent") {
-          return "VPS helper queue への引き渡しを app-server bridge へ送りました。Dashboard Butler と通知で local queue の保存結果を確認してください。";
+          return "VPS helper queue への引き渡し要求を app-server bridge へ送りました。これは queue 保存完了ではありません。Dashboard Butler と通知で local queue の保存結果を確認してください。";
         }
-        return "VPS helper queue へ渡しました。Dashboard Butler と通知で進捗を確認してください。";
+        return "VPS helper queue handoff の起動応答を受け取りました。これは完了結果ではありません。Dashboard Butler と通知で local queue の保存結果を確認してください。";
       }
 
       if (copyApprovalGrantButton) {

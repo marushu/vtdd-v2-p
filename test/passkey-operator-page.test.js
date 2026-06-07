@@ -538,12 +538,16 @@ test("passkey operator page focuses VPS runner admin mode on real approval only"
   assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="vps_runner_admin"'), true);
   assert.equal(html.includes("文字列としての passkey は承認ではありません"), true);
-  assert.equal(html.includes("function isVpsHelperQueueHandoffAccepted(body)"), true);
+  assert.equal(html.includes("function isVpsHelperQueueHandoffLaunchAcknowledged(body)"), true);
   assert.equal(html.includes('executionStatus === "sent_to_bridge"'), true);
   assert.equal(html.includes('runtimeStatus === "vps_local_helper_queue_control_sent"'), true);
+  assert.equal(html.includes('runtimeStatus !== "vps_local_helper_queue_control_sent"'), true);
+  assert.equal(html.includes('executionStatus === "queued_for_vps_helper_execution" || executionStatus === "sent_to_bridge"'), false);
   assert.equal(html.includes('queueStatus === "queued"'), false);
   assert.equal(html.includes('runtimeStatus === "vps_local_helper_queue_queued"'), false);
-  assert.equal(html.includes('executionStatus !== "blocked"'), true);
+  assert.equal(html.includes('executionStatus !== "" && executionStatus !== "blocked"'), true);
+  assert.equal(html.includes("これは queue 保存完了ではありません"), true);
+  assert.equal(html.includes("これは完了結果ではありません"), true);
   assert.equal(html.includes("VPS helper queue handoff did not queue"), false);
 });
 
