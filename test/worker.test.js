@@ -4908,7 +4908,7 @@ test("DashboardChatRoom records deploy bridge restart result and releases failed
       deployRunId: "123",
       repository: "marushu/vtdd-v2-p",
       relatedIssue: 741,
-      status: "failed",
+      status: "launch_failed",
       reason: "spawn failed",
       completedAt: "2026-06-07T00:00:01.000Z"
     })

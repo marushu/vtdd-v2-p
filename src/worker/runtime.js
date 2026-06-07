@@ -725,14 +725,14 @@ export class DashboardChatRoom {
       });
       return;
     }
-    if (normalized.status === "failed") {
+    if (normalized.status === "launch_failed") {
       await this.releaseDeployBridgeControlClaim(this.deployBridgeControlIdempotencyKey(normalized));
     }
     await this.broadcastTransientStatus({
       threadId: normalized.threadId,
       status: normalized.transientStatus,
       text: normalized.transientText,
-      snapshot: normalized.status === "started",
+      snapshot: normalized.status === "launch_started",
       snapshotSource: "deploy_bridge_sync_restart_result"
     });
     const store = resolveDashboardChatStore(this.env);
@@ -5557,7 +5557,7 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
     };
   }
   const status = normalizeDashboardEventText(input.status).toLowerCase();
-  const allowedStatuses = new Set(["started", "blocked", "duplicate", "failed"]);
+  const allowedStatuses = new Set(["launch_started", "launch_failed", "blocked", "duplicate"]);
   if (!allowedStatuses.has(status)) {
     return {
       ok: false,
@@ -5570,7 +5570,7 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
   const requestId = normalizeDashboardEventText(input.requestId || input.request_id);
   const executionId = normalizeDashboardEventText(input.executionId || input.execution_id);
   const createdAt = normalizeIsoTimestamp(input.completedAt || input.completed_at || input.createdAt || input.created_at) || new Date().toISOString();
-  const transientStatus = status === "failed" || status === "blocked" ? "failed" : "thinking";
+  const transientStatus = status === "launch_failed" || status === "blocked" ? "failed" : "thinking";
   const transientText = buildDeployBridgeSyncRestartResultTransientText({ status });
   const text = buildDeployBridgeSyncRestartResultMessageText({
     status,
@@ -5601,7 +5601,7 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
         role: "system",
         repository,
         relatedIssue,
-        status: status === "failed" || status === "blocked" ? "failed" : "sent",
+        status: status === "launch_failed" || status === "blocked" ? "failed" : "sent",
         text,
         messageId: `deploy-bridge-sync-restart-result:${deployRunId || requestId || createDashboardRequestId("result")}:${status}`,
         createdAt
@@ -5612,8 +5612,8 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
 }
 
 function buildDeployBridgeSyncRestartResultTransientText({ status = "" } = {}) {
-  if (status === "started") {
-    return "app-server bridge restart script を VPS local で起動しました。before/after は VPS log / systemd journal で確認します。";
+  if (status === "launch_started") {
+    return "app-server bridge restart script を VPS local で起動しました。これは起動結果であり、restart 完了結果ではありません。";
   }
   if (status === "duplicate") {
     return "同じ deploy bridge restart request は既に処理済みのため、重複起動しません。";
@@ -5677,10 +5677,10 @@ function buildDeployBridgeSyncRestartResultMessageText({
     lines.push("", "固定 command:");
     lines.push(`- ${fixedCommand}`);
   }
-  if (status === "started") {
-    lines.push("", "注記: これは restart script の起動結果です。service restart 後の before/after state は VPS local log / systemd journal / 再接続 event で確認します。");
+  if (status === "launch_started") {
+    lines.push("", "注記: これは restart script の起動結果です。service restart の完了結果ではありません。service restart 後の before/after state は VPS local log / systemd journal / 再接続 event で確認します。");
   }
-  if (status === "failed") {
+  if (status === "launch_failed") {
     lines.push("", "注記: bridge 側で起動失敗したため、この deployRunId の retry guard は解放します。");
   }
   return lines.join("\n");

@@ -443,7 +443,7 @@ test("dashboard app-server bridge deploy restart control uses only fixed sync sc
   assert.deepEqual(spawnCalls[0].options, { shell: false, detached: true, stdio: "ignore" });
   assert.equal(spawnCalls[0].unrefCalled, true);
   assert.equal(result.type, "deploy_bridge_sync_restart_result");
-  assert.equal(result.status, "started");
+  assert.equal(result.status, "launch_started");
   assert.equal(result.persistence.githubIssueCommentQueue, false);
   assert.equal(result.persistence.systemdJournal, "vtdd-dashboard-app-server-bridge-unresolved.service");
 });
@@ -511,7 +511,7 @@ test("dashboard app-server bridge deploy restart control dedupes repeated reques
     }
   });
 
-  assert.equal(first.status, "started");
+  assert.equal(first.status, "launch_started");
   assert.equal(duplicate.status, "duplicate");
   assert.equal(duplicate.attempted, false);
   assert.equal(spawnCalls.length, 1);

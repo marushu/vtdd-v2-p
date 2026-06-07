@@ -58584,14 +58584,14 @@ var DashboardChatRoom = class {
       });
       return;
     }
-    if (normalized.status === "failed") {
+    if (normalized.status === "launch_failed") {
       await this.releaseDeployBridgeControlClaim(this.deployBridgeControlIdempotencyKey(normalized));
     }
     await this.broadcastTransientStatus({
       threadId: normalized.threadId,
       status: normalized.transientStatus,
       text: normalized.transientText,
-      snapshot: normalized.status === "started",
+      snapshot: normalized.status === "launch_started",
       snapshotSource: "deploy_bridge_sync_restart_result"
     });
     const store = resolveDashboardChatStore(this.env);
@@ -62812,7 +62812,7 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
     };
   }
   const status = normalizeDashboardEventText(input.status).toLowerCase();
-  const allowedStatuses = /* @__PURE__ */ new Set(["started", "blocked", "duplicate", "failed"]);
+  const allowedStatuses = /* @__PURE__ */ new Set(["launch_started", "launch_failed", "blocked", "duplicate"]);
   if (!allowedStatuses.has(status)) {
     return {
       ok: false,
@@ -62825,7 +62825,7 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
   const requestId = normalizeDashboardEventText(input.requestId || input.request_id);
   const executionId = normalizeDashboardEventText(input.executionId || input.execution_id);
   const createdAt = normalizeIsoTimestamp(input.completedAt || input.completed_at || input.createdAt || input.created_at) || (/* @__PURE__ */ new Date()).toISOString();
-  const transientStatus = status === "failed" || status === "blocked" ? "failed" : "thinking";
+  const transientStatus = status === "launch_failed" || status === "blocked" ? "failed" : "thinking";
   const transientText = buildDeployBridgeSyncRestartResultTransientText({ status });
   const text = buildDeployBridgeSyncRestartResultMessageText({
     status,
@@ -62856,7 +62856,7 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
         role: "system",
         repository,
         relatedIssue,
-        status: status === "failed" || status === "blocked" ? "failed" : "sent",
+        status: status === "launch_failed" || status === "blocked" ? "failed" : "sent",
         text,
         messageId: `deploy-bridge-sync-restart-result:${deployRunId || requestId || createDashboardRequestId("result")}:${status}`,
         createdAt
@@ -62866,8 +62866,8 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
   };
 }
 function buildDeployBridgeSyncRestartResultTransientText({ status = "" } = {}) {
-  if (status === "started") {
-    return "app-server bridge restart script \u3092 VPS local \u3067\u8D77\u52D5\u3057\u307E\u3057\u305F\u3002before/after \u306F VPS log / systemd journal \u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002";
+  if (status === "launch_started") {
+    return "app-server bridge restart script \u3092 VPS local \u3067\u8D77\u52D5\u3057\u307E\u3057\u305F\u3002\u3053\u308C\u306F\u8D77\u52D5\u7D50\u679C\u3067\u3042\u308A\u3001restart \u5B8C\u4E86\u7D50\u679C\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002";
   }
   if (status === "duplicate") {
     return "\u540C\u3058 deploy bridge restart request \u306F\u65E2\u306B\u51E6\u7406\u6E08\u307F\u306E\u305F\u3081\u3001\u91CD\u8907\u8D77\u52D5\u3057\u307E\u305B\u3093\u3002";
@@ -62928,10 +62928,10 @@ function buildDeployBridgeSyncRestartResultMessageText({
     lines.push("", "\u56FA\u5B9A command:");
     lines.push(`- ${fixedCommand}`);
   }
-  if (status === "started") {
-    lines.push("", "\u6CE8\u8A18: \u3053\u308C\u306F restart script \u306E\u8D77\u52D5\u7D50\u679C\u3067\u3059\u3002service restart \u5F8C\u306E before/after state \u306F VPS local log / systemd journal / \u518D\u63A5\u7D9A event \u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002");
+  if (status === "launch_started") {
+    lines.push("", "\u6CE8\u8A18: \u3053\u308C\u306F restart script \u306E\u8D77\u52D5\u7D50\u679C\u3067\u3059\u3002service restart \u306E\u5B8C\u4E86\u7D50\u679C\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002service restart \u5F8C\u306E before/after state \u306F VPS local log / systemd journal / \u518D\u63A5\u7D9A event \u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002");
   }
-  if (status === "failed") {
+  if (status === "launch_failed") {
     lines.push("", "\u6CE8\u8A18: bridge \u5074\u3067\u8D77\u52D5\u5931\u6557\u3057\u305F\u305F\u3081\u3001\u3053\u306E deployRunId \u306E retry guard \u306F\u89E3\u653E\u3057\u307E\u3059\u3002");
   }
   return lines.join("\n");

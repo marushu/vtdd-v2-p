@@ -572,7 +572,7 @@ export async function executeDeployBridgeSyncRestartRequest({
       deployRunId: normalizeBridgeText(request.deployRunId),
       repository: normalizeBridgeText(request.repository),
       relatedIssue: Number(request.relatedIssue || 0) || null,
-      status: "started",
+      status: "launch_started",
       attempted: true,
       command: {
         command: command.command,
@@ -601,7 +601,7 @@ export async function executeDeployBridgeSyncRestartRequest({
       threadId: normalizeBridgeText(request.threadId),
       requestId: normalizeBridgeText(request.requestId),
       executionId: normalizeBridgeText(request.executionId),
-      status: "failed",
+      status: "launch_failed",
       attempted: true,
       command: {
         command: command.command,

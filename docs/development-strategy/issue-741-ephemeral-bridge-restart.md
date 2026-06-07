@@ -91,11 +91,24 @@ fallback reviewer は、Worker が WebSocket 送信成功を `sent` と報告す
 追加 bounded change contract:
 
 - target Issue: Issue #741 / Issue #637。
-- exact Success Criteria: bridge の `deploy_bridge_sync_restart_result` を Worker/DO が受け取り、Dashboard thread に runtime truth として append する。`failed` result では DO claim を release し、同じ deployRunId の retry を可能にする。`started` と `duplicate` は replay guard として claim を維持する。
+- exact Success Criteria: bridge の `deploy_bridge_sync_restart_result` を Worker/DO が受け取り、Dashboard thread に runtime truth として appendする。当初は `failed` result で DO claim を release し、`started` と `duplicate` は replay guard として claim を維持する想定だったが、第3ラウンドで `launch_failed` / `launch_started` に置換した。
 - Non-goals: detached child が systemd restart 完了後に同じ WebSocket へ before/after state を返すこと、live E2E、logrotate/tmpfiles、Action Schema 追加。
 - files expected to change: `src/worker/runtime.js`, `test/worker.test.js`, `worker.js`, this strategy file。
 - validation: focused DO app-server control/result tests、bridge restart control tests、`npm run build:worker`、`npm run verify:worker`。
 - stop condition: restart 完了後の before/after state を同じ PR で保証するには bridge self-restart script の protocol 変更が必要になる場合。この PR では local log/systemd journal evidence と Dashboard result message までに限定し、live before/after は merge 後 E2E として残す。
+
+## PR #823 reviewer blocker 第3ラウンド対応
+
+fallback reviewer は、bridge が detached child を起動した直後に `started` result を返しているため、Dashboard からは systemd restart の完了結果に見えてしまう点を merge blocker とした。さらに detached child が後で失敗しても bridge process は結果を返せず、bridge 側 in-memory idempotency marker を解放できない。この指摘も妥当で、この PR で restart 完了を返すと主張すると過剰 claim になる。
+
+追加 bounded change contract:
+
+- target Issue: Issue #741 / Issue #637。
+- exact Success Criteria: bridge が返す result status は `launch_started` / `launch_failed` / `blocked` / `duplicate` に限定し、systemd restart 完了とは別物として Dashboard thread に明示する。`launch_started` は detached script の起動成功だけを意味し、actual before/after truth は VPS local log / systemd journal / bridge reconnect event で確認する。`launch_failed` のみ DO claim を release し、spawn 失敗 retry を可能にする。
+- Non-goals: detached child から Worker へ restart 完了 event を送る protocol 追加、live deploy E2E、logrotate/tmpfiles、Action Schema 追加、既存 GitHub Issue comment cleanup。
+- files expected to change: `src/worker/runtime.js`, `scripts/run-dashboard-app-server-bridge.mjs`, `test/worker.test.js`, `test/dashboard-app-server-bridge.test.js`, `worker.js`, this strategy file。
+- validation: focused DO app-server control/result tests、bridge restart control tests、`npm run build:worker`、`npm run verify:worker`。
+- stop condition: restart 完了 after state を Dashboard result として返すには bridge self-restart 後の sidecar callback が必要になる場合。この PR では queue 蓄積破棄と launch truth に限定し、完了 after truth 接続は次 Issue/PR に分ける。
 
 ## 実装候補と捨てた案
 
