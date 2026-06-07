@@ -20,6 +20,11 @@ import {
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
 import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "./prepare-pr-body-file.mjs";
 import { renderPrBody } from "./render-pr-body.mjs";
+import {
+  claimNextVpsLocalHelperExecution,
+  completeVpsLocalHelperExecution,
+  peekNextVpsLocalHelperExecution
+} from "./vps-local-helper-queue.mjs";
 
 const QUEUE_MARKER_RE = /<!--\s*vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)\s*-->/;
 const PRIVILEGED_MAINTENANCE_QUEUE_MARKER_RE =
@@ -131,6 +136,28 @@ async function runVpsRunnerOnce({
         repoSync
       };
     }
+  }
+
+  const localPrivilegedMaintenanceExecution = dryRun
+    ? await peekNextVpsLocalHelperExecution({
+        queueRoot: env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR,
+        logPath: env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG
+      })
+    : await claimNextVpsLocalHelperExecution({
+        queueRoot: env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR,
+        logPath: env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG
+      });
+  if (localPrivilegedMaintenanceExecution.ok) {
+    if (dryRun) {
+      return {
+        ok: true,
+        message: `Dry run selected local privileged maintenance ${localPrivilegedMaintenanceExecution.payload.executionId} for ${localPrivilegedMaintenanceExecution.payload.repository}#${localPrivilegedMaintenanceExecution.payload.issueNumber}.`
+      };
+    }
+    return executeVpsLocalPrivilegedMaintenanceRunnerExecution({
+      execution: localPrivilegedMaintenanceExecution,
+      env
+    });
   }
 
   const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
@@ -287,6 +314,64 @@ async function executeVpsPrivilegedMaintenanceRunnerExecution({ githubFetch, exe
     return {
       ok: false,
       reason: "VPS privileged maintenance helper execution failed."
+    };
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function executeVpsLocalPrivilegedMaintenanceRunnerExecution({ execution, env = process.env }) {
+  const payload = { ...execution.payload };
+  const helperPath = normalizeText(payload.executionEnvelope?.helperInvocation?.args?.[1]) ||
+    DEFAULT_PRIVILEGED_MAINTENANCE_HELPER_PATH;
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-helper-execution-"));
+  const inputPath = path.join(tempDir, "helper-execution-input.json");
+  try {
+    await fs.writeFile(inputPath, JSON.stringify(payload.executionEnvelope.helperExecutionInput, null, 2), {
+      mode: 0o600
+    });
+    const result = await runCommand("sudo", ["-n", helperPath, "--execute", "--input", inputPath], {
+      maxBuffer: 1024 * 1024
+    });
+    const parsed = parseJsonObject(result.stdout);
+    await completeVpsLocalHelperExecution({
+      executionId: payload.executionId,
+      status: "completed",
+      result: {
+        rootExecutionStarted: true,
+        helperExecutionStarted: true,
+        runtimeTruth: parsed?.runtimeTruth || null,
+        helperResult: redactVpsPrivilegedMaintenanceHelperResult(parsed)
+      },
+      queueRoot: env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR,
+      logPath: env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG
+    });
+    return {
+      ok: true,
+      message: `VPS local privileged maintenance helper execution ${payload.executionId} completed.`
+    };
+  } catch (error) {
+    const parsed = parseJsonObject(error?.stdout);
+    const runtimeTruth = parsed?.runtimeTruth && typeof parsed.runtimeTruth === "object" ? parsed.runtimeTruth : null;
+    await completeVpsLocalHelperExecution({
+      executionId: payload.executionId,
+      status: "failed",
+      result: {
+        rootExecutionStarted: runtimeTruth?.rootExecutionStarted === true,
+        helperExecutionStarted: runtimeTruth?.helperExecutionStarted === true,
+        runtimeTruth,
+        helperResult: redactVpsPrivilegedMaintenanceHelperResult(parsed),
+        rawFailure: {
+          error: "vps_privileged_maintenance_helper_failed",
+          reason: summarizeDiagnosticText(error?.stderr || error?.message || String(error), 500)
+        }
+      },
+      queueRoot: env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR,
+      logPath: env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG
+    });
+    return {
+      ok: false,
+      reason: "VPS local privileged maintenance helper execution failed."
     };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });

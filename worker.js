@@ -58100,15 +58100,17 @@ var DashboardChatRoom = class {
           reason: "threadId is required"
         });
       }
-      const message = normalizeDeployBridgeControlMessage({
+      const rawMessage = payload.message && typeof payload.message === "object" ? payload.message : {};
+      const messageType = normalizeDashboardEventText(rawMessage.type);
+      const message = messageType === "vps_local_helper_queue_enqueue_requested" ? normalizeVpsLocalHelperQueueControlMessage({ threadId: threadId2, message: rawMessage }) : normalizeDeployBridgeControlMessage({
         threadId: threadId2,
-        message: payload.message
+        message: rawMessage
       });
       if (!message.ok) {
         return json(422, {
           ok: false,
-          error: "deploy_bridge_control_invalid",
-          reason: "app-server control only accepts deploy bridge restart requests with fixed target",
+          error: messageType === "vps_local_helper_queue_enqueue_requested" ? "vps_local_helper_queue_control_invalid" : "deploy_bridge_control_invalid",
+          reason: "app-server control only accepts fixed deploy bridge restart or VPS local helper queue requests",
           issues: message.issues
         });
       }
@@ -58123,6 +58125,7 @@ var DashboardChatRoom = class {
             requestId: normalizeDashboardEventText(message.message.requestId),
             messageType: normalizeDashboardEventText(message.message.type),
             deployRunId: normalizeDashboardEventText(message.message.deployRunId),
+            executionId: normalizeDashboardEventText(message.message.executionId),
             idempotencyKey: idempotency.key
           }
         });
@@ -58138,7 +58141,8 @@ var DashboardChatRoom = class {
             reason: "app-server bridge socket is not connected",
             requestId: normalizeDashboardEventText(message.message.requestId),
             messageType: normalizeDashboardEventText(message.message.type),
-            deployRunId: normalizeDashboardEventText(message.message.deployRunId)
+            deployRunId: normalizeDashboardEventText(message.message.deployRunId),
+            executionId: normalizeDashboardEventText(message.message.executionId)
           }
         });
       }
@@ -58155,6 +58159,7 @@ var DashboardChatRoom = class {
           requestId: normalizeDashboardEventText(message.message.requestId),
           messageType: normalizeDashboardEventText(message.message.type),
           deployRunId: normalizeDashboardEventText(message.message.deployRunId),
+          executionId: normalizeDashboardEventText(message.message.executionId),
           idempotencyKey: sent ? idempotency.key : ""
         }
       });
@@ -58490,6 +58495,10 @@ var DashboardChatRoom = class {
       await this.acceptDeployBridgeSyncRestartResult({ socket, attachment, payload });
       return;
     }
+    if (normalizeDashboardEventText(payload?.type).toLowerCase() === "vps_local_helper_queue_enqueue_result") {
+      await this.acceptVpsLocalHelperQueueEnqueueResult({ socket, attachment, payload });
+      return;
+    }
     const normalized = normalizeDashboardAppServerBridgeEvent(payload, {
       fallbackThreadId: attachment?.threadId
     });
@@ -58565,6 +58574,38 @@ var DashboardChatRoom = class {
     if (messagesToAppend.some((message) => shouldClearDashboardTransientProgressSnapshot(message))) {
       await this.clearTransientProgressSnapshot(normalized.threadId);
     }
+    await this.broadcastThread({ threadId: normalized.threadId, messages });
+  }
+  async acceptVpsLocalHelperQueueEnqueueResult({ socket, attachment, payload }) {
+    const normalized = normalizeVpsLocalHelperQueueEnqueueResult(payload, {
+      fallbackThreadId: attachment?.threadId
+    });
+    if (!normalized.ok) {
+      this.sendSocket(socket, {
+        type: "error",
+        ok: false,
+        reason: normalized.reason
+      });
+      return;
+    }
+    const attachmentThreadId = normalizeDashboardThreadId(attachment?.threadId);
+    if (attachmentThreadId && normalized.threadId !== attachmentThreadId) {
+      this.sendSocket(socket, {
+        type: "error",
+        ok: false,
+        reason: "VPS local helper queue result threadId does not match the connected dashboard thread"
+      });
+      return;
+    }
+    await this.broadcastTransientStatus({
+      threadId: normalized.threadId,
+      status: normalized.transientStatus,
+      text: normalized.transientText,
+      snapshot: normalized.status === "queued",
+      snapshotSource: "vps_local_helper_queue_enqueue_result"
+    });
+    const store = resolveDashboardChatStore(this.env);
+    const messages = store ? await store.appendMany(normalized.threadId, [normalized.message]) : [normalized.message].filter(Boolean);
     await this.broadcastThread({ threadId: normalized.threadId, messages });
   }
   async acceptDeployBridgeSyncRestartResult({ socket, attachment, payload }) {
@@ -62886,6 +62927,54 @@ function normalizeDeployBridgeControlMessage({ threadId, message } = {}) {
     message: normalized
   };
 }
+function normalizeVpsLocalHelperQueueControlMessage({ threadId, message } = {}) {
+  const issues = [];
+  const source = message && typeof message === "object" ? message : {};
+  const payload = source.payload && typeof source.payload === "object" ? source.payload : {};
+  const normalized = {
+    type: normalizeDashboardEventText(source.type),
+    schema: "vtdd.dashboard.app_server_bridge.v1",
+    requestId: normalizeDashboardEventText(source.requestId),
+    executionId: normalizeDashboardEventText(source.executionId || payload.executionId),
+    threadId: normalizeDashboardThreadId(threadId || source.threadId),
+    repository: normalizeCanonicalRepositoryInput(source.repository || payload.repository),
+    issueNumber: normalizePositiveInteger10(source.issueNumber || payload.issueNumber),
+    payload,
+    createdAt: normalizeIsoTimestamp(source.createdAt || source.created_at) || (/* @__PURE__ */ new Date()).toISOString()
+  };
+  if (normalized.type !== "vps_local_helper_queue_enqueue_requested") {
+    issues.push("type must be vps_local_helper_queue_enqueue_requested");
+  }
+  if (!normalized.requestId) {
+    issues.push("requestId is required");
+  }
+  if (!normalized.executionId) {
+    issues.push("executionId is required");
+  }
+  if (!normalized.threadId) {
+    issues.push("threadId is required");
+  }
+  if (!normalized.repository) {
+    issues.push("repository is required");
+  }
+  if (!normalized.issueNumber) {
+    issues.push("issueNumber is required");
+  }
+  if (normalizeDashboardEventText(payload.transport) !== "vps_privileged_maintenance_helper") {
+    issues.push("payload.transport must be vps_privileged_maintenance_helper");
+  }
+  if (payload.approvalScopeMatched !== true) {
+    issues.push("payload.approvalScopeMatched must be true");
+  }
+  if (!payload.executionEnvelope || typeof payload.executionEnvelope !== "object") {
+    issues.push("payload.executionEnvelope is required");
+  }
+  return {
+    ok: issues.length === 0,
+    issues,
+    message: normalized
+  };
+}
 function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = "" } = {}) {
   const input = normalizeObject12(payload);
   const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || fallbackThreadId);
@@ -62948,6 +63037,122 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
       { threadId }
     )
   };
+}
+function normalizeVpsLocalHelperQueueEnqueueResult(payload, { fallbackThreadId = "" } = {}) {
+  const input = normalizeObject12(payload);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || fallbackThreadId);
+  if (!threadId) {
+    return {
+      ok: false,
+      reason: "threadId is required for VPS local helper queue enqueue result"
+    };
+  }
+  const status = normalizeDashboardEventText(input.status).toLowerCase();
+  const allowedStatuses = /* @__PURE__ */ new Set(["queued", "duplicate", "blocked"]);
+  if (!allowedStatuses.has(status)) {
+    return {
+      ok: false,
+      reason: "VPS local helper queue enqueue result status is invalid"
+    };
+  }
+  const repository = normalizeCanonicalRepositoryInput(input.repository);
+  const issueNumber = normalizePositiveInteger10(input.issueNumber || input.issue_number);
+  const executionId = normalizeDashboardEventText(input.executionId || input.execution_id);
+  const requestId = normalizeDashboardEventText(input.requestId || input.request_id);
+  const createdAt = normalizeIsoTimestamp(input.completedAt || input.completed_at || input.createdAt || input.created_at) || (/* @__PURE__ */ new Date()).toISOString();
+  const text = buildVpsLocalHelperQueueEnqueueResultMessageText({
+    status,
+    repository,
+    issueNumber,
+    executionId,
+    requestId,
+    queue: input.queue,
+    wakeup: input.wakeup,
+    persistence: input.persistence,
+    issues: input.issues
+  });
+  return {
+    ok: true,
+    threadId,
+    status,
+    repository,
+    issueNumber,
+    executionId,
+    requestId,
+    transientStatus: status === "blocked" ? "failed" : "thinking",
+    transientText: status === "blocked" ? "VPS local helper queue \u3078\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002" : "VPS local helper queue \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002VPS runner \u304C pickup \u3057\u307E\u3059\u3002",
+    message: normalizeDashboardChatMessage(
+      {
+        threadId,
+        role: "system",
+        repository,
+        relatedIssue: issueNumber || null,
+        status: status === "blocked" ? "failed" : "sent",
+        text,
+        messageId: `vps-local-helper-queue:${executionId || requestId || createDashboardRequestId("queue")}:${status}`,
+        createdAt
+      },
+      { threadId }
+    )
+  };
+}
+function buildVpsLocalHelperQueueEnqueueResultMessageText({
+  status = "",
+  repository = "",
+  issueNumber = null,
+  executionId = "",
+  requestId = "",
+  queue = null,
+  wakeup = null,
+  persistence = null,
+  issues = []
+} = {}) {
+  const normalizedQueue = normalizeObject12(queue);
+  const normalizedWakeup = normalizeObject12(wakeup);
+  const normalizedPersistence = normalizeObject12(persistence);
+  const lines = [
+    "VPS local helper queue \u306E\u4FDD\u5B58\u7D50\u679C\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002",
+    "",
+    "\u72B6\u614B:",
+    `- status: ${status || "unknown"}`,
+    `- repository: ${repository || "\u672A\u6307\u5B9A"}`,
+    `- relatedIssue: ${issueNumber || "\u672A\u6307\u5B9A"}`,
+    `- executionId: ${executionId || "\u672A\u6307\u5B9A"}`,
+    `- requestId: ${requestId || "\u672A\u6307\u5B9A"}`,
+    "- queueCommentPosted: false",
+    "- transport: vps_local_helper_queue"
+  ];
+  const issueLines = Array.isArray(issues) ? issues.map((issue2) => sanitizeDashboardChatText(issue2)).filter(Boolean) : [];
+  if (issueLines.length > 0) {
+    lines.push("", "\u8A3A\u65AD:");
+    for (const issue2 of issueLines.slice(0, 8)) {
+      lines.push(`- ${issue2}`);
+    }
+  }
+  const queueFile = sanitizeDashboardChatText(normalizedQueue.queueFile || normalizedPersistence.vpsLocalQueueFile || "");
+  const stateFile = sanitizeDashboardChatText(normalizedQueue.stateFile || normalizedPersistence.vpsLocalStateFile || "");
+  const logPath = sanitizeDashboardChatText(normalizedQueue.logPath || normalizedPersistence.vpsLocalLogPath || "");
+  if (queueFile || stateFile || logPath) {
+    lines.push("", "VPS local evidence:");
+    if (queueFile) lines.push(`- queueFile: ${queueFile}`);
+    if (stateFile) lines.push(`- stateFile: ${stateFile}`);
+    if (logPath) lines.push(`- logPath: ${logPath}`);
+  }
+  if (normalizedWakeup.status || normalizedWakeup.reason) {
+    lines.push("", "runner wakeup:");
+    lines.push(`- status: ${sanitizeDashboardChatText(normalizedWakeup.status || "unknown")}`);
+    lines.push(`- attempted: ${normalizedWakeup.attempted === true ? "true" : "false"}`);
+    if (normalizedWakeup.reason) {
+      lines.push(`- reason: ${sanitizeDashboardChatText(normalizedWakeup.reason)}`);
+    }
+  }
+  if (status === "queued") {
+    lines.push("", "\u6CE8\u8A18: Worker \u306B\u306F helper envelope \u3092\u4FDD\u5B58\u3057\u3066\u3044\u307E\u305B\u3093\u3002\u63A5\u7D9A\u4E2D app-server bridge \u304C VPS local queue/state/log \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002");
+  }
+  if (status === "duplicate") {
+    lines.push("", "\u6CE8\u8A18: \u540C\u3058 executionId \u306F\u65E2\u306B VPS local queue \u306B\u5B58\u5728\u3059\u308B\u305F\u3081\u3001\u91CD\u8907\u4FDD\u5B58\u3057\u307E\u305B\u3093\u3002");
+  }
+  return lines.join("\n");
 }
 function buildDeployBridgeSyncRestartResultTransientText({ status = "" } = {}) {
   if (status === "launch_started") {
@@ -63827,42 +64032,140 @@ async function createVpsPrivilegedMaintenanceHelperExecutionQueue({ payload, env
   const dashboardThreadId = normalizeText33(
     payload?.handoff?.dashboardThreadId || payload?.dashboardThreadId || payload?.dashboard_thread_id || payload?.threadId || payload?.thread_id
   );
+  if (!dashboardThreadId) {
+    const body2 = {
+      ok: false,
+      error: "vps_local_helper_queue_thread_required",
+      reason: "dashboardThreadId is required so the connected app-server bridge can write the VPS local helper queue.",
+      issues: ["dashboardThreadId is required for VPS local helper queue handoff"],
+      execution: {
+        executionId,
+        transport: "vps_local_helper_queue",
+        repository,
+        issueNumber,
+        dashboardThreadId: null,
+        queueCommentId: null,
+        queueCommentUrl: null,
+        status: "blocked"
+      },
+      runtimeTruth: {
+        kind: "vps_privileged_maintenance_helper_execution_queue",
+        status: "blocked",
+        rootExecutionStarted: false,
+        helperExecutionStarted: false,
+        queueCommentPosted: false,
+        dashboardThreadIdIncluded: false,
+        requiredTransport: "vps_local_helper_queue",
+        disabledTransport: "github_issue_comment_queue"
+      }
+    };
+    return { ok: false, status: 422, error: body2.error, reason: body2.reason, issues: body2.issues, body: body2 };
+  }
+  const controlMessage = {
+    type: "vps_local_helper_queue_enqueue_requested",
+    schema: "vtdd.dashboard.app_server_bridge.v1",
+    requestId: `vps-local-helper-queue:${executionId}`,
+    executionId,
+    threadId: dashboardThreadId,
+    repository,
+    issueNumber,
+    payload: {
+      executionId,
+      transport: "vps_privileged_maintenance_helper",
+      repository,
+      issueNumber,
+      dashboardThreadId,
+      handoff: { dashboardThreadId },
+      approvalActor: normalizeGitHubLogin(payload?.approvalActor),
+      approvalScopeMatched: true,
+      issueTraceability: {
+        canonicalSpec: "github_issue",
+        issueNumber,
+        relatedIssue: issueNumber,
+        issueTraceable: true
+      },
+      executionEnvelope: envelope
+    },
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const control = await requestDashboardAppServerBridgeControl({
+    env,
+    threadId: dashboardThreadId,
+    message: controlMessage
+  });
+  if (!control.ok || control.control?.status !== "sent") {
+    const reason = control.reason || control.control?.reason || "app-server bridge socket is not connected";
+    const body2 = {
+      ok: false,
+      error: "vps_local_helper_queue_unavailable",
+      reason,
+      issues: [
+        "VPS local queue must be written by the connected app-server bridge; Worker does not persist helper envelopes.",
+        reason
+      ],
+      execution: {
+        executionId,
+        transport: "vps_local_helper_queue",
+        repository,
+        issueNumber,
+        dashboardThreadId,
+        queueCommentId: null,
+        queueCommentUrl: null,
+        status: control.control?.status === "duplicate" ? "duplicate" : "blocked"
+      },
+      runtimeTruth: {
+        kind: "vps_privileged_maintenance_helper_execution_queue",
+        status: control.control?.status === "duplicate" ? "vps_local_helper_queue_duplicate" : "vps_local_helper_queue_unavailable",
+        rootExecutionStarted: false,
+        helperExecutionStarted: false,
+        queueCommentPosted: false,
+        dashboardThreadIdIncluded: true,
+        requiredTransport: "vps_local_helper_queue",
+        disabledTransport: "github_issue_comment_queue",
+        bridgeControlSent: false,
+        bridgeControlStatus: control.control?.status || null,
+        nextAction: "Restore the app-server bridge connection and retry; do not create GitHub Issue comment queue entries."
+      }
+    };
+    return {
+      ok: false,
+      status: control.control?.status === "duplicate" ? 202 : 503,
+      error: body2.error,
+      reason: body2.reason,
+      issues: body2.issues,
+      body: body2
+    };
+  }
   const body = {
-    ok: false,
-    error: "vps_local_helper_queue_unavailable",
-    reason: "GitHub Issue comments are no longer accepted as the VPS privileged maintenance helper execution queue.",
-    issues: [
-      "Issue comment queue transport is disabled to avoid unbounded comment accumulation and silent pickup gaps.",
-      "A bounded VPS-local helper queue/state/log transport must be connected before this execution can be queued."
-    ],
+    ok: true,
     execution: {
       executionId,
       transport: "vps_local_helper_queue",
       repository,
       issueNumber,
-      dashboardThreadId: dashboardThreadId || null,
+      dashboardThreadId,
       queueCommentId: null,
       queueCommentUrl: null,
-      status: "blocked"
+      status: "sent_to_bridge"
     },
     runtimeTruth: {
       kind: "vps_privileged_maintenance_helper_execution_queue",
-      status: "vps_local_helper_queue_unavailable",
+      status: "vps_local_helper_queue_control_sent",
       rootExecutionStarted: false,
       helperExecutionStarted: false,
       queueCommentPosted: false,
-      dashboardThreadIdIncluded: Boolean(dashboardThreadId),
+      dashboardThreadIdIncluded: true,
       requiredTransport: "vps_local_helper_queue",
       disabledTransport: "github_issue_comment_queue",
-      nextAction: "Connect a bounded VPS-local helper queue/state/log transport before retrying this maintenance execution."
+      bridgeControlSent: true,
+      bridgeControlRequestId: control.control?.requestId || controlMessage.requestId,
+      bridgeControlMessageType: control.control?.messageType || controlMessage.type,
+      nextAction: "Connected app-server bridge will write the VPS local helper queue, state, and log, then wake the VPS runner."
     }
   };
   return {
-    ok: false,
-    status: 503,
-    error: body.error,
-    reason: body.reason,
-    issues: body.issues,
+    ok: true,
+    status: 202,
     body
   };
 }
@@ -63904,6 +64207,10 @@ function validateVpsPrivilegedMaintenanceExecutionEnvelopeForQueue(envelope) {
 }
 function safeIdentifier(value) {
   return String(value || "").replace(/[^A-Za-z0-9_.-]+/g, "_").slice(0, 80) || "execution";
+}
+function normalizeGitHubLogin(value) {
+  const login = normalizeText33(value);
+  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login) ? login : "";
 }
 async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
   const inventory = buildVpsPrivilegedMaintenanceInstallInventory({

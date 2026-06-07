@@ -31,6 +31,7 @@ import {
   createDashboardAppServerClientSelector,
   ensureDashboardBridgeRepoSynced,
   executeDeployBridgeSyncRestartRequest,
+  executeVpsLocalHelperQueueEnqueueRequest,
   executeVpsRunnerWakeup,
   extractDashboardAppServerUnsupportedModel,
   extractAppServerNotificationTurnId,
@@ -397,6 +398,82 @@ test("dashboard app-server bridge runner wakeup uses only fixed user systemd sta
   assert.equal(result.fallback, "vtdd-vps-runner.timer");
   assert.equal(result.threadId, "dashboard-main");
   assert.equal(result.executionId, "remote-codex-issue717");
+});
+
+test("dashboard app-server bridge enqueues VPS helper execution into local queue and wakes runner", async () => {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-local-helper-queue-"));
+  const queueRoot = path.join(tmpRoot, "queue");
+  const logPath = path.join(tmpRoot, "logs", "queue.log");
+  const previousQueueRoot = process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR;
+  const previousLogPath = process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG;
+  process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR = queueRoot;
+  process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG = logPath;
+  const spawnCalls = [];
+  try {
+    const result = await executeVpsLocalHelperQueueEnqueueRequest({
+      request: {
+        threadId: "dashboard-main-unresolved",
+        requestId: "vps-local-helper-queue:test",
+        payload: {
+          executionId: "vps-maint-local-741",
+          transport: "vps_privileged_maintenance_helper",
+          repository: "marushu/vtdd-v2-p",
+          issueNumber: 741,
+          dashboardThreadId: "dashboard-main-unresolved",
+          approvalScopeMatched: true,
+          executionEnvelope: {
+            kind: "vps_privileged_maintenance_helper_execution_envelope",
+            status: "ready_for_vps_helper_execution",
+            repository: "marushu/vtdd-v2-p",
+            requestId: "helper-request-741",
+            capabilityId: "dashboard.bridge.unresolved.deploy.sync.restart",
+            mode: "execute",
+            helperInvocation: {
+              executable: "sudo",
+              args: ["-n", "/usr/local/sbin/vtdd-vps-maintenance-helper", "--execute", "--input", "<helper-execution-input-json>"],
+              shell: false,
+              inputFile: "helperExecutionInput"
+            },
+            helperExecutionInput: { mode: "execute", helperRequest: { requestId: "helper-request-741" } },
+            rootExecutionStarted: false,
+            helperExecutionStarted: false
+          }
+        }
+      },
+      now: (() => {
+        const values = ["2026-06-07T01:00:00.000Z", "2026-06-07T01:00:01.000Z", "2026-06-07T01:00:02.000Z"];
+        return () => values.shift() || "2026-06-07T01:00:02.000Z";
+      })(),
+      spawnImpl(command, args, options) {
+        spawnCalls.push({ command, args, options });
+        return {
+          stdout: { on() {} },
+          stderr: { on() {} },
+          on(type, handler) {
+            if (type === "close") queueMicrotask(() => handler(0));
+          }
+        };
+      }
+    });
+
+    assert.equal(result.type, "vps_local_helper_queue_enqueue_result");
+    assert.equal(result.status, "queued");
+    assert.equal(result.persistence.githubIssueCommentQueue, false);
+    assert.equal(result.queue.transport, "vps_local_helper_queue");
+    assert.equal(spawnCalls.length, 1);
+    const pending = JSON.parse(await fs.readFile(path.join(queueRoot, "pending", "vps-maint-local-741.json"), "utf8"));
+    assert.equal(pending.executionId, "vps-maint-local-741");
+    const state = JSON.parse(await fs.readFile(path.join(queueRoot, "state", "vps-maint-local-741.json"), "utf8"));
+    assert.equal(state.status, "pending");
+    const log = await fs.readFile(logPath, "utf8");
+    assert.equal(log.includes('"event":"queued"'), true);
+  } finally {
+    if (previousQueueRoot === undefined) delete process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR;
+    else process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR = previousQueueRoot;
+    if (previousLogPath === undefined) delete process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG;
+    else process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG = previousLogPath;
+    await fs.rm(tmpRoot, { recursive: true, force: true });
+  }
 });
 
 test("dashboard app-server bridge deploy restart control uses only fixed sync script", async () => {

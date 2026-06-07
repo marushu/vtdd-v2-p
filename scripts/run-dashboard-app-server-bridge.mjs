@@ -8,6 +8,7 @@ import {
   buildDashboardAppServerUsageCostBoundary,
   normalizeDashboardAppServerUsageProfile
 } from "../src/core/dashboard-app-server-usage-profile.js";
+import { enqueueVpsLocalHelperExecution } from "./vps-local-helper-queue.mjs";
 
 const DEFAULT_SCHEMA = "vtdd.dashboard.app_server_bridge.v1";
 const DANGER_FULL_ACCESS_SANDBOX = "danger-full-access";
@@ -618,6 +619,85 @@ export async function executeDeployBridgeSyncRestartRequest({
       reason: normalizeBridgeText(error?.message || "failed to start deploy bridge sync/restart").slice(0, 240)
     };
   }
+}
+
+export async function executeVpsLocalHelperQueueEnqueueRequest({
+  request = {},
+  spawnImpl = spawn,
+  now = () => new Date().toISOString(),
+  enqueue = enqueueVpsLocalHelperExecution
+} = {}) {
+  const startedAt = now();
+  const payload = request?.payload && typeof request.payload === "object" ? request.payload : {};
+  const enqueueResult = await enqueue({
+    payload,
+    queueRoot: process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR,
+    logPath: process.env.VTDD_VPS_LOCAL_HELPER_QUEUE_LOG,
+    now
+  });
+  if (!enqueueResult.ok) {
+    return {
+      type: "vps_local_helper_queue_enqueue_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(payload.executionId),
+      repository: normalizeBridgeText(payload.repository),
+      issueNumber: Number(payload.issueNumber || 0) || null,
+      status: "blocked",
+      queued: false,
+      attempted: false,
+      issues: enqueueResult.issues || [enqueueResult.reason || "vps local helper queue enqueue blocked"],
+      startedAt,
+      completedAt: now()
+    };
+  }
+
+  const wakeup = await executeVpsRunnerWakeup({
+    request: {
+      threadId: request.threadId,
+      requestId: `runner-wakeup:${payload.executionId}`,
+      executionId: payload.executionId,
+      repository: payload.repository,
+      issueNumber: payload.issueNumber,
+      queueCommentUrl: ""
+    },
+    spawnImpl,
+    now
+  });
+  return {
+    type: "vps_local_helper_queue_enqueue_result",
+    schema: DEFAULT_SCHEMA,
+    threadId: normalizeBridgeText(request.threadId),
+    requestId: normalizeBridgeText(request.requestId),
+    executionId: normalizeBridgeText(payload.executionId),
+    repository: normalizeBridgeText(payload.repository),
+    issueNumber: Number(payload.issueNumber || 0) || null,
+    dashboardThreadId: normalizeBridgeText(payload.dashboardThreadId || payload?.handoff?.dashboardThreadId),
+    status: enqueueResult.status === "duplicate" ? "duplicate" : "queued",
+    queued: true,
+    attempted: true,
+    queue: {
+      transport: "vps_local_helper_queue",
+      queueFile: enqueueResult.queueFile,
+      stateFile: enqueueResult.stateFile,
+      logPath: enqueueResult.logPath
+    },
+    wakeup: {
+      status: wakeup.status,
+      attempted: wakeup.attempted,
+      fallback: wakeup.fallback,
+      reason: wakeup.reason || null
+    },
+    persistence: {
+      githubIssueCommentQueue: false,
+      vpsLocalQueueFile: enqueueResult.queueFile,
+      vpsLocalStateFile: enqueueResult.stateFile,
+      vpsLocalLogPath: enqueueResult.logPath
+    },
+    startedAt,
+    completedAt: now()
+  };
 }
 
 export function buildDeployBridgeSyncRestartIdempotencyKey(request = {}) {
@@ -2907,6 +2987,9 @@ export async function connectDashboardAppServerBridgeOnce({
     }
     if (payload?.type === "deploy_bridge_sync_restart_requested") {
       executeDeployBridgeSyncRestartRequest({ request: payload }).then((result) => safeSend(result));
+    }
+    if (payload?.type === "vps_local_helper_queue_enqueue_requested") {
+      executeVpsLocalHelperQueueEnqueueRequest({ request: payload }).then((result) => safeSend(result));
     }
   });
 

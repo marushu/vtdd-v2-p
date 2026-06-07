@@ -39,6 +39,7 @@ import {
   selectPendingVpsPrivilegedMaintenanceExecutions,
   selectPendingVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
+import { enqueueVpsLocalHelperExecution } from "../scripts/vps-local-helper-queue.mjs";
 
 function developmentStrategyFixture() {
   return {
@@ -152,6 +153,58 @@ test("VPS runner selects pending privileged maintenance queue only once", () => 
   assert.equal(selected.length, 1);
   assert.equal(selected[0].payload.executionId, "vps-maint-637-c");
   assert.equal(selected[0].actors.queueCommentAuthor, "owner");
+});
+
+test("VPS runner dry-run selects VPS local helper queue before GitHub Issue comments without claiming it", async () => {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-local-runner-"));
+  const queueRoot = path.join(tmpRoot, "queue");
+  await enqueueVpsLocalHelperExecution({
+    queueRoot,
+    payload: {
+      executionId: "vps-maint-local-dry-run",
+      transport: "vps_privileged_maintenance_helper",
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 637,
+      dashboardThreadId: "dashboard-main-sample-org-vtdd-v2",
+      approvalScopeMatched: true,
+      executionEnvelope: {
+        kind: "vps_privileged_maintenance_helper_execution_envelope",
+        status: "ready_for_vps_helper_execution",
+        repository: "sample-org/vtdd-v2",
+        requestId: "helper-request-local",
+        capabilityId: "dashboard.bridge.unresolved.deploy.sync.restart",
+        mode: "execute",
+        helperInvocation: {
+          executable: "sudo",
+          args: ["-n", "/usr/local/sbin/vtdd-vps-maintenance-helper", "--execute", "--input", "<helper-execution-input-json>"],
+          shell: false,
+          inputFile: "helperExecutionInput"
+        },
+        helperExecutionInput: { mode: "execute", helperRequest: { requestId: "helper-request-local" } },
+        rootExecutionStarted: false,
+        helperExecutionStarted: false
+      }
+    },
+    now: () => "2026-06-07T01:00:00.000Z"
+  });
+
+  const result = await runVpsRunnerOnce({
+    githubFetch: async () => [],
+    token: "ghs_test",
+    repositoryPolicies: normalizeRepositoryPolicies({ allowedRepositories: ["sample-org/vtdd-v2"] }),
+    workRoot: path.join(tmpRoot, "work"),
+    dryRun: true,
+    repoSyncPreflight: false,
+    env: {
+      VTDD_VPS_LOCAL_HELPER_QUEUE_DIR: queueRoot
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.message, /Dry run selected local privileged maintenance vps-maint-local-dry-run/);
+  const pending = await fs.readFile(path.join(queueRoot, "pending", "vps-maint-local-dry-run.json"), "utf8");
+  assert.equal(JSON.parse(pending).lifecycle.status, "pending");
+  await fs.rm(tmpRoot, { recursive: true, force: true });
 });
 
 test("VPS runner rejects queue comments without scoped approval", () => {
