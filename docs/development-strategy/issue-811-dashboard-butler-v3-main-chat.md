@@ -237,3 +237,24 @@ turn is running and follow-up input may be spoken.
 - `node --test test/worker.test.js`
 - `npx playwright test scripts/e2e-issue811-dashboard-butler-v3-main-chat.spec.mjs`
 - `npm run check:generated-worker`
+
+## 2026-06-07 owner correction: single composer action slot
+
+Owner corrected the composer control model after PR #821: the first design was
+better. The right-side composer action should be a single action slot rather
+than showing voice and stop/send side by side.
+
+修正方針:
+
+- Empty composer, not running: show only the voice mode button.
+- Text entered, not running: replace voice with the send button.
+- Active turn running: replace the right-side action with the stop button.
+- Do not keep voice visible beside stop during active turn.
+- This keeps the composer compact and avoids accidental voice starts while
+  preserving the ChatGPT-like input affordance.
+
+追加検証:
+
+- `node --test test/worker.test.js`
+- `npx playwright test scripts/e2e-issue811-dashboard-butler-v3-main-chat.spec.mjs`
+- `npm run check:generated-worker`

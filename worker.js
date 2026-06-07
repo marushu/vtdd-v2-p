@@ -72499,9 +72499,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .send-button[data-mode="stop"]::before { content: "\u25A0"; }
     .send-button[data-mode="stop"] { color: var(--page-bg); }
     .send-button[data-mode="stop"] span { display: none; }
-    .composer-actions { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+    .composer-actions { display: inline-flex; align-items: center; gap: 0; flex: 0 0 auto; }
     .composer-box[data-can-send="false"] .send-button[data-mode="send"] { display: none; }
-    .composer-box[data-can-send="true"]:not([data-running="true"]) .voice-button { display: none; }
+    .composer-box[data-running="true"] .voice-button, .composer-box[data-can-send="true"] .voice-button { display: none; }
     .followup-queue { display: grid; gap: 8px; padding: 0 10px; }
     .followup-queue[hidden], .followup-draft[hidden] { display: none; }
     .followup-chip, .followup-draft { width: fit-content; max-width: min(720px, 100%); justify-self: end; border: 1px solid var(--border); border-radius: 18px; background: var(--floating-bg); box-shadow: 0 10px 34px var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text); }
@@ -72741,13 +72741,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <span class="progress-title">\u9032\u884C\u4E2D</span>
           <p class="progress-text"></p>
         </div>
-        <div class="composer-box">
+        <div class="composer-box" data-can-send="false" data-running="false">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <div class="composer-actions" aria-label="\u5165\u529B\u64CD\u4F5C">
             <button class="voice-button" id="butler-voice-button" type="button" aria-label="\u97F3\u58F0\u5165\u529B" title="\u97F3\u58F0\u5165\u529B"><span class="voice-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span></button>
-            <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1"><span>\u2191</span></button>
+            <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1" data-mode="send"><span>\u2191</span></button>
           </div>
         </div>
         <div class="followup-draft" id="butler-followup-draft" hidden>
