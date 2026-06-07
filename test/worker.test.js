@@ -3445,6 +3445,257 @@ test("worker allows VPS passkey operator continuation without Cloudflare Access 
   assert.equal(queueCommentBody.includes("dashboard_bridge_unresolved_deploy_sync_restart"), true);
 });
 
+test("worker treats approvalGrantId and vpsProposalId as VPS continuation intent", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const proposalResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 741,
+        operation: "enable",
+        id: "dashboard.bridge.unresolved.deploy.sync.restart",
+        title: "Deploy後 repo-less Dashboard bridge sync/restart",
+        commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+        riskLevel: "medium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: [
+          "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main"
+        ],
+        affectedPaths: [
+          "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+          "vtdd-dashboard-app-server-bridge-unresolved.service"
+        ],
+        redactionRules: ["no secrets"],
+        rollbackPlan: "stop auto follow-up proposal",
+        expectedRuntimeTruth: ["before git HEAD", "after git HEAD", "after service active state"],
+        reason: "Issue #741 deploy follow-up",
+        impactScope: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p, vtdd-dashboard-app-server-bridge-unresolved.service",
+        dashboardThreadId: "dashboard-main-unresolved",
+        executionId: "issue741-approval-continuation-weak-text"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+  assert.equal(proposalResponse.status, 200);
+  const proposalBody = await proposalResponse.json();
+  await provider.store({
+    id: "approval:vps-operator-weak-text",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:vps-operator-weak-text",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-06-07T10:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: proposalBody.approvalScope
+    },
+    metadata: { source: "vps-operator-weak-text-test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-06-07T10:00:00.000Z"
+  });
+
+  const githubCalls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 741,
+        text: "承認済みです。",
+        vpsProposalId: proposalBody.vpsProposalId,
+        approvalGrantId: "approval:vps-operator-weak-text",
+        executionId: "issue741-approval-continuation-weak-text"
+      })
+    }),
+    {
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 74103,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/741#issuecomment-74103"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.status, "queued_for_vps_helper_execution");
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages[1].status, "sent");
+  assert.equal(githubCalls.length, 1);
+});
+
+test("worker returns blocked VPS continuation execution instead of dropping it", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const proposalResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 741,
+        operation: "enable",
+        id: "dashboard.bridge.unresolved.deploy.sync.restart",
+        title: "Deploy後 repo-less Dashboard bridge sync/restart",
+        commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+        riskLevel: "medium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: [
+          "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main"
+        ],
+        rollbackPlan: "stop auto follow-up proposal",
+        reason: "Issue #741 deploy follow-up",
+        impactScope: "vtdd-dashboard-app-server-bridge-unresolved.service",
+        dashboardThreadId: "dashboard-main-unresolved",
+        executionId: "issue741-approval-continuation-blocked"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+  assert.equal(proposalResponse.status, 200);
+  const proposalBody = await proposalResponse.json();
+  await provider.store({
+    id: "approval:vps-operator-queue-blocked",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:vps-operator-queue-blocked",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-06-07T10:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: proposalBody.approvalScope
+    },
+    metadata: { source: "vps-operator-queue-blocked-test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-06-07T10:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 741,
+        text: "承認済みです。",
+        vpsProposalId: proposalBody.vpsProposalId,
+        approvalGrantId: "approval:vps-operator-queue-blocked",
+        executionId: "issue741-approval-continuation-blocked"
+      })
+    }),
+    {
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore(),
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.status, "blocked");
+  assert.equal(body.execution.vpsProposalId, proposalBody.vpsProposalId);
+  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages[1].status, "blocked");
+  assert.match(body.messages[1].text, /github_write_unavailable/);
+  assert.match(body.messages[1].text, /GitHub App installation token is unavailable/);
+});
+
+test("worker rejects VPS continuation context that does not match the stored proposal", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const proposalResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 741,
+        operation: "enable",
+        id: "dashboard.bridge.unresolved.deploy.sync.restart",
+        title: "Deploy後 repo-less Dashboard bridge sync/restart",
+        commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+        riskLevel: "medium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: [
+          "node scripts/sync-dashboard-app-server-bridge-after-deploy.mjs --service vtdd-dashboard-app-server-bridge-unresolved.service --ref origin/main"
+        ],
+        rollbackPlan: "stop auto follow-up proposal",
+        reason: "Issue #741 deploy follow-up",
+        impactScope: "vtdd-dashboard-app-server-bridge-unresolved.service",
+        dashboardThreadId: "dashboard-main-unresolved",
+        executionId: "issue741-approval-continuation-context"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+  assert.equal(proposalResponse.status, 200);
+  const proposalBody = await proposalResponse.json();
+  await provider.store({
+    id: "approval:vps-operator-context",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:vps-operator-context",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-06-07T10:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: proposalBody.approvalScope
+    },
+    metadata: { source: "vps-operator-context-test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-06-07T10:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/helper-requests", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        vpsProposalId: proposalBody.vpsProposalId,
+        approvalGrantId: "approval:vps-operator-context",
+        repository: "marushu/other",
+        relatedIssue: 742,
+        threadId: "dashboard-main-other"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(body.error, "vps_privileged_maintenance_context_mismatch");
+  assert.equal(body.issues.includes("repository does not match the VPS maintenance approval proposal"), true);
+  assert.equal(body.issues.includes("relatedIssue does not match the VPS maintenance approval proposal"), true);
+  assert.equal(body.issues.includes("dashboardThreadId does not match the VPS maintenance approval proposal"), true);
+});
+
 test("worker keeps ordinary Dashboard Butler planning chat out of VPS helper queue", async () => {
   const store = createInMemoryDashboardChatStore();
   const response = await worker.fetch(
