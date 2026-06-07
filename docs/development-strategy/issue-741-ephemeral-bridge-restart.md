@@ -84,6 +84,19 @@ codex fallback reviewer は `/app-server-control` が汎用制御面になって
 
 DO 側の idempotency marker は queue ではなく replay guard として TTL 付き最小 metadata に限定する。保存するのは request body ではなく request/deployRun の key、status、timestamp 程度で、stale execution を後で実行する材料にはしない。
 
+## PR #823 reviewer blocker 第2ラウンド対応
+
+fallback reviewer は、Worker が WebSocket 送信成功を `sent` と報告するだけで、bridge 側の `started` / `blocked` / `duplicate` / `failed` result を Dashboard/Worker に戻していない点を merge blocker とした。また、DO claim を送信時に確定すると、bridge spawn failure でも同じ deployRunId が 24h retry 不能になる点も blocker とした。これも妥当。
+
+追加 bounded change contract:
+
+- target Issue: Issue #741 / Issue #637。
+- exact Success Criteria: bridge の `deploy_bridge_sync_restart_result` を Worker/DO が受け取り、Dashboard thread に runtime truth として append する。`failed` result では DO claim を release し、同じ deployRunId の retry を可能にする。`started` と `duplicate` は replay guard として claim を維持する。
+- Non-goals: detached child が systemd restart 完了後に同じ WebSocket へ before/after state を返すこと、live E2E、logrotate/tmpfiles、Action Schema 追加。
+- files expected to change: `src/worker/runtime.js`, `test/worker.test.js`, `worker.js`, this strategy file。
+- validation: focused DO app-server control/result tests、bridge restart control tests、`npm run build:worker`、`npm run verify:worker`。
+- stop condition: restart 完了後の before/after state を同じ PR で保証するには bridge self-restart script の protocol 変更が必要になる場合。この PR では local log/systemd journal evidence と Dashboard result message までに限定し、live before/after は merge 後 E2E として残す。
+
 ## 実装候補と捨てた案
 
 採用: deploy success event から接続中 bridge へ one-shot WebSocket control request を送る。

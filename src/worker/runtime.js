@@ -617,6 +617,10 @@ export class DashboardChatRoom {
   }
 
   async acceptAppServerBridgeMessage({ socket, attachment, payload }) {
+    if (normalizeDashboardEventText(payload?.type).toLowerCase() === "deploy_bridge_sync_restart_result") {
+      await this.acceptDeployBridgeSyncRestartResult({ socket, attachment, payload });
+      return;
+    }
     const normalized = normalizeDashboardAppServerBridgeEvent(payload, {
       fallbackThreadId: attachment?.threadId
     });
@@ -697,6 +701,44 @@ export class DashboardChatRoom {
     if (messagesToAppend.some((message) => shouldClearDashboardTransientProgressSnapshot(message))) {
       await this.clearTransientProgressSnapshot(normalized.threadId);
     }
+    await this.broadcastThread({ threadId: normalized.threadId, messages });
+  }
+
+  async acceptDeployBridgeSyncRestartResult({ socket, attachment, payload }) {
+    const normalized = normalizeDeployBridgeSyncRestartResult(payload, {
+      fallbackThreadId: attachment?.threadId
+    });
+    if (!normalized.ok) {
+      this.sendSocket(socket, {
+        type: "error",
+        ok: false,
+        reason: normalized.reason
+      });
+      return;
+    }
+    const attachmentThreadId = normalizeDashboardThreadId(attachment?.threadId);
+    if (attachmentThreadId && normalized.threadId !== attachmentThreadId) {
+      this.sendSocket(socket, {
+        type: "error",
+        ok: false,
+        reason: "deploy bridge result threadId does not match the connected dashboard thread"
+      });
+      return;
+    }
+    if (normalized.status === "failed") {
+      await this.releaseDeployBridgeControlClaim(this.deployBridgeControlIdempotencyKey(normalized));
+    }
+    await this.broadcastTransientStatus({
+      threadId: normalized.threadId,
+      status: normalized.transientStatus,
+      text: normalized.transientText,
+      snapshot: normalized.status === "started",
+      snapshotSource: "deploy_bridge_sync_restart_result"
+    });
+    const store = resolveDashboardChatStore(this.env);
+    const messages = store
+      ? await store.appendMany(normalized.threadId, [normalized.message])
+      : [normalized.message].filter(Boolean);
     await this.broadcastThread({ threadId: normalized.threadId, messages });
   }
 
@@ -5503,6 +5545,145 @@ function normalizeDeployBridgeControlMessage({ threadId, message } = {}) {
     issues,
     message: normalized
   };
+}
+
+function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = "" } = {}) {
+  const input = normalizeObject(payload);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || fallbackThreadId);
+  if (!threadId) {
+    return {
+      ok: false,
+      reason: "threadId is required for deploy bridge restart result"
+    };
+  }
+  const status = normalizeDashboardEventText(input.status).toLowerCase();
+  const allowedStatuses = new Set(["started", "blocked", "duplicate", "failed"]);
+  if (!allowedStatuses.has(status)) {
+    return {
+      ok: false,
+      reason: "deploy bridge restart result status is invalid"
+    };
+  }
+  const repository = normalizeCanonicalRepositoryInput(input.repository);
+  const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.related_issue || input.issueNumber);
+  const deployRunId = normalizeDashboardEventText(input.deployRunId || input.deploy_run_id);
+  const requestId = normalizeDashboardEventText(input.requestId || input.request_id);
+  const executionId = normalizeDashboardEventText(input.executionId || input.execution_id);
+  const createdAt = normalizeIsoTimestamp(input.completedAt || input.completed_at || input.createdAt || input.created_at) || new Date().toISOString();
+  const transientStatus = status === "failed" || status === "blocked" ? "failed" : "thinking";
+  const transientText = buildDeployBridgeSyncRestartResultTransientText({ status });
+  const text = buildDeployBridgeSyncRestartResultMessageText({
+    status,
+    repository,
+    relatedIssue,
+    deployRunId,
+    requestId,
+    executionId,
+    reason: input.reason,
+    issues: input.issues,
+    persistence: input.persistence,
+    command: input.command
+  });
+  return {
+    ok: true,
+    threadId,
+    status,
+    repository,
+    relatedIssue,
+    deployRunId,
+    requestId,
+    executionId,
+    transientStatus,
+    transientText,
+    message: normalizeDashboardChatMessage(
+      {
+        threadId,
+        role: "system",
+        repository,
+        relatedIssue,
+        status: status === "failed" || status === "blocked" ? "failed" : "sent",
+        text,
+        messageId: `deploy-bridge-sync-restart-result:${deployRunId || requestId || createDashboardRequestId("result")}:${status}`,
+        createdAt
+      },
+      { threadId }
+    )
+  };
+}
+
+function buildDeployBridgeSyncRestartResultTransientText({ status = "" } = {}) {
+  if (status === "started") {
+    return "app-server bridge restart script を VPS local で起動しました。before/after は VPS log / systemd journal で確認します。";
+  }
+  if (status === "duplicate") {
+    return "同じ deploy bridge restart request は既に処理済みのため、重複起動しません。";
+  }
+  if (status === "blocked") {
+    return "app-server bridge restart request は bridge 側で blocked になりました。";
+  }
+  return "app-server bridge restart script の起動に失敗しました。同じ deployRunId は retry 可能です。";
+}
+
+function buildDeployBridgeSyncRestartResultMessageText({
+  status = "",
+  repository = "",
+  relatedIssue = null,
+  deployRunId = "",
+  requestId = "",
+  executionId = "",
+  reason = "",
+  issues = [],
+  persistence = null,
+  command = null
+} = {}) {
+  const lines = [
+    "deploy 後 app-server bridge sync/restart の bridge 実行結果を受信しました。",
+    "",
+    "状態:",
+    `- status: ${status || "unknown"}`,
+    `- repository: ${repository || "未指定"}`,
+    `- relatedIssue: ${relatedIssue || "未指定"}`,
+    `- deployRunId: ${deployRunId || "未指定"}`,
+    `- requestId: ${requestId || "未指定"}`,
+    `- executionId: ${executionId || "未指定"}`
+  ];
+  const issueLines = Array.isArray(issues)
+    ? issues.map((issue) => sanitizeDashboardChatText(issue)).filter(Boolean)
+    : [];
+  if (reason || issueLines.length > 0) {
+    lines.push("", "診断:");
+    if (reason) {
+      lines.push(`- reason: ${sanitizeDashboardChatText(reason)}`);
+    }
+    for (const issue of issueLines.slice(0, 8)) {
+      lines.push(`- ${issue}`);
+    }
+  }
+  const normalizedPersistence = normalizeObject(persistence);
+  const logPath = sanitizeDashboardChatText(normalizedPersistence.vpsLocalLogPath || normalizedPersistence.vps_local_log_path || "");
+  const journal = sanitizeDashboardChatText(normalizedPersistence.systemdJournal || normalizedPersistence.systemd_journal || "");
+  if (logPath || journal) {
+    lines.push("", "証跡:");
+    if (logPath) {
+      lines.push(`- VPS local log: ${logPath}`);
+    }
+    if (journal) {
+      lines.push(`- systemd journal: ${journal}`);
+    }
+  }
+  const normalizedCommand = normalizeObject(command);
+  const fixedCommand = sanitizeDashboardChatText(normalizedCommand.fixedCommand || normalizedCommand.fixed_command || "");
+  if (fixedCommand) {
+    lines.push("", "固定 command:");
+    lines.push(`- ${fixedCommand}`);
+  }
+  if (status === "started") {
+    lines.push("", "注記: これは restart script の起動結果です。service restart 後の before/after state は VPS local log / systemd journal / 再接続 event で確認します。");
+  }
+  if (status === "failed") {
+    lines.push("", "注記: bridge 側で起動失敗したため、この deployRunId の retry guard は解放します。");
+  }
+  return lines.join("\n");
 }
 
 function buildDeployBridgeFollowupHelperRequest({ record, repository, relatedIssue, host, workingDirectory, threadId, deployApproval } = {}) {

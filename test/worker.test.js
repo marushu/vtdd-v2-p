@@ -4859,6 +4859,78 @@ test("DashboardChatRoom app-server control rejects generic bridge messages", asy
   assert.equal(bridgeSocket.sent.length, 0);
 });
 
+test("DashboardChatRoom records deploy bridge restart result and releases failed claim", async () => {
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const storage = createMockDurableObjectStorage();
+  const store = createInMemoryDashboardChatStore();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const payload = {
+    threadId: "dashboard-main-marushu-vtdd-v2-p",
+    message: {
+      type: "deploy_bridge_sync_restart_requested",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-123",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 741,
+      deployRunId: "123",
+      commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+      service: "vtdd-dashboard-app-server-bridge-unresolved.service",
+      ref: "origin/main"
+    }
+  };
+
+  const first = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+  );
+  assert.equal((await first.json()).control.status, "sent");
+  assert.equal(bridgeSocket.sent.length, 1);
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "deploy_bridge_sync_restart_result",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-123",
+      deployRunId: "123",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 741,
+      status: "failed",
+      reason: "spawn failed",
+      completedAt: "2026-06-07T00:00:01.000Z"
+    })
+  );
+  const messages = await store.listThread("dashboard-main-marushu-vtdd-v2-p", { limit: 10 });
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].status, "failed");
+  assert.equal(messages[0].text.includes("bridge 実行結果を受信しました"), true);
+  assert.equal(messages[0].text.includes("retry guard は解放します"), true);
+  assert.equal(storage.deleteCalls.length, 1);
+
+  const retry = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+  );
+  assert.equal((await retry.json()).control.status, "sent");
+  assert.equal(bridgeSocket.sent.length, 2);
+});
+
 test("DashboardChatRoom attaches execution queue preflight to repository app-server turns", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
