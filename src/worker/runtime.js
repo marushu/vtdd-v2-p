@@ -17972,14 +17972,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function renderFollowupQueue() {
         if (!followupQueueList) return;
+        const queuedItems = followupQueue.filter((item) => item && item.status === "queued");
         followupQueueList.replaceChildren();
-        followupQueueList.hidden = followupQueue.length === 0;
-        for (const item of followupQueue) {
+        followupQueueList.hidden = queuedItems.length === 0;
+        for (const item of queuedItems) {
           const mediaReferences = Array.isArray(item.mediaReferences) ? item.mediaReferences : [];
           const chip = document.createElement("div");
           chip.className = "followup-chip";
           const label = document.createElement("small");
-          label.textContent = item.status === "sent" ? "差し込み済み" : "キュー待ち";
+          label.textContent = "キュー待ち";
           const text = document.createElement("span");
           text.textContent = item.text;
           chip.appendChild(label);
@@ -17989,29 +17990,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             media.textContent = "添付 " + mediaReferences.length + "件";
             chip.appendChild(media);
           }
-          if (item.status === "queued") {
-            const actions = document.createElement("div");
-            actions.className = "followup-actions";
-            const guideButton = document.createElement("button");
-            guideButton.type = "button";
-            guideButton.dataset.followupAction = "guide";
-            guideButton.dataset.followupId = item.id;
-            guideButton.textContent = "誘導する";
-            const editButton = document.createElement("button");
-            editButton.type = "button";
-            editButton.dataset.followupAction = "edit";
-            editButton.dataset.followupId = item.id;
-            editButton.textContent = "編集する";
-            const cancelButton = document.createElement("button");
-            cancelButton.type = "button";
-            cancelButton.dataset.followupAction = "cancel";
-            cancelButton.dataset.followupId = item.id;
-            cancelButton.textContent = "キャンセル";
-            actions.appendChild(guideButton);
-            actions.appendChild(editButton);
-            actions.appendChild(cancelButton);
-            chip.appendChild(actions);
-          }
+          const actions = document.createElement("div");
+          actions.className = "followup-actions";
+          const guideButton = document.createElement("button");
+          guideButton.type = "button";
+          guideButton.dataset.followupAction = "guide";
+          guideButton.dataset.followupId = item.id;
+          guideButton.textContent = "誘導する";
+          const editButton = document.createElement("button");
+          editButton.type = "button";
+          editButton.dataset.followupAction = "edit";
+          editButton.dataset.followupId = item.id;
+          editButton.textContent = "編集する";
+          const cancelButton = document.createElement("button");
+          cancelButton.type = "button";
+          cancelButton.dataset.followupAction = "cancel";
+          cancelButton.dataset.followupId = item.id;
+          cancelButton.textContent = "キャンセル";
+          actions.appendChild(guideButton);
+          actions.appendChild(editButton);
+          actions.appendChild(cancelButton);
+          chip.appendChild(actions);
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
@@ -18039,7 +18038,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
             interruption: true
           }));
-          item.status = "sent";
+          followupQueue = followupQueue.filter((queuedItem) => queuedItem.id !== item.id);
+          restoredFollowupQueueNeedsOwnerAction = false;
           persistFollowupQueue();
           renderFollowupQueue();
           return true;
@@ -18058,7 +18058,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function cancelFollowupQueueItem(itemId) {
         const before = followupQueue.length;
         restoredFollowupQueueNeedsOwnerAction = false;
-        followupQueue = followupQueue.filter((item) => item.id !== itemId || item.status === "sent");
+        followupQueue = followupQueue.filter((item) => item.id !== itemId);
         if (followupQueue.length !== before) {
           persistFollowupQueue();
           renderFollowupQueue();

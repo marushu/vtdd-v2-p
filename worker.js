@@ -73887,14 +73887,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function renderFollowupQueue() {
         if (!followupQueueList) return;
+        const queuedItems = followupQueue.filter((item) => item && item.status === "queued");
         followupQueueList.replaceChildren();
-        followupQueueList.hidden = followupQueue.length === 0;
-        for (const item of followupQueue) {
+        followupQueueList.hidden = queuedItems.length === 0;
+        for (const item of queuedItems) {
           const mediaReferences = Array.isArray(item.mediaReferences) ? item.mediaReferences : [];
           const chip = document.createElement("div");
           chip.className = "followup-chip";
           const label = document.createElement("small");
-          label.textContent = item.status === "sent" ? "\u5DEE\u3057\u8FBC\u307F\u6E08\u307F" : "\u30AD\u30E5\u30FC\u5F85\u3061";
+          label.textContent = "\u30AD\u30E5\u30FC\u5F85\u3061";
           const text = document.createElement("span");
           text.textContent = item.text;
           chip.appendChild(label);
@@ -73904,29 +73905,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             media.textContent = "\u6DFB\u4ED8 " + mediaReferences.length + "\u4EF6";
             chip.appendChild(media);
           }
-          if (item.status === "queued") {
-            const actions = document.createElement("div");
-            actions.className = "followup-actions";
-            const guideButton = document.createElement("button");
-            guideButton.type = "button";
-            guideButton.dataset.followupAction = "guide";
-            guideButton.dataset.followupId = item.id;
-            guideButton.textContent = "\u8A98\u5C0E\u3059\u308B";
-            const editButton = document.createElement("button");
-            editButton.type = "button";
-            editButton.dataset.followupAction = "edit";
-            editButton.dataset.followupId = item.id;
-            editButton.textContent = "\u7DE8\u96C6\u3059\u308B";
-            const cancelButton = document.createElement("button");
-            cancelButton.type = "button";
-            cancelButton.dataset.followupAction = "cancel";
-            cancelButton.dataset.followupId = item.id;
-            cancelButton.textContent = "\u30AD\u30E3\u30F3\u30BB\u30EB";
-            actions.appendChild(guideButton);
-            actions.appendChild(editButton);
-            actions.appendChild(cancelButton);
-            chip.appendChild(actions);
-          }
+          const actions = document.createElement("div");
+          actions.className = "followup-actions";
+          const guideButton = document.createElement("button");
+          guideButton.type = "button";
+          guideButton.dataset.followupAction = "guide";
+          guideButton.dataset.followupId = item.id;
+          guideButton.textContent = "\u8A98\u5C0E\u3059\u308B";
+          const editButton = document.createElement("button");
+          editButton.type = "button";
+          editButton.dataset.followupAction = "edit";
+          editButton.dataset.followupId = item.id;
+          editButton.textContent = "\u7DE8\u96C6\u3059\u308B";
+          const cancelButton = document.createElement("button");
+          cancelButton.type = "button";
+          cancelButton.dataset.followupAction = "cancel";
+          cancelButton.dataset.followupId = item.id;
+          cancelButton.textContent = "\u30AD\u30E3\u30F3\u30BB\u30EB";
+          actions.appendChild(guideButton);
+          actions.appendChild(editButton);
+          actions.appendChild(cancelButton);
+          chip.appendChild(actions);
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
@@ -73954,7 +73953,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
             interruption: true
           }));
-          item.status = "sent";
+          followupQueue = followupQueue.filter((queuedItem) => queuedItem.id !== item.id);
+          restoredFollowupQueueNeedsOwnerAction = false;
           persistFollowupQueue();
           renderFollowupQueue();
           return true;
@@ -73973,7 +73973,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function cancelFollowupQueueItem(itemId) {
         const before = followupQueue.length;
         restoredFollowupQueueNeedsOwnerAction = false;
-        followupQueue = followupQueue.filter((item) => item.id !== itemId || item.status === "sent");
+        followupQueue = followupQueue.filter((item) => item.id !== itemId);
         if (followupQueue.length !== before) {
           persistFollowupQueue();
           renderFollowupQueue();

@@ -1385,6 +1385,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('guideButton.textContent = "誘導する"'), true);
   assert.equal(body.includes('editButton.textContent = "編集する"'), true);
   assert.equal(body.includes('cancelButton.textContent = "キャンセル"'), true);
+  assert.equal(body.includes("差し込み済み"), false);
+  assert.equal(body.includes('label.textContent = "キュー待ち"'), true);
+  assert.equal(body.includes("followupQueue = followupQueue.filter((queuedItem) => queuedItem.id !== item.id)"), true);
   assert.equal(body.includes('function flushFollowupQueueItem(itemId)'), true);
   assert.equal(body.includes('function editFollowupQueueItem(itemId)'), true);
   assert.equal(body.includes('現在の実行が終わるか、キューの誘導するを押した時に送ります'), true);
