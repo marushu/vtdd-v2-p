@@ -82,3 +82,10 @@ Worker media validation が差し込み payload を拒否する、upload 済み 
 - 判断: production E2E 以前の UX/state blocker。#817 の範囲内で、draft panel に `差し込む` / `キューに追加` / `キャンセル` を出し、`差し込む` は即 `interruption: true` で送る。
 - reload recovery: queued follow-up は `sessionStorage` に thread 単位で保存し、reload/reconnect 後も queue chip を復元する。未 upload の local file はブラウザ仕様上復元できないため、既存 draft text 復元と「添付は再選択」表示に留める。
 - validation: source guard と local Playwright E2E に、初期 draft panel の `差し込む` button、直接差し込み payload、queued follow-up reload persistence を追加する。
+
+## 2026-06-08 owner blocker: 投入済みカードを composer に残さない
+
+- 観測: production PWA で投入済み follow-up が `差し込み済み` chip として composer 上に残り、bridge restart launch truth のような内部運用文言まで入力欄付近に居座っている。owner は「投入しているのだから消せ」と判断した。
+- 判断: #816 の queue UX 欠陥。composer 上に残すべきものは owner が次に操作できる未送信 queue だけであり、送信済み follow-up は thread message / bridge input の truth に移った時点で composer queue から消す。
+- 設計: `followupQueue` の保存・描画対象を `status === "queued"` に限定する。送信成功した item は `sent` 表示へ遷移させず queue から削除する。cancel も sent item を温存しない。
+- 検証計画: source guard で `差し込み済み` label が runtime HTML に残らないこと、`sendFollowupQueueItem()` が送信成功後に queue から remove すること、persist 対象が queued のみであることを確認する。既存の添付保持と deploy/restart launch 静音化 test も再実行する。

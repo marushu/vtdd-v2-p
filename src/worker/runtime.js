@@ -788,17 +788,21 @@ export class DashboardChatRoom {
     if (normalized.status === "launch_failed") {
       await this.releaseDeployBridgeControlClaim(this.deployBridgeControlIdempotencyKey(normalized));
     }
-    await this.broadcastTransientStatus({
-      threadId: normalized.threadId,
-      status: normalized.transientStatus,
-      text: normalized.transientText,
-      snapshot: normalized.status === "launch_started",
-      snapshotSource: "deploy_bridge_sync_restart_result"
-    });
+    if (normalized.transientStatus) {
+      await this.broadcastTransientStatus({
+        threadId: normalized.threadId,
+        status: normalized.transientStatus,
+        text: normalized.transientText,
+        snapshot: normalized.status === "launch_started",
+        snapshotSource: "deploy_bridge_sync_restart_result"
+      });
+    }
     const store = resolveDashboardChatStore(this.env);
-    const messages = store
-      ? await store.appendMany(normalized.threadId, [normalized.message])
-      : [normalized.message].filter(Boolean);
+    const messages = normalized.message
+      ? store
+        ? await store.appendMany(normalized.threadId, [normalized.message])
+        : [normalized.message]
+      : [];
     await this.broadcastThread({ threadId: normalized.threadId, messages });
   }
 
@@ -5592,25 +5596,7 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
       rootExecutionStarted: false,
       helperExecutionStarted: true
     },
-    message: normalizeDashboardChatMessage(
-      {
-        threadId,
-        messageId,
-        role: "system",
-        repository,
-        relatedIssue,
-        status: "sent",
-        text: buildDeployBridgeFollowupControlMessageText({
-          record,
-          repository,
-          relatedIssue,
-          executionId,
-          control
-        }),
-        createdAt: record.updatedAt || record.createdAt
-      },
-      { threadId }
-    )
+    message: null
   };
 }
 
@@ -5759,7 +5745,8 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
   const requestId = normalizeDashboardEventText(input.requestId || input.request_id);
   const executionId = normalizeDashboardEventText(input.executionId || input.execution_id);
   const createdAt = normalizeIsoTimestamp(input.completedAt || input.completed_at || input.createdAt || input.created_at) || new Date().toISOString();
-  const transientStatus = status === "launch_failed" || status === "blocked" ? "failed" : "thinking";
+  const quietLaunch = status === "launch_started";
+  const transientStatus = quietLaunch ? "" : status === "launch_failed" || status === "blocked" ? "failed" : "thinking";
   const transientText = buildDeployBridgeSyncRestartResultTransientText({ status });
   const text = buildDeployBridgeSyncRestartResultMessageText({
     status,
@@ -5784,19 +5771,21 @@ function normalizeDeployBridgeSyncRestartResult(payload, { fallbackThreadId = ""
     executionId,
     transientStatus,
     transientText,
-    message: normalizeDashboardChatMessage(
-      {
-        threadId,
-        role: "system",
-        repository,
-        relatedIssue,
-        status: status === "launch_failed" || status === "blocked" ? "failed" : "sent",
-        text,
-        messageId: `deploy-bridge-sync-restart-result:${deployRunId || requestId || createDashboardRequestId("result")}:${status}`,
-        createdAt
-      },
-      { threadId }
-    )
+    message: quietLaunch
+      ? null
+      : normalizeDashboardChatMessage(
+          {
+            threadId,
+            role: "system",
+            repository,
+            relatedIssue,
+            status: status === "launch_failed" || status === "blocked" ? "failed" : "sent",
+            text,
+            messageId: `deploy-bridge-sync-restart-result:${deployRunId || requestId || createDashboardRequestId("result")}:${status}`,
+            createdAt
+          },
+          { threadId }
+        )
   };
 }
 
@@ -15311,7 +15300,6 @@ function buildGitHubActionsDashboardChatMessageText(event) {
   }
   lines.push("", "次:");
   if (isDeploy && conclusion === "success") {
-    lines.push("- deploy 後 bridge sync/restart を接続中 app-server bridge へ一回限りで送ります。");
     lines.push("- production E2E / runtime truth を確認します。");
   } else if (conclusion === "failure" || conclusion === "cancelled" || conclusion === "timed_out") {
     lines.push("- deploy / Actions の失敗原因を確認し、blocker と次 action を出します。");
@@ -17984,14 +17972,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function renderFollowupQueue() {
         if (!followupQueueList) return;
+        const queuedItems = followupQueue.filter((item) => item && item.status === "queued");
         followupQueueList.replaceChildren();
-        followupQueueList.hidden = followupQueue.length === 0;
-        for (const item of followupQueue) {
+        followupQueueList.hidden = queuedItems.length === 0;
+        for (const item of queuedItems) {
           const mediaReferences = Array.isArray(item.mediaReferences) ? item.mediaReferences : [];
           const chip = document.createElement("div");
           chip.className = "followup-chip";
           const label = document.createElement("small");
-          label.textContent = item.status === "sent" ? "差し込み済み" : "キュー待ち";
+          label.textContent = "キュー待ち";
           const text = document.createElement("span");
           text.textContent = item.text;
           chip.appendChild(label);
@@ -18001,29 +17990,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             media.textContent = "添付 " + mediaReferences.length + "件";
             chip.appendChild(media);
           }
-          if (item.status === "queued") {
-            const actions = document.createElement("div");
-            actions.className = "followup-actions";
-            const guideButton = document.createElement("button");
-            guideButton.type = "button";
-            guideButton.dataset.followupAction = "guide";
-            guideButton.dataset.followupId = item.id;
-            guideButton.textContent = "誘導する";
-            const editButton = document.createElement("button");
-            editButton.type = "button";
-            editButton.dataset.followupAction = "edit";
-            editButton.dataset.followupId = item.id;
-            editButton.textContent = "編集する";
-            const cancelButton = document.createElement("button");
-            cancelButton.type = "button";
-            cancelButton.dataset.followupAction = "cancel";
-            cancelButton.dataset.followupId = item.id;
-            cancelButton.textContent = "キャンセル";
-            actions.appendChild(guideButton);
-            actions.appendChild(editButton);
-            actions.appendChild(cancelButton);
-            chip.appendChild(actions);
-          }
+          const actions = document.createElement("div");
+          actions.className = "followup-actions";
+          const guideButton = document.createElement("button");
+          guideButton.type = "button";
+          guideButton.dataset.followupAction = "guide";
+          guideButton.dataset.followupId = item.id;
+          guideButton.textContent = "誘導する";
+          const editButton = document.createElement("button");
+          editButton.type = "button";
+          editButton.dataset.followupAction = "edit";
+          editButton.dataset.followupId = item.id;
+          editButton.textContent = "編集する";
+          const cancelButton = document.createElement("button");
+          cancelButton.type = "button";
+          cancelButton.dataset.followupAction = "cancel";
+          cancelButton.dataset.followupId = item.id;
+          cancelButton.textContent = "キャンセル";
+          actions.appendChild(guideButton);
+          actions.appendChild(editButton);
+          actions.appendChild(cancelButton);
+          chip.appendChild(actions);
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
@@ -18051,7 +18038,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
             interruption: true
           }));
-          item.status = "sent";
+          followupQueue = followupQueue.filter((queuedItem) => queuedItem.id !== item.id);
+          restoredFollowupQueueNeedsOwnerAction = false;
           persistFollowupQueue();
           renderFollowupQueue();
           return true;
@@ -18070,7 +18058,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function cancelFollowupQueueItem(itemId) {
         const before = followupQueue.length;
         restoredFollowupQueueNeedsOwnerAction = false;
-        followupQueue = followupQueue.filter((item) => item.id !== itemId || item.status === "sent");
+        followupQueue = followupQueue.filter((item) => item.id !== itemId);
         if (followupQueue.length !== before) {
           persistFollowupQueue();
           renderFollowupQueue();
