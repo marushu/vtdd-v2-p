@@ -191,16 +191,24 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   延命せず、Issue comment helper queue を止める safety slice が `Now` に
   preempt する。Issue #816 / #814 / #811 は active のまま、#741 safety slice
   の後に再開する。
+- 2026-06-07 PR #826 merged and deployed the safety slice: Worker no longer
+  creates GitHub Issue comment helper queue entries. Owner then requested the
+  next required repair, classified as the same Issue #741 `ROOT` continuation:
+  connect VPS local queue/state/log and runner pickup so Butler can hand off
+  bridge restart / privileged maintenance without storing helper envelopes in
+  GitHub comments or Worker persistence.
 
 ## Now
 
 - Issue #741: GitHub Issue comment を VPS privileged maintenance helper
-  execution queue として使う旧経路を止める。pagination 修正ではなく、
-  Dashboard Butler / passkey operator continuation は Issue comment を作らず
-  `vps_local_helper_queue_unavailable` blocked を返し、root/helper execution
-  を開始しない。これは safety slice であり、VPS local queue/state/log consumer
-  の接続、bridge restart 完了、watchdog live install/enable、Issue #741 close は
-  次 slice に残る。
+  execution queue として使う旧経路を止めた後の継続 slice。Dashboard Butler /
+  passkey operator continuation は Issue comment を作らず、接続中
+  app-server bridge へ VPS local helper queue enqueue control を送り、bridge が
+  VPS local queue/state/log に一回保存し、VPS runner が local pending を GitHub
+  Issue comments より先に pickup する。bridge 未接続時は store-and-forward せず
+  `vps_local_helper_queue_unavailable` blocked として扱い、Worker では
+  root/helper execution を開始しない。watchdog live install/enable、production
+  deploy、Issue #741 close はこの PR では行わない。
 
 ## Next
 

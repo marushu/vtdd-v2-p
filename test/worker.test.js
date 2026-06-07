@@ -3337,7 +3337,7 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.equal(approvedBody.messages[1].role, "butler");
   assert.equal(approvedBody.messages[1].status, "blocked");
   assert.match(approvedBody.messages[1].text, /vps_local_helper_queue_unavailable/);
-  assert.match(approvedBody.messages[1].text, /Issue comment queue transport is disabled/);
+  assert.match(approvedBody.messages[1].text, /Worker does not persist helper envelopes/);
   assert.match(approvedBody.messages[1].text, /rootExecutionStarted=false/);
   assert.equal(githubCalls.length, 0);
 });
@@ -3621,7 +3621,7 @@ test("worker returns blocked VPS continuation execution instead of dropping it",
   assert.equal(body.messages.length, 2);
   assert.equal(body.messages[1].status, "blocked");
   assert.match(body.messages[1].text, /vps_local_helper_queue_unavailable/);
-  assert.match(body.messages[1].text, /Issue comment queue transport is disabled/);
+  assert.match(body.messages[1].text, /Worker does not persist helper envelopes/);
 });
 
 test("worker rejects VPS continuation context that does not match the stored proposal", async () => {
@@ -3832,7 +3832,7 @@ test("worker maps Dashboard Butler VPS runner status text to the low-risk preset
   assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.messages[1].status, "blocked");
   assert.match(body.messages[1].text, /vps_local_helper_queue_unavailable/);
-  assert.match(body.messages[1].text, /Issue comment queue transport is disabled/);
+  assert.match(body.messages[1].text, /Worker does not persist helper envelopes/);
   assert.doesNotMatch(body.messages[1].text, /approval URL/);
   assert.equal(githubCalls.length, 0);
 
@@ -12010,6 +12010,7 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
   assert.equal(executionBody.runtimeTruth.helperExecutionStarted, false);
 
   const githubCalls = [];
+  const rooms = createMockDashboardChatRoomNamespace();
   const queueResponse = await worker.fetch(
     new Request("https://example.com/v2/vps/privileged-maintenance/helper-execution-queues", {
       method: "POST",
@@ -12025,6 +12026,7 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
     }),
     {
       ...gatewayAuthEnv,
+      DASHBOARD_CHAT_ROOMS: rooms.namespace,
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_test",
       GITHUB_API_FETCH: async (url, init) => {
         githubCalls.push({ url, init });
@@ -12039,22 +12041,27 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
     }
   );
 
-  assert.equal(queueResponse.status, 503);
+  assert.equal(queueResponse.status, 202);
   const queueBody = await queueResponse.json();
-  assert.equal(queueBody.ok, false);
-  assert.equal(queueBody.error, "vps_local_helper_queue_unavailable");
+  assert.equal(queueBody.ok, true);
   assert.equal(queueBody.execution.executionId, "vps-maint-test-637");
   assert.equal(queueBody.execution.transport, "vps_local_helper_queue");
   assert.equal(queueBody.execution.dashboardThreadId, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(queueBody.execution.queueCommentId, null);
   assert.equal(queueBody.runtimeTruth.kind, "vps_privileged_maintenance_helper_execution_queue");
-  assert.equal(queueBody.runtimeTruth.status, "vps_local_helper_queue_unavailable");
+  assert.equal(queueBody.runtimeTruth.status, "vps_local_helper_queue_control_sent");
   assert.equal(queueBody.runtimeTruth.dashboardThreadIdIncluded, true);
   assert.equal(queueBody.runtimeTruth.queueCommentPosted, false);
   assert.equal(queueBody.runtimeTruth.disabledTransport, "github_issue_comment_queue");
+  assert.equal(queueBody.runtimeTruth.bridgeControlSent, true);
   assert.equal(queueBody.runtimeTruth.rootExecutionStarted, false);
   assert.equal(queueBody.runtimeTruth.helperExecutionStarted, false);
   assert.equal(githubCalls.length, 0);
+  assert.equal(rooms.calls.length, 1);
+  const controlPayload = JSON.parse(rooms.calls[0].init.body);
+  assert.equal(controlPayload.message.type, "vps_local_helper_queue_enqueue_requested");
+  assert.equal(controlPayload.message.payload.executionId, "vps-maint-test-637");
+  assert.equal(controlPayload.message.payload.executionEnvelope.status, "ready_for_vps_helper_execution");
 });
 
 test("worker retrieves VPS maintenance install inventory without root execution", async () => {
