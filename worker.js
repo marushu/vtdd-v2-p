@@ -28133,8 +28133,8 @@ function renderPasskeyOperatorPage(input = {}) {
         const queueStatus = String(body?.execution?.queue?.status || "");
         const runtimeStatus = String(body?.execution?.runtimeTruth?.status || body?.runtimeTruth?.status || "");
         if (executionStatus === "queued_for_vps_helper_execution" || executionStatus === "sent_to_bridge") return true;
-        if (queueStatus === "sent_to_bridge" || queueStatus === "queued") return true;
-        if (runtimeStatus === "vps_local_helper_queue_control_sent" || runtimeStatus === "vps_local_helper_queue_queued") return true;
+        if (queueStatus === "sent_to_bridge" && runtimeStatus === "vps_local_helper_queue_control_sent") return true;
+        if (runtimeStatus === "vps_local_helper_queue_control_sent" && executionStatus !== "blocked") return true;
         return false;
       }
 

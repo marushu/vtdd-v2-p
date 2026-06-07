@@ -541,6 +541,9 @@ test("passkey operator page focuses VPS runner admin mode on real approval only"
   assert.equal(html.includes("function isVpsHelperQueueHandoffAccepted(body)"), true);
   assert.equal(html.includes('executionStatus === "sent_to_bridge"'), true);
   assert.equal(html.includes('runtimeStatus === "vps_local_helper_queue_control_sent"'), true);
+  assert.equal(html.includes('queueStatus === "queued"'), false);
+  assert.equal(html.includes('runtimeStatus === "vps_local_helper_queue_queued"'), false);
+  assert.equal(html.includes('executionStatus !== "blocked"'), true);
   assert.equal(html.includes("VPS helper queue handoff did not queue"), false);
 });
 
