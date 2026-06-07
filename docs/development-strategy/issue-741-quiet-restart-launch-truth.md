@@ -41,6 +41,8 @@ production PWA で transient progress がどの程度見えるべきかは未確
 
 launch truth を完全に消すと debug が難しくなる。runtime response / deployBridgeFollowup object / logs には残し、通常 message だけを抑制する必要がある。
 
+owner screenshot では通常 chat message だけでなく、投入済み follow-up が `差し込み済み` chip として composer に残っていた。送信済み item は owner が次に操作できる queue ではないため、composer 上には未送信 queue だけを残す。これは Issue #816 の queue UX blocker だが、今回の restart launch truth ノイズが composer に居座る直接原因でもある。
+
 ## PR 前に確認すること
 
 Issue #741 の authority boundary、PR #829 の completion truth、test/worker の deploy bridge restart expectations、generated worker drift を確認する。
@@ -56,6 +58,8 @@ Issue #741 の authority boundary、PR #829 の completion truth、test/worker �
 ## merge 後に通す E2E
 
 production deploy 後、passkey approved bridge restart で通常 chat に `起動結果` / `restart 完了結果ではありません` / `before/after truth が戻るまで` の中間 message が積まれず、最終 completion/failure truth だけが owner-facing に残ることを確認する。
+
+同じ production PWA で、差し込みを送信したあと composer 上に `差し込み済み` chip が残らず、未送信 queue item だけが `キュー待ち` として表示されることを確認する。
 
 ## 次の PR を増やさない理由
 
