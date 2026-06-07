@@ -28080,7 +28080,7 @@ function renderPasskeyOperatorPage(input = {}) {
         }
         const repositoryInput = readRequiredRepositoryInput();
         const issueNumber = Number(document.getElementById("issue-input").value || 0) || null;
-        setApproveOutput("\u30D1\u30B9\u30AD\u30FC\u627F\u8A8D\u6E08\u307F\u3002Dashboard Butler \u3078\u623B\u3057\u3066 VPS helper queue \u3078\u9032\u3081\u3066\u3044\u307E\u3059...", {
+        setApproveOutput("\u30D1\u30B9\u30AD\u30FC\u627F\u8A8D\u6E08\u307F\u3002Dashboard Butler \u3078\u623B\u3057\u3066 VPS helper queue \u63A5\u7D9A\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059...", {
           show: shouldShowApproveOutput("status")
         });
         const continueResponse = await fetch("${apiBase}/dashboard/chat/messages", {
@@ -28102,9 +28102,13 @@ function renderPasskeyOperatorPage(input = {}) {
         }
         const runtimeTruth = continueBody?.execution?.runtimeTruth || {};
         if (continueBody?.execution?.status !== "queued_for_vps_helper_execution") {
+          const executionStatus = continueBody?.execution?.status || "blocked";
+          const errorText = continueBody?.error || continueBody?.execution?.runtimeTruth?.status || executionStatus;
+          const nextAction = continueBody?.execution?.runtimeTruth?.nextAction || continueBody?.runtimeTruth?.nextAction || "";
           throw new Error(
-            "VPS helper queue handoff did not queue. "
-            + (runtimeTruth.status || continueBody?.execution?.status || "unknown")
+            "VPS helper queue handoff blocked. "
+            + errorText
+            + (nextAction ? ". next action: " + nextAction : "")
           );
         }
         setApproveOutput("VPS helper queue \u3078\u6E21\u3057\u307E\u3057\u305F\u3002Dashboard Butler \u3068\u901A\u77E5\u3067\u9032\u6357\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002", {
@@ -63823,111 +63827,44 @@ async function createVpsPrivilegedMaintenanceHelperExecutionQueue({ payload, env
   const dashboardThreadId = normalizeText33(
     payload?.handoff?.dashboardThreadId || payload?.dashboardThreadId || payload?.dashboard_thread_id || payload?.threadId || payload?.thread_id
   );
-  const queueCommentBody = buildVpsPrivilegedMaintenanceQueueComment({
-    executionId,
-    repository,
-    issueNumber,
-    dashboardThreadId,
-    approvalActor: payload?.approvalActor,
-    executionEnvelope: envelope
-  });
-  const writeResult = await executeGitHubWritePlane({
-    operation: "issue_comment_create",
-    repository,
-    issueNumber,
-    body: queueCommentBody,
-    approvalPhrase: "GO",
-    targetConfirmed: true,
-    approvalScopeMatched: true,
-    env
-  });
-  if (!writeResult.ok) {
-    const body2 = {
-      ok: false,
-      error: writeResult.error || "vps_privileged_maintenance_queue_post_failed",
-      reason: writeResult.reason,
-      issues: writeResult.issues ?? [],
-      runtimeTruth: {
-        kind: "vps_privileged_maintenance_helper_execution_queue",
-        status: "failed",
-        rootExecutionStarted: false,
-        helperExecutionStarted: false,
-        queueCommentPosted: false,
-        redacted: true
-      }
-    };
-    return {
-      ok: false,
-      status: writeResult.status ?? 503,
-      error: body2.error,
-      reason: body2.reason,
-      issues: body2.issues,
-      body: body2
-    };
-  }
   const body = {
-    ok: true,
+    ok: false,
+    error: "vps_local_helper_queue_unavailable",
+    reason: "GitHub Issue comments are no longer accepted as the VPS privileged maintenance helper execution queue.",
+    issues: [
+      "Issue comment queue transport is disabled to avoid unbounded comment accumulation and silent pickup gaps.",
+      "A bounded VPS-local helper queue/state/log transport must be connected before this execution can be queued."
+    ],
     execution: {
       executionId,
-      transport: "vps_privileged_maintenance_helper",
+      transport: "vps_local_helper_queue",
       repository,
       issueNumber,
       dashboardThreadId: dashboardThreadId || null,
-      queueCommentId: writeResult.write?.commentId || null,
-      queueCommentUrl: writeResult.write?.url || null,
-      status: "queued"
+      queueCommentId: null,
+      queueCommentUrl: null,
+      status: "blocked"
     },
     runtimeTruth: {
       kind: "vps_privileged_maintenance_helper_execution_queue",
-      status: "queued_for_vps_helper_execution",
+      status: "vps_local_helper_queue_unavailable",
       rootExecutionStarted: false,
       helperExecutionStarted: false,
-      queueCommentPosted: true,
+      queueCommentPosted: false,
       dashboardThreadIdIncluded: Boolean(dashboardThreadId),
-      nextAction: "VPS runner must pick up the vtdd:vps-privileged-maintenance-execution queue comment and invoke the root-owned helper"
+      requiredTransport: "vps_local_helper_queue",
+      disabledTransport: "github_issue_comment_queue",
+      nextAction: "Connect a bounded VPS-local helper queue/state/log transport before retrying this maintenance execution."
     }
   };
   return {
-    ok: true,
-    status: 200,
+    ok: false,
+    status: 503,
+    error: body.error,
+    reason: body.reason,
+    issues: body.issues,
     body
   };
-}
-function buildVpsPrivilegedMaintenanceQueueComment({
-  executionId,
-  repository,
-  issueNumber,
-  dashboardThreadId,
-  approvalActor,
-  executionEnvelope
-} = {}) {
-  const payload = {
-    executionId,
-    transport: "vps_privileged_maintenance_helper",
-    repository,
-    issueNumber,
-    dashboardThreadId: dashboardThreadId || null,
-    handoff: {
-      dashboardThreadId: dashboardThreadId || null
-    },
-    approvalScopeMatched: true,
-    approvalActor: normalizeGitHubLogin(approvalActor) || null,
-    issueTraceability: {
-      canonicalSpec: "github_issue",
-      issueNumber,
-      relatedIssue: issueNumber,
-      issueTraceable: true
-    },
-    executionEnvelope
-  };
-  return [
-    `<!-- vtdd:vps-privileged-maintenance-execution:${executionId} -->`,
-    "VTDD VPS privileged maintenance helper \u5B9F\u884C\u30AD\u30E5\u30FC\u3067\u3059\u3002",
-    "",
-    "\u3053\u306E\u30B3\u30E1\u30F3\u30C8\u306F\u901A\u5E38\u306E Codex branch/PR queue \u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002scoped passkey approval \u6E08\u307F helper execution envelope \u3092 user-owned VPS runner \u304C root-owned helper \u3078\u6E21\u3059\u305F\u3081\u306E bounded handoff \u3067\u3059\u3002",
-    "",
-    fencedJson2(payload)
-  ].join("\n");
 }
 function validateVpsPrivilegedMaintenanceExecutionEnvelopeForQueue(envelope) {
   const issues = [];
@@ -63965,17 +63902,8 @@ function validateVpsPrivilegedMaintenanceExecutionEnvelopeForQueue(envelope) {
   }
   return issues;
 }
-function fencedJson2(value) {
-  return `\`\`\`json
-${JSON.stringify(value, null, 2)}
-\`\`\``;
-}
 function safeIdentifier(value) {
   return String(value || "").replace(/[^A-Za-z0-9_.-]+/g, "_").slice(0, 80) || "execution";
-}
-function normalizeGitHubLogin(value) {
-  const login = normalizeText33(value);
-  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login) ? login : "";
 }
 async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
   const inventory = buildVpsPrivilegedMaintenanceInstallInventory({
@@ -69202,7 +69130,8 @@ async function buildDashboardChatTurn(payload, options = {}) {
 }
 function shouldDashboardVpsMaintenanceFlowStayInWorker(flow = null, options = {}) {
   const status = normalizeText33(flow?.execution?.status || flow?.messageStatus);
-  return ["approval_required", "queued_for_vps_helper_execution", "sent"].includes(status) || options.approvalContinuation === true && status === "blocked";
+  const runtimeTruth = flow?.execution?.runtimeTruth || {};
+  return ["approval_required", "queued_for_vps_helper_execution", "sent"].includes(status) || status === "blocked" && (normalizeText33(runtimeTruth.requiredTransport) === "vps_local_helper_queue" || normalizeText33(runtimeTruth.disabledTransport) === "github_issue_comment_queue" || normalizeText33(runtimeTruth.status) === "vps_local_helper_queue_unavailable") || options.approvalContinuation === true && status === "blocked";
 }
 async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
   payload,
@@ -69432,7 +69361,8 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
     relatedIssue,
     error: queue.error,
     reason: queue.reason,
-    issues: queue.issues
+    issues: queue.issues,
+    nextAction: queue.body?.runtimeTruth?.nextAction
   });
   return {
     messageStatus: queue.ok ? "sent" : "blocked",
@@ -69560,7 +69490,8 @@ async function queueDashboardVpsMaintenanceLowRiskRead({
     relatedIssue,
     error: queue.error,
     reason: queue.reason,
-    issues: queue.issues
+    issues: queue.issues,
+    nextAction: queue.body?.runtimeTruth?.nextAction
   });
   return {
     messageStatus: queue.ok ? "sent" : "blocked",

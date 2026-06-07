@@ -85,15 +85,17 @@ test("active issue execution queue names current open PR hygiene", () => {
 });
 
 test("active issue execution queue names the next automatic implementation lane", () => {
-  assert.equal(sectionBody("Now").includes("Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする"), true);
-  assert.equal(sectionBody("Now").includes("queue / guide / edit / cancel"), true);
-  assert.equal(sectionBody("Now").includes("Issue #811 は parent root"), true);
+  assert.equal(sectionBody("Now").includes("Issue #741: GitHub Issue comment を VPS privileged maintenance helper"), true);
+  assert.equal(sectionBody("Now").includes("vps_local_helper_queue_unavailable"), true);
+  assert.equal(sectionBody("Now").includes("root/helper execution"), true);
   assert.equal(doc.includes("2026-06-06 owner input classified Issue #811 as `ROOT`"), true);
   assert.equal(doc.includes("2026-06-06 owner input classified Issue #814 as `ROOT` support for Issue"), true);
   assert.equal(doc.includes("2026-06-06 owner input classified Issue #816 as `NEXT`"), true);
   assert.equal(doc.includes("2026-06-07 owner input classified Issue #818 as `NEXT`"), true);
+  assert.equal(doc.includes("2026-06-07 owner input classified Issue #741 as `ROOT`"), true);
   assert.equal(doc.includes("PR #819 merged Issue #818 voice readback / interrupt gate"), true);
   assert.equal(doc.includes("PR #724 merged and deploy-production succeeded for Issue #723"), true);
+  assert.equal(sectionBody("Next").includes("Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする"), true);
   assert.equal(sectionBody("Next").includes("Issue #814: Dashboard Butler voice mode で VPS 返信を読み上げる"), true);
   assert.equal(sectionBody("Next").includes("Issue #637: iPhone/PWA-complete VPS privileged maintenance"), true);
   assert.equal(sectionBody("Evidence Gaps").includes("Issue #606: PR #627 merged and production deployed"), true);
