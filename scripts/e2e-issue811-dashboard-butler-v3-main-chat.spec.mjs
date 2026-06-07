@@ -547,12 +547,37 @@ test("Issue #811 mobile main chat keeps floating header, drawer overlay, passkey
     )
   });
   await expect(page.locator("#butler-pending-media .media-chip")).toHaveCount(1);
+  await expect(page.locator("#butler-followup-insert")).toBeVisible();
   await page.locator("#butler-followup-queue").click();
-  await expect(page.locator("#butler-followup-queue-list")).toContainText("差し込み済み");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("キュー待ち");
   await expect(page.locator("#butler-followup-queue-list")).toContainText("これは現在の実行に差し込む補足。");
   await expect(page.locator("#butler-followup-queue-list")).toContainText("添付 1件");
+  await expect(page.locator("button[data-followup-action='guide']")).toBeVisible();
   await expect.poll(async () => page.evaluate(() => {
     const sent = window.__vtddFakeSockets?.[0]?.sent || [];
+    return sent
+      .map((entry) => {
+        try {
+          return JSON.parse(entry);
+        } catch {
+          return null;
+        }
+      })
+      .some((entry) =>
+        entry &&
+        entry.type === "owner_message" &&
+        entry.interruption === true &&
+        entry.text === "これは現在の実行に差し込む補足。"
+      );
+  })).toBe(false);
+
+  await page.reload();
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("キュー待ち");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("これは現在の実行に差し込む補足。");
+  await expect(page.locator("#butler-followup-queue-list")).toContainText("添付 1件");
+  await page.locator("button[data-followup-action='guide']").click();
+  await expect.poll(async () => page.evaluate(() => {
+    const sent = window.__vtddFakeSockets?.at(-1)?.sent || [];
     return sent
       .map((entry) => {
         try {

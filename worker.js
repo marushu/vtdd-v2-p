@@ -72741,6 +72741,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <span class="progress-title">\u9032\u884C\u4E2D</span>
           <p class="progress-text"></p>
         </div>
+        <div class="followup-draft" id="butler-followup-draft" hidden>
+          <p id="butler-followup-draft-text"></p>
+          <div class="followup-actions">
+            <button id="butler-followup-insert" type="button">\u5DEE\u3057\u8FBC\u3080</button>
+            <button id="butler-followup-cancel" type="button">\u30AD\u30E3\u30F3\u30BB\u30EB</button>
+            <button id="butler-followup-queue" type="button">\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0</button>
+          </div>
+        </div>
+        <div class="followup-queue" id="butler-followup-queue-list" aria-live="polite" hidden></div>
         <div class="composer-box" data-can-send="false" data-running="false">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
@@ -72750,14 +72759,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1" data-mode="send"><span>\u2191</span></button>
           </div>
         </div>
-        <div class="followup-draft" id="butler-followup-draft" hidden>
-          <p id="butler-followup-draft-text"></p>
-          <div class="followup-actions">
-            <button id="butler-followup-cancel" type="button">\u30AD\u30E3\u30F3\u30BB\u30EB</button>
-            <button id="butler-followup-queue" type="button">\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0</button>
-          </div>
-        </div>
-        <div class="followup-queue" id="butler-followup-queue-list" aria-live="polite" hidden></div>
         <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E96\u5099\u4E2D\u3067\u3059\u3002\u9001\u4FE1\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u77E5\u3089\u305B\u307E\u3059\u3002</div>
       </form>
       <div class="media-lightbox" id="butler-media-lightbox" role="dialog" aria-modal="true" aria-label="\u6DFB\u4ED8\u30D7\u30EC\u30D3\u30E5\u30FC" hidden>
@@ -72793,6 +72794,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const progressPane = document.getElementById("butler-transient-progress");
       const followupDraft = document.getElementById("butler-followup-draft");
       const followupDraftText = document.getElementById("butler-followup-draft-text");
+      const followupInsertButton = document.getElementById("butler-followup-insert");
       const followupCancel = document.getElementById("butler-followup-cancel");
       const followupQueueButton = document.getElementById("butler-followup-queue");
       const followupQueueList = document.getElementById("butler-followup-queue-list");
@@ -72845,6 +72847,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let pendingOwnerSend = null;
       let activeTurnInProgress = false;
       let followupQueue = [];
+      let restoredFollowupQueueNeedsOwnerAction = false;
       let voiceRecognizer = null;
       let voiceListening = false;
       let voiceModeActive = false;
@@ -72865,6 +72868,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let authReturnResumePromise = null;
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
+      const followupQueueStorageKey = "vtdd.dashboard.followupQueue:" + (threadId || "unknown");
       const dashboardForceRefreshKey = "vtdd.dashboard.forceRefresh:last";
 
       function getDashboardDraftStorage() {
@@ -73114,14 +73118,66 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setActiveTurnInProgress(active) {
+        const wasActive = activeTurnInProgress;
         activeTurnInProgress = active === true;
         setSendButtonMode(activeTurnInProgress ? "stop" : "send");
         syncComposerActionState();
+        if (wasActive && !activeTurnInProgress) {
+          flushQueuedFollowups();
+        }
       }
 
       function clearFollowupDraft() {
         if (followupDraft) followupDraft.hidden = true;
         if (followupDraftText) followupDraftText.textContent = "";
+      }
+
+      function getPersistableFollowupQueue() {
+        return followupQueue
+          .filter((item) => item && item.status === "queued")
+          .map((item) => ({
+            id: String(item.id || ""),
+            text: String(item.text || ""),
+            mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
+            status: "queued",
+            createdAt: item.createdAt || new Date().toISOString()
+          }))
+          .filter((item) => item.id && item.text);
+      }
+
+      function persistFollowupQueue() {
+        try {
+          const items = getPersistableFollowupQueue();
+          if (items.length > 0) {
+            getDashboardDraftStorage().setItem(followupQueueStorageKey, JSON.stringify(items));
+          } else {
+            getDashboardDraftStorage().removeItem(followupQueueStorageKey);
+          }
+        } catch {}
+      }
+
+      function restoreFollowupQueue() {
+        try {
+          const rawQueue = getDashboardDraftStorage().getItem(followupQueueStorageKey) || "";
+          const parsed = rawQueue ? JSON.parse(rawQueue) : [];
+          if (!Array.isArray(parsed)) return;
+          followupQueue = parsed
+            .map((item) => ({
+              id: String(item?.id || ""),
+              text: String(item?.text || "").trim(),
+              mediaReferences: Array.isArray(item?.mediaReferences) ? item.mediaReferences : [],
+              status: "queued",
+              createdAt: item?.createdAt || new Date().toISOString()
+            }))
+            .filter((item) => item.id && item.text);
+          if (followupQueue.length > 0) {
+            restoredFollowupQueueNeedsOwnerAction = true;
+            renderFollowupQueue();
+            setStatus("\u524D\u56DE\u306E\u5DEE\u3057\u8FBC\u307F\u30AD\u30E5\u30FC\u3092\u5FA9\u5143\u3057\u307E\u3057\u305F\u3002\u9001\u308B\u5834\u5408\u306F\u30AD\u30E5\u30FC\u306E\u8A98\u5C0E\u3059\u308B\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002", { temporary: true });
+          }
+        } catch {
+          followupQueue = [];
+        }
       }
 
       function renderFollowupQueue() {
@@ -73143,9 +73199,99 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             media.textContent = "\u6DFB\u4ED8 " + mediaReferences.length + "\u4EF6";
             chip.appendChild(media);
           }
+          if (item.status === "queued") {
+            const actions = document.createElement("div");
+            actions.className = "followup-actions";
+            const guideButton = document.createElement("button");
+            guideButton.type = "button";
+            guideButton.dataset.followupAction = "guide";
+            guideButton.dataset.followupId = item.id;
+            guideButton.textContent = "\u8A98\u5C0E\u3059\u308B";
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.dataset.followupAction = "edit";
+            editButton.dataset.followupId = item.id;
+            editButton.textContent = "\u7DE8\u96C6\u3059\u308B";
+            const cancelButton = document.createElement("button");
+            cancelButton.type = "button";
+            cancelButton.dataset.followupAction = "cancel";
+            cancelButton.dataset.followupId = item.id;
+            cancelButton.textContent = "\u30AD\u30E3\u30F3\u30BB\u30EB";
+            actions.appendChild(guideButton);
+            actions.appendChild(editButton);
+            actions.appendChild(cancelButton);
+            chip.appendChild(actions);
+          }
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
+      }
+
+      function findFollowupQueueItem(itemId) {
+        return followupQueue.find((item) => item.id === itemId) || null;
+      }
+
+      function sendFollowupQueueItem(item) {
+        if (!item || item.status !== "queued") return false;
+        if (!isChatSocketOpen()) {
+          setStatus("\u63A5\u7D9A\u304C\u623B\u3063\u305F\u3089\u5DEE\u3057\u8FBC\u307F\u3092\u9001\u308A\u307E\u3059\u3002", { thinking: true });
+          return false;
+        }
+        try {
+          chatSocket.send(JSON.stringify({
+            type: "owner_message",
+            threadId,
+            clientMessageId: item.id,
+            repositoryInput,
+            text: item.text,
+            issueNumber,
+            relatedIssue: issueNumber,
+            mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
+            interruption: true
+          }));
+          item.status = "sent";
+          persistFollowupQueue();
+          renderFollowupQueue();
+          return true;
+        } catch {
+          setStatus("\u5DEE\u3057\u8FBC\u307F\u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u5FA9\u5E30\u5F8C\u306B\u518D\u9001\u3067\u304D\u307E\u3059\u3002");
+          renderFollowupQueue();
+          return false;
+        }
+      }
+
+      function flushFollowupQueueItem(itemId) {
+        restoredFollowupQueueNeedsOwnerAction = false;
+        return sendFollowupQueueItem(findFollowupQueueItem(itemId));
+      }
+
+      function cancelFollowupQueueItem(itemId) {
+        const before = followupQueue.length;
+        restoredFollowupQueueNeedsOwnerAction = false;
+        followupQueue = followupQueue.filter((item) => item.id !== itemId || item.status === "sent");
+        if (followupQueue.length !== before) {
+          persistFollowupQueue();
+          renderFollowupQueue();
+          setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E3\u30F3\u30BB\u30EB\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+        }
+      }
+
+      function editFollowupQueueItem(itemId) {
+        const item = findFollowupQueueItem(itemId);
+        restoredFollowupQueueNeedsOwnerAction = false;
+        if (!item || item.status !== "queued") return false;
+        const nextText = window.prompt("\u5DEE\u3057\u8FBC\u307F\u3092\u7DE8\u96C6", item.text);
+        if (nextText === null) return false;
+        const normalized = normalizeComposerInputText(nextText).trim();
+        if (!normalized) {
+          setStatus("\u7A7A\u306E\u5DEE\u3057\u8FBC\u307F\u306B\u306F\u3067\u304D\u307E\u305B\u3093\u3002", { temporary: true });
+          return false;
+        }
+        item.text = normalized;
+        persistFollowupQueue();
+        renderFollowupQueue();
+        setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u7DE8\u96C6\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+        return true;
       }
 
       function addFollowupQueueItem(text, options = {}) {
@@ -73159,6 +73305,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           createdAt: new Date().toISOString()
         };
         followupQueue.push(item);
+        persistFollowupQueue();
         renderFollowupQueue();
         return item;
       }
@@ -73181,12 +73328,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           revokePendingMediaPreviews();
           pendingMediaItems = [];
           renderPendingMedia();
+          persistDashboardDraft();
         }
         return addFollowupQueueItem(normalized, {
           ...options,
           id: clientMessageId,
           mediaReferences
         });
+      }
+
+      async function insertFollowupFromComposer(text) {
+        const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+        if (!item) return null;
+        const sent = flushFollowupQueueItem(item.id);
+        textarea.value = "";
+        resizeComposerInput();
+        persistDashboardDraft();
+        clearFollowupDraft();
+        setStatus(sent ? "\u5DEE\u3057\u8FBC\u307F\u3092\u73FE\u5728\u306E\u5B9F\u884C\u3078\u9001\u308A\u307E\u3057\u305F\u3002" : "\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u4FDD\u6301\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u304C\u623B\u3063\u305F\u3089\u9001\u308C\u307E\u3059\u3002", { temporary: true });
+        textarea.focus({ preventScroll: true });
+        return item;
       }
 
       function showFollowupDraft(text) {
@@ -73395,7 +73556,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const item = await addFollowupQueueItemFromComposer(transcript, { status: "queued" });
         if (!item) return false;
         clearFollowupDraft();
-        flushQueuedFollowups();
+        flushQueuedFollowups({ force: true });
         setStatus(item.status === "sent" ? "\u8AAD\u307F\u4E0A\u3052\u3092\u6B62\u3081\u3001\u5DEE\u3057\u8FBC\u307F\u3092\u73FE\u5728\u306E\u5B9F\u884C\u3078\u9001\u308A\u307E\u3057\u305F\u3002" : "\u8AAD\u307F\u4E0A\u3052\u3092\u6B62\u3081\u3001\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002", { temporary: true });
         return true;
       }
@@ -73574,27 +73735,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         };
       }
 
-      function flushQueuedFollowups() {
+      function flushQueuedFollowups(options = {}) {
         if (!isChatSocketOpen()) return;
+        if (restoredFollowupQueueNeedsOwnerAction && options.force !== true) return;
+        if (activeTurnInProgress && options.force !== true) return;
         const queued = followupQueue.filter((item) => item.status === "queued");
         for (const item of queued) {
-          try {
-            chatSocket.send(JSON.stringify({
-              type: "owner_message",
-              threadId,
-              clientMessageId: item.id,
-              repositoryInput,
-              text: item.text,
-              issueNumber,
-              relatedIssue: issueNumber,
-              mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
-              interruption: true
-            }));
-            item.status = "sent";
-          } catch {
+          if (!sendFollowupQueueItem(item)) {
             break;
           }
         }
+        persistFollowupQueue();
         renderFollowupQueue();
       }
 
@@ -75318,8 +75469,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           resizeComposerInput();
           persistDashboardDraft();
           clearFollowupDraft();
-          flushQueuedFollowups();
-          setStatus(item?.status === "sent" ? "\u5DEE\u3057\u8FBC\u307F\u3092\u73FE\u5728\u306E\u5B9F\u884C\u3078\u9001\u308A\u307E\u3057\u305F\u3002" : "\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002\u73FE\u5728\u306E\u5B9F\u884C\u3078\u53CD\u6620\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u9001\u308A\u307E\u3059\u3002", { temporary: true });
+          setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002\u73FE\u5728\u306E\u5B9F\u884C\u304C\u7D42\u308F\u308B\u304B\u3001\u30AD\u30E5\u30FC\u306E\u8A98\u5C0E\u3059\u308B\u3092\u62BC\u3057\u305F\u6642\u306B\u9001\u308A\u307E\u3059\u3002", { temporary: true });
           textarea.focus({ preventScroll: true });
           return;
         }
@@ -75448,6 +75598,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         persistDashboardDraft();
         textarea.focus({ preventScroll: true });
       });
+      followupInsertButton?.addEventListener("click", async () => {
+        const text = textarea.value.trim() || followupDraftText?.textContent || (pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
+        if (!text) {
+          clearFollowupDraft();
+          return;
+        }
+        await insertFollowupFromComposer(text);
+      });
       followupQueueButton?.addEventListener("click", async () => {
         const text = textarea.value.trim() || followupDraftText?.textContent || (pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
         if (!text) {
@@ -75461,10 +75619,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         textarea.value = "";
         resizeComposerInput();
         clearFollowupDraft();
-        flushQueuedFollowups();
         persistDashboardDraft();
-        setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+        setStatus("\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002\u73FE\u5728\u306E\u5B9F\u884C\u304C\u7D42\u308F\u308B\u304B\u3001\u30AD\u30E5\u30FC\u306E\u8A98\u5C0E\u3059\u308B\u3092\u62BC\u3057\u305F\u6642\u306B\u9001\u308A\u307E\u3059\u3002", { temporary: true });
         textarea.focus({ preventScroll: true });
+      });
+      followupQueueList?.addEventListener("click", (event) => {
+        const target = event.target?.closest?.("button[data-followup-action][data-followup-id]");
+        if (!target) return;
+        const itemId = target.dataset.followupId || "";
+        if (target.dataset.followupAction === "guide") {
+          const sent = flushFollowupQueueItem(itemId);
+          setStatus(sent ? "\u5DEE\u3057\u8FBC\u307F\u3092\u73FE\u5728\u306E\u5B9F\u884C\u3078\u9001\u308A\u307E\u3057\u305F\u3002" : "\u5DEE\u3057\u8FBC\u307F\u3092\u30AD\u30E5\u30FC\u306B\u4FDD\u6301\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u304C\u623B\u3063\u305F\u3089\u9001\u308C\u307E\u3059\u3002", { temporary: true });
+        } else if (target.dataset.followupAction === "edit") {
+          editFollowupQueueItem(itemId);
+        } else if (target.dataset.followupAction === "cancel") {
+          cancelFollowupQueueItem(itemId);
+        }
       });
       voiceButton?.addEventListener("click", toggleVoiceInput);
 
@@ -75517,6 +75687,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       resizeComposerInput();
       syncComposerActionState();
       restoreDashboardDraft();
+      restoreFollowupQueue();
       refreshCheckButton?.addEventListener("click", () => {
         refreshDashboardFreshnessStatus({ visibleStatus: true, pill: "\u78BA\u8A8D\u6E08\u307F" });
       });

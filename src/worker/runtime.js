@@ -16651,6 +16651,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <span class="progress-title">進行中</span>
           <p class="progress-text"></p>
         </div>
+        <div class="followup-draft" id="butler-followup-draft" hidden>
+          <p id="butler-followup-draft-text"></p>
+          <div class="followup-actions">
+            <button id="butler-followup-insert" type="button">差し込む</button>
+            <button id="butler-followup-cancel" type="button">キャンセル</button>
+            <button id="butler-followup-queue" type="button">キューに追加</button>
+          </div>
+        </div>
+        <div class="followup-queue" id="butler-followup-queue-list" aria-live="polite" hidden></div>
         <div class="composer-box" data-can-send="false" data-running="false">
           <button class="media-button" id="butler-media-button" type="button" aria-label="画像・動画・ファイルを追加" title="画像・動画・ファイルを追加">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
@@ -16660,14 +16669,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler に送信" data-mode="send"><span>↑</span></button>
           </div>
         </div>
-        <div class="followup-draft" id="butler-followup-draft" hidden>
-          <p id="butler-followup-draft-text"></p>
-          <div class="followup-actions">
-            <button id="butler-followup-cancel" type="button">キャンセル</button>
-            <button id="butler-followup-queue" type="button">キューに追加</button>
-          </div>
-        </div>
-        <div class="followup-queue" id="butler-followup-queue-list" aria-live="polite" hidden></div>
         <div class="composer-status" id="butler-chat-status">接続準備中です。送信できる状態になったら知らせます。</div>
       </form>
       <div class="media-lightbox" id="butler-media-lightbox" role="dialog" aria-modal="true" aria-label="添付プレビュー" hidden>
@@ -16703,6 +16704,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const progressPane = document.getElementById("butler-transient-progress");
       const followupDraft = document.getElementById("butler-followup-draft");
       const followupDraftText = document.getElementById("butler-followup-draft-text");
+      const followupInsertButton = document.getElementById("butler-followup-insert");
       const followupCancel = document.getElementById("butler-followup-cancel");
       const followupQueueButton = document.getElementById("butler-followup-queue");
       const followupQueueList = document.getElementById("butler-followup-queue-list");
@@ -16755,6 +16757,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let pendingOwnerSend = null;
       let activeTurnInProgress = false;
       let followupQueue = [];
+      let restoredFollowupQueueNeedsOwnerAction = false;
       let voiceRecognizer = null;
       let voiceListening = false;
       let voiceModeActive = false;
@@ -16775,6 +16778,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let authReturnResumePromise = null;
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
+      const followupQueueStorageKey = "vtdd.dashboard.followupQueue:" + (threadId || "unknown");
       const dashboardForceRefreshKey = "vtdd.dashboard.forceRefresh:last";
 
       function getDashboardDraftStorage() {
@@ -17024,14 +17028,66 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setActiveTurnInProgress(active) {
+        const wasActive = activeTurnInProgress;
         activeTurnInProgress = active === true;
         setSendButtonMode(activeTurnInProgress ? "stop" : "send");
         syncComposerActionState();
+        if (wasActive && !activeTurnInProgress) {
+          flushQueuedFollowups();
+        }
       }
 
       function clearFollowupDraft() {
         if (followupDraft) followupDraft.hidden = true;
         if (followupDraftText) followupDraftText.textContent = "";
+      }
+
+      function getPersistableFollowupQueue() {
+        return followupQueue
+          .filter((item) => item && item.status === "queued")
+          .map((item) => ({
+            id: String(item.id || ""),
+            text: String(item.text || ""),
+            mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
+            status: "queued",
+            createdAt: item.createdAt || new Date().toISOString()
+          }))
+          .filter((item) => item.id && item.text);
+      }
+
+      function persistFollowupQueue() {
+        try {
+          const items = getPersistableFollowupQueue();
+          if (items.length > 0) {
+            getDashboardDraftStorage().setItem(followupQueueStorageKey, JSON.stringify(items));
+          } else {
+            getDashboardDraftStorage().removeItem(followupQueueStorageKey);
+          }
+        } catch {}
+      }
+
+      function restoreFollowupQueue() {
+        try {
+          const rawQueue = getDashboardDraftStorage().getItem(followupQueueStorageKey) || "";
+          const parsed = rawQueue ? JSON.parse(rawQueue) : [];
+          if (!Array.isArray(parsed)) return;
+          followupQueue = parsed
+            .map((item) => ({
+              id: String(item?.id || ""),
+              text: String(item?.text || "").trim(),
+              mediaReferences: Array.isArray(item?.mediaReferences) ? item.mediaReferences : [],
+              status: "queued",
+              createdAt: item?.createdAt || new Date().toISOString()
+            }))
+            .filter((item) => item.id && item.text);
+          if (followupQueue.length > 0) {
+            restoredFollowupQueueNeedsOwnerAction = true;
+            renderFollowupQueue();
+            setStatus("前回の差し込みキューを復元しました。送る場合はキューの誘導するを押してください。", { temporary: true });
+          }
+        } catch {
+          followupQueue = [];
+        }
       }
 
       function renderFollowupQueue() {
@@ -17053,9 +17109,99 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             media.textContent = "添付 " + mediaReferences.length + "件";
             chip.appendChild(media);
           }
+          if (item.status === "queued") {
+            const actions = document.createElement("div");
+            actions.className = "followup-actions";
+            const guideButton = document.createElement("button");
+            guideButton.type = "button";
+            guideButton.dataset.followupAction = "guide";
+            guideButton.dataset.followupId = item.id;
+            guideButton.textContent = "誘導する";
+            const editButton = document.createElement("button");
+            editButton.type = "button";
+            editButton.dataset.followupAction = "edit";
+            editButton.dataset.followupId = item.id;
+            editButton.textContent = "編集する";
+            const cancelButton = document.createElement("button");
+            cancelButton.type = "button";
+            cancelButton.dataset.followupAction = "cancel";
+            cancelButton.dataset.followupId = item.id;
+            cancelButton.textContent = "キャンセル";
+            actions.appendChild(guideButton);
+            actions.appendChild(editButton);
+            actions.appendChild(cancelButton);
+            chip.appendChild(actions);
+          }
           followupQueueList.appendChild(chip);
         }
         updateComposerReserve();
+      }
+
+      function findFollowupQueueItem(itemId) {
+        return followupQueue.find((item) => item.id === itemId) || null;
+      }
+
+      function sendFollowupQueueItem(item) {
+        if (!item || item.status !== "queued") return false;
+        if (!isChatSocketOpen()) {
+          setStatus("接続が戻ったら差し込みを送ります。", { thinking: true });
+          return false;
+        }
+        try {
+          chatSocket.send(JSON.stringify({
+            type: "owner_message",
+            threadId,
+            clientMessageId: item.id,
+            repositoryInput,
+            text: item.text,
+            issueNumber,
+            relatedIssue: issueNumber,
+            mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
+            interruption: true
+          }));
+          item.status = "sent";
+          persistFollowupQueue();
+          renderFollowupQueue();
+          return true;
+        } catch {
+          setStatus("差し込み送信に失敗しました。接続復帰後に再送できます。");
+          renderFollowupQueue();
+          return false;
+        }
+      }
+
+      function flushFollowupQueueItem(itemId) {
+        restoredFollowupQueueNeedsOwnerAction = false;
+        return sendFollowupQueueItem(findFollowupQueueItem(itemId));
+      }
+
+      function cancelFollowupQueueItem(itemId) {
+        const before = followupQueue.length;
+        restoredFollowupQueueNeedsOwnerAction = false;
+        followupQueue = followupQueue.filter((item) => item.id !== itemId || item.status === "sent");
+        if (followupQueue.length !== before) {
+          persistFollowupQueue();
+          renderFollowupQueue();
+          setStatus("差し込みをキャンセルしました。", { temporary: true });
+        }
+      }
+
+      function editFollowupQueueItem(itemId) {
+        const item = findFollowupQueueItem(itemId);
+        restoredFollowupQueueNeedsOwnerAction = false;
+        if (!item || item.status !== "queued") return false;
+        const nextText = window.prompt("差し込みを編集", item.text);
+        if (nextText === null) return false;
+        const normalized = normalizeComposerInputText(nextText).trim();
+        if (!normalized) {
+          setStatus("空の差し込みにはできません。", { temporary: true });
+          return false;
+        }
+        item.text = normalized;
+        persistFollowupQueue();
+        renderFollowupQueue();
+        setStatus("差し込みを編集しました。", { temporary: true });
+        return true;
       }
 
       function addFollowupQueueItem(text, options = {}) {
@@ -17069,6 +17215,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           createdAt: new Date().toISOString()
         };
         followupQueue.push(item);
+        persistFollowupQueue();
         renderFollowupQueue();
         return item;
       }
@@ -17091,12 +17238,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           revokePendingMediaPreviews();
           pendingMediaItems = [];
           renderPendingMedia();
+          persistDashboardDraft();
         }
         return addFollowupQueueItem(normalized, {
           ...options,
           id: clientMessageId,
           mediaReferences
         });
+      }
+
+      async function insertFollowupFromComposer(text) {
+        const item = await addFollowupQueueItemFromComposer(text, { status: "queued" });
+        if (!item) return null;
+        const sent = flushFollowupQueueItem(item.id);
+        textarea.value = "";
+        resizeComposerInput();
+        persistDashboardDraft();
+        clearFollowupDraft();
+        setStatus(sent ? "差し込みを現在の実行へ送りました。" : "差し込みをキューに保持しました。接続が戻ったら送れます。", { temporary: true });
+        textarea.focus({ preventScroll: true });
+        return item;
       }
 
       function showFollowupDraft(text) {
@@ -17305,7 +17466,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const item = await addFollowupQueueItemFromComposer(transcript, { status: "queued" });
         if (!item) return false;
         clearFollowupDraft();
-        flushQueuedFollowups();
+        flushQueuedFollowups({ force: true });
         setStatus(item.status === "sent" ? "読み上げを止め、差し込みを現在の実行へ送りました。" : "読み上げを止め、差し込みをキューに追加しました。", { temporary: true });
         return true;
       }
@@ -17484,27 +17645,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         };
       }
 
-      function flushQueuedFollowups() {
+      function flushQueuedFollowups(options = {}) {
         if (!isChatSocketOpen()) return;
+        if (restoredFollowupQueueNeedsOwnerAction && options.force !== true) return;
+        if (activeTurnInProgress && options.force !== true) return;
         const queued = followupQueue.filter((item) => item.status === "queued");
         for (const item of queued) {
-          try {
-            chatSocket.send(JSON.stringify({
-              type: "owner_message",
-              threadId,
-              clientMessageId: item.id,
-              repositoryInput,
-              text: item.text,
-              issueNumber,
-              relatedIssue: issueNumber,
-              mediaReferences: Array.isArray(item.mediaReferences) ? item.mediaReferences : [],
-              interruption: true
-            }));
-            item.status = "sent";
-          } catch {
+          if (!sendFollowupQueueItem(item)) {
             break;
           }
         }
+        persistFollowupQueue();
         renderFollowupQueue();
       }
 
@@ -19228,8 +19379,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           resizeComposerInput();
           persistDashboardDraft();
           clearFollowupDraft();
-          flushQueuedFollowups();
-          setStatus(item?.status === "sent" ? "差し込みを現在の実行へ送りました。" : "差し込みをキューに追加しました。現在の実行へ反映できる状態になったら送ります。", { temporary: true });
+          setStatus("差し込みをキューに追加しました。現在の実行が終わるか、キューの誘導するを押した時に送ります。", { temporary: true });
           textarea.focus({ preventScroll: true });
           return;
         }
@@ -19358,6 +19508,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         persistDashboardDraft();
         textarea.focus({ preventScroll: true });
       });
+      followupInsertButton?.addEventListener("click", async () => {
+        const text = textarea.value.trim() || followupDraftText?.textContent || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
+        if (!text) {
+          clearFollowupDraft();
+          return;
+        }
+        await insertFollowupFromComposer(text);
+      });
       followupQueueButton?.addEventListener("click", async () => {
         const text = textarea.value.trim() || followupDraftText?.textContent || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
         if (!text) {
@@ -19371,10 +19529,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         textarea.value = "";
         resizeComposerInput();
         clearFollowupDraft();
-        flushQueuedFollowups();
         persistDashboardDraft();
-        setStatus("差し込みをキューに追加しました。", { temporary: true });
+        setStatus("差し込みをキューに追加しました。現在の実行が終わるか、キューの誘導するを押した時に送ります。", { temporary: true });
         textarea.focus({ preventScroll: true });
+      });
+      followupQueueList?.addEventListener("click", (event) => {
+        const target = event.target?.closest?.("button[data-followup-action][data-followup-id]");
+        if (!target) return;
+        const itemId = target.dataset.followupId || "";
+        if (target.dataset.followupAction === "guide") {
+          const sent = flushFollowupQueueItem(itemId);
+          setStatus(sent ? "差し込みを現在の実行へ送りました。" : "差し込みをキューに保持しました。接続が戻ったら送れます。", { temporary: true });
+        } else if (target.dataset.followupAction === "edit") {
+          editFollowupQueueItem(itemId);
+        } else if (target.dataset.followupAction === "cancel") {
+          cancelFollowupQueueItem(itemId);
+        }
       });
       voiceButton?.addEventListener("click", toggleVoiceInput);
 
@@ -19427,6 +19597,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       resizeComposerInput();
       syncComposerActionState();
       restoreDashboardDraft();
+      restoreFollowupQueue();
       refreshCheckButton?.addEventListener("click", () => {
         refreshDashboardFreshnessStatus({ visibleStatus: true, pill: "確認済み" });
       });
