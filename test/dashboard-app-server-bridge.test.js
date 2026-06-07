@@ -501,11 +501,15 @@ test("dashboard app-server bridge enqueues VPS helper execution into local queue
     assert.equal(result.wakeup.primary, "systemd_user_service_start");
     assert.equal(result.wakeup.fallbackRole, "recovery_only");
     assert.equal(result.wakeup.fallbackUsed, false);
+    assert.equal(result.restartCompletion.status, "pending_vps_runner_completion");
+    assert.equal(result.restartCompletion.terminal, false);
+    assert.equal(result.restartCompletion.completionSource, "vps_local_helper_queue_state");
     assert.equal(spawnCalls.length, 1);
     const pending = JSON.parse(await fs.readFile(path.join(queueRoot, "pending", "vps-maint-local-741.json"), "utf8"));
     assert.equal(pending.executionId, "vps-maint-local-741");
     const state = JSON.parse(await fs.readFile(path.join(queueRoot, "state", "vps-maint-local-741.json"), "utf8"));
     assert.equal(state.status, "pending");
+    assert.equal(state.result, null);
     const log = await fs.readFile(logPath, "utf8");
     assert.equal(log.includes('"event":"queued"'), true);
   } finally {

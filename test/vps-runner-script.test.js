@@ -39,7 +39,7 @@ import {
   selectPendingVpsPrivilegedMaintenanceExecutions,
   selectPendingVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
-import { enqueueVpsLocalHelperExecution } from "../scripts/vps-local-helper-queue.mjs";
+import { completeVpsLocalHelperExecution, enqueueVpsLocalHelperExecution } from "../scripts/vps-local-helper-queue.mjs";
 
 function developmentStrategyFixture() {
   return {
@@ -204,6 +204,83 @@ test("VPS runner dry-run selects VPS local helper queue before GitHub Issue comm
   assert.match(result.message, /Dry run selected local privileged maintenance vps-maint-local-dry-run/);
   const pending = await fs.readFile(path.join(queueRoot, "pending", "vps-maint-local-dry-run.json"), "utf8");
   assert.equal(JSON.parse(pending).lifecycle.status, "pending");
+  await fs.rm(tmpRoot, { recursive: true, force: true });
+});
+
+test("VPS local helper queue state keeps compact restart completion truth", async () => {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-local-state-"));
+  const queueRoot = path.join(tmpRoot, "queue");
+  await enqueueVpsLocalHelperExecution({
+    queueRoot,
+    payload: {
+      executionId: "vps-maint-local-complete",
+      transport: "vps_privileged_maintenance_helper",
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 741,
+      dashboardThreadId: "dashboard-main-unresolved",
+      approvalScopeMatched: true,
+      executionEnvelope: {
+        kind: "vps_privileged_maintenance_helper_execution_envelope",
+        status: "ready_for_vps_helper_execution",
+        repository: "sample-org/vtdd-v2",
+        requestId: "helper-request-local-complete",
+        capabilityId: "dashboard.bridge.unresolved.deploy.sync.restart",
+        mode: "execute",
+        helperInvocation: {
+          executable: "sudo",
+          args: ["-n", "/usr/local/sbin/vtdd-vps-maintenance-helper", "--execute", "--input", "<helper-execution-input-json>"],
+          shell: false,
+          inputFile: "helperExecutionInput"
+        },
+        helperExecutionInput: { mode: "execute", helperRequest: { requestId: "helper-request-local-complete" } },
+        rootExecutionStarted: false,
+        helperExecutionStarted: false
+      }
+    },
+    now: () => "2026-06-07T01:00:00.000Z"
+  });
+  await fs.rename(
+    path.join(queueRoot, "pending", "vps-maint-local-complete.json"),
+    path.join(queueRoot, "running", "vps-maint-local-complete.json")
+  );
+
+  await completeVpsLocalHelperExecution({
+    queueRoot,
+    executionId: "vps-maint-local-complete",
+    status: "completed",
+    result: {
+      rootExecutionStarted: true,
+      helperExecutionStarted: true,
+      runtimeTruth: {
+        status: "synced_and_restarted",
+        serviceRestarted: true,
+        restartVerified: true,
+        syncVerified: true,
+        beforeSha: "before-sha",
+        afterSha: "after-sha",
+        targetRefSha: "after-sha",
+        beforeServiceMainPid: "1234",
+        afterServiceMainPid: "5678",
+        beforeServiceActiveEnterTimestamp: "Thu 2026-06-04 15:00:46 JST",
+        afterServiceActiveEnterTimestamp: "Thu 2026-06-04 18:23:12 JST"
+      },
+      helperResult: {
+        status: "completed",
+        redactedLogSummary: "this must not be copied into state"
+      }
+    },
+    now: () => "2026-06-07T01:02:00.000Z"
+  });
+
+  const state = JSON.parse(await fs.readFile(path.join(queueRoot, "state", "vps-maint-local-complete.json"), "utf8"));
+  assert.equal(state.status, "completed");
+  assert.equal(state.result.runtimeStatus, "synced_and_restarted");
+  assert.equal(state.result.helperStatus, "completed");
+  assert.equal(state.result.serviceRestarted, true);
+  assert.equal(state.result.restartVerified, true);
+  assert.equal(state.result.beforeServiceMainPid, "1234");
+  assert.equal(state.result.afterServiceMainPid, "5678");
+  assert.equal(JSON.stringify(state).includes("redactedLogSummary"), false);
   await fs.rm(tmpRoot, { recursive: true, force: true });
 });
 
@@ -805,36 +882,43 @@ test("VPS runner event reads dashboard runtime URL from default vault manifest w
 });
 
 test("VPS runner event records missing runtime dashboard delivery configuration", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-missing-runtime-"));
   const calls = [];
-  await postVpsRunnerEvent({
-    githubFetch: async (url, init = {}) => {
-      calls.push({ url, init });
-      return { id: 45004 };
-    },
-    payload: {
-      executionId: "exec-dashboard-missing-runtime",
-      repository: "marushu/vtdd-v2-p",
-      issueNumber: 450,
-      handoff: {
-        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+  try {
+    await postVpsRunnerEvent({
+      githubFetch: async (url, init = {}) => {
+        calls.push({ url, init });
+        return { id: 45004 };
+      },
+      payload: {
+        executionId: "exec-dashboard-missing-runtime",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 450,
+        handoff: {
+          dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+        }
+      },
+      event: {
+        status: "completed",
+        lastEvent: "branch_pushed",
+        currentStep: "branch_pushed",
+        message: "完了"
+      },
+      env: {
+        VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST: path.join(tempDir, "missing-manifest.json")
       }
-    },
-    event: {
-      status: "completed",
-      lastEvent: "branch_pushed",
-      currentStep: "branch_pushed",
-      message: "完了"
-    },
-    env: {}
-  });
+    });
 
-  const parsed = parseVpsRunnerEventComment(calls[0].init.body.body);
-  assert.equal(parsed.ok, true);
-  assert.equal(parsed.event.dashboardDelivery.status, "skipped");
-  assert.equal(
-    parsed.event.dashboardDelivery.reason,
-    "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing"
-  );
+    const parsed = parseVpsRunnerEventComment(calls[0].init.body.body);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.event.dashboardDelivery.status, "skipped");
+    assert.equal(
+      parsed.event.dashboardDelivery.reason,
+      "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing"
+    );
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("VPS runner milestone event mentions queue comment author", () => {
@@ -1952,15 +2036,22 @@ test("VPS runner actor identity incident starts with Japanese owner notification
 });
 
 test("VPS runner role App token resolution fails closed when role credentials are missing", async () => {
-  const result = await resolveRoleGitHubAppInstallationToken({
-    role: "codex_fallback_reviewer",
-    env: {},
-    apiBaseUrl: "https://api.github.com"
-  });
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-missing-role-vault-"));
+  try {
+    const result = await resolveRoleGitHubAppInstallationToken({
+      role: "codex_fallback_reviewer",
+      env: {
+        VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST: path.join(tempDir, "missing-manifest.json")
+      },
+      apiBaseUrl: "https://api.github.com"
+    });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.reason.includes("VTDD Codex Fallback Reviewer"), true);
-  assert.equal(result.reason.includes("missing app id, private key, installation id"), true);
+    assert.equal(result.ok, false);
+    assert.equal(result.reason.includes("VTDD Codex Fallback Reviewer"), true);
+    assert.equal(result.reason.includes("missing app id, private key, installation id"), true);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("VPS runner role App token resolution can read role credentials from vault manifest", async () => {
