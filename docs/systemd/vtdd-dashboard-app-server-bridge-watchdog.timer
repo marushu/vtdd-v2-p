@@ -1,0 +1,14 @@
+[Unit]
+Description=Run VTDD Dashboard app-server bridge watchdog periodically
+Documentation=../../docs/ops/dashboard-app-server-bridge-watchdog.md
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=60s
+AccuracySec=10s
+RandomizedDelaySec=10s
+Persistent=true
+Unit=vtdd-dashboard-app-server-bridge-watchdog.service
+
+[Install]
+WantedBy=timers.target

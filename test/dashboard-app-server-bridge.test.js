@@ -47,7 +47,8 @@ import {
   postOwnerActionRequiredEvent,
   runDashboardAppServerBridge,
   runDashboardDebugSlowTurn,
-  stripDashboardAppServerModelFromUsageProfile
+  stripDashboardAppServerModelFromUsageProfile,
+  touchDashboardBridgeHeartbeatFile
 } from "../scripts/run-dashboard-app-server-bridge.mjs";
 
 test("dashboard app-server bridge builds initialize and thread requests from Codex app-server protocol", () => {
@@ -3677,6 +3678,50 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
   assert.equal(parsed.activityQuietMs, 700);
   assert.equal(parsed.reconnectDelayMs, 1000);
   assert.equal(parsed.heartbeatMs, 30000);
+  assert.match(parsed.heartbeatFile, /dashboard-bridge-unresolved\.heartbeat\.json$/);
+});
+
+test("dashboard app-server bridge args read heartbeat file from env and cli", () => {
+  const parsedFromEnv = parseBridgeArgs([], {
+    VTDD_RUNTIME_URL: "https://runtime.example",
+    VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
+    VTDD_DASHBOARD_THREAD_ID: "dashboard-main",
+    VTDD_DASHBOARD_BRIDGE_HEARTBEAT_FILE: "/run/vtdd/bridge-heartbeat.json"
+  });
+  assert.equal(parsedFromEnv.heartbeatFile, "/run/vtdd/bridge-heartbeat.json");
+
+  const parsedFromCli = parseBridgeArgs(["--heartbeat-file", "/tmp/bridge-heartbeat.json"], {
+    VTDD_RUNTIME_URL: "https://runtime.example",
+    VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
+    VTDD_DASHBOARD_THREAD_ID: "dashboard-main",
+    VTDD_DASHBOARD_BRIDGE_HEARTBEAT_FILE: "/run/vtdd/bridge-heartbeat.json"
+  });
+  assert.equal(parsedFromCli.heartbeatFile, "/tmp/bridge-heartbeat.json");
+});
+
+test("dashboard app-server bridge heartbeat file redacts endpoint token", async () => {
+  const writes = [];
+  const mkdirs = [];
+  const ok = await touchDashboardBridgeHeartbeatFile({
+    heartbeatFile: "/tmp/vtdd/bridge-heartbeat.json",
+    endpoint: "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main-unresolved&token=secret-token",
+    cwd: "/repo",
+    status: "ping_sent",
+    now: () => "2026-06-07T07:00:00.000Z",
+    mkdir: async (...args) => mkdirs.push(args),
+    writeFile: async (...args) => writes.push(args)
+  });
+
+  assert.equal(ok, true);
+  assert.equal(mkdirs[0][0], "/tmp/vtdd");
+  assert.equal(writes[0][0], "/tmp/vtdd/bridge-heartbeat.json");
+  const payload = JSON.parse(writes[0][1]);
+  assert.equal(payload.kind, "dashboard_app_server_bridge_heartbeat");
+  assert.equal(payload.status, "ping_sent");
+  assert.equal(payload.cwd, "/repo");
+  assert.equal(payload.updatedAt, "2026-06-07T07:00:00.000Z");
+  assert.equal(payload.endpoint.includes("secret-token"), false);
+  assert.equal(payload.endpoint.includes("token=redacted"), true);
 });
 
 test("dashboard app-server bridge args read app-server usage tuning from env and cli", () => {
@@ -4135,7 +4180,9 @@ test("dashboard app-server bridge reconnects the dashboard WebSocket without rei
   assert.equal(String(sockets[1].endpoint), "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main");
 });
 
-test("dashboard app-server bridge sends heartbeat pings on an open socket", async () => {
+test("dashboard app-server bridge sends heartbeat pings and records pong-confirmed heartbeat", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-bridge-heartbeat-"));
+  const heartbeatFile = path.join(tmpDir, "heartbeat.json");
   const sockets = [];
   class MockWebSocket {
     constructor(endpoint, protocols) {
@@ -4180,11 +4227,15 @@ test("dashboard app-server bridge sends heartbeat pings on an open socket", asyn
     token: "secret-token",
     appServer,
     WebSocketImpl: MockWebSocket,
-    heartbeatMs: 1
+    heartbeatMs: 1,
+    heartbeatFile
   });
   assert.equal(sockets.length, 1);
   sockets[0].emit("open");
+  await waitForHeartbeatStatus(heartbeatFile, "connected");
   await waitFor(() => sockets[0].sent.includes("ping"));
+  sockets[0].emit("message", { data: JSON.stringify({ type: "pong", ok: true, threadId: "dashboard-main" }) });
+  await waitForHeartbeatStatus(heartbeatFile, "pong_received");
   sockets[0].emit("close");
   await once;
 });
@@ -4226,6 +4277,22 @@ async function waitFor(predicate, { timeoutMs = 1000 } = {}) {
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error("timed out waiting for condition");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
+async function waitForHeartbeatStatus(heartbeatFile, expectedStatus, { timeoutMs = 1000 } = {}) {
+  const start = Date.now();
+  while (true) {
+    try {
+      const payload = JSON.parse(await fs.readFile(heartbeatFile, "utf8"));
+      if (payload.status === expectedStatus) {
+        return payload;
+      }
+    } catch {}
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`timed out waiting for heartbeat status ${expectedStatus}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
