@@ -1331,12 +1331,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("break-glass"), true);
   assert.equal(body.includes("任意コマンドではなく、状態確認と固定復旧だけを扱います"), true);
   assert.equal(body.includes(".composer-status:empty"), true);
+  assert.equal(body.includes('class="composer-box" data-can-send="false" data-running="false"'), true);
   assert.equal(body.includes('id="butler-send-button"'), true);
+  assert.equal(body.includes('id="butler-send-button" type="submit" aria-label="Butler に送信" data-mode="send"'), true);
   assert.equal(body.includes('data-mode="stop"'), true);
   assert.equal(body.includes('id="butler-voice-button"'), true);
   assert.equal(body.includes('class="composer-actions"'), true);
-  assert.equal(body.includes('.composer-box[data-can-send="true"]:not([data-running="true"]) .voice-button { display: none; }'), true);
-  assert.equal(body.includes('.composer-box[data-running="true"] .voice-button'), false);
+  assert.equal(body.includes('.composer-box[data-running="true"] .voice-button, .composer-box[data-can-send="true"] .voice-button { display: none; }'), true);
   assert.equal(body.includes("function toggleVoiceInput()"), true);
   assert.equal(body.includes("function appendVoiceTranscript(text)"), true);
   assert.equal(body.includes("無音区切りで送信します"), true);
