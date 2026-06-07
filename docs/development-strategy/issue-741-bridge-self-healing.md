@@ -10,13 +10,13 @@ Issue #741 の lifecycle guard と Issue #637 の VPS recovery plane のうち�
 
 ## 設計
 
-watchdog script は VPS user 権限で動き、`systemctl --user show/is-active` による service state と bridge heartbeat file を読む。対象は fixed service `vtdd-dashboard-app-server-bridge-unresolved.service` に限定する。異常判定は active/running でない、MainPID がない、heartbeat file がない、または heartbeat が stale threshold を超える場合とする。検知後は grace period を置いて再確認し、一時的な揺らぎや provider 側自動復旧と競合しない。
+watchdog script は VPS user 権限で動き、`systemctl --user show/is-active` による service state と bridge heartbeat file を読む。対象は fixed service `vtdd-dashboard-app-server-bridge-unresolved.service` に限定する。異常判定は active/running でない、MainPID がない、heartbeat file がない、または heartbeat が stale threshold を超える場合とする。heartbeat は ping 送信ではなく Worker からの `pong` 受信で更新する。検知後は grace period を置いて再確認し、一時的な揺らぎや provider 側自動復旧と競合しない。
 
-復旧実行前に single-flight lock を取得する。attempt history は request body queue ではなく VPS local の bounded JSON state に保存し、一定 window 内の max attempts を超えたら restart しない。失敗時は backoff/circuit breaker として `circuit_open` を返し、無限 retry で VPS resource を食い潰さない。
+復旧実行前に single-flight lock を取得する。lock 親ディレクトリは初回起動時に作成し、stale lock は TTL 後に破棄して復旧する。attempt history は request body queue ではなく VPS local の bounded JSON state に保存し、一定 window 内の max attempts を超えたら restart しない。失敗時は backoff/circuit breaker として `circuit_open` を返し、無限 retry で VPS resource を食い潰さない。
 
 restart は fixed command `systemctl --user restart vtdd-dashboard-app-server-bridge-unresolved.service` のみを実行する。任意 command / arbitrary service / deploy / credential / permission mutation は扱わない。実行前後に PID、ActiveState、SubState、ActiveEnterTimestamp、ExecMainStatus を取得する。必要に応じて `origin/main` への sync は deploy後 helper の責務であり、この watchdog は bridge process recovery に限定する。
 
-事後報告は既存 Worker machine route `/v2/events/vps-runner` を使う。bridge が落ちていてもこの route は bridge に依存しない。runtime URL と bearer token が設定されている時だけ POST し、未設定なら local log/state に残す。Dashboard thread は `dashboard-main-unresolved` を default にする。
+事後報告は既存 Worker machine route `/v2/events/vps-runner` を使う。bridge が落ちていてもこの route は bridge に依存しない。runtime URL と bearer token が設定されている時だけ POST し、未設定なら local log/state に残す。routine healthy check は default では POST しない。Dashboard thread は `dashboard-main-unresolved` を default にする。
 
 systemd user service/timer template は repo に置くが、この PR では VPS へ install/enable しない。installation / deploy は scoped approval または後続 E2E で扱う。
 

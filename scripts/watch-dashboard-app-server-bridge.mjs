@@ -16,7 +16,9 @@ const DEFAULT_MAX_LOG_LINES = 100;
 const DEFAULT_ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_GRACE_MS = 30 * 1000;
+const DEFAULT_POST_RESTART_SETTLE_MS = 30 * 1000;
 const DEFAULT_STALE_HEARTBEAT_MS = 90 * 1000;
+const DEFAULT_LOCK_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_RETENTION = 50;
 
 export function parseWatchdogArgs(argv = process.argv.slice(2), env = process.env) {
@@ -33,11 +35,14 @@ export function parseWatchdogArgs(argv = process.argv.slice(2), env = process.en
     attemptWindowMs: Number(env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_ATTEMPT_WINDOW_MS || DEFAULT_ATTEMPT_WINDOW_MS),
     maxAttempts: Number(env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_MAX_ATTEMPTS || DEFAULT_MAX_ATTEMPTS),
     graceMs: Number(env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_GRACE_MS || DEFAULT_GRACE_MS),
+    postRestartSettleMs: Number(env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_POST_RESTART_SETTLE_MS || DEFAULT_POST_RESTART_SETTLE_MS),
     staleHeartbeatMs: Number(env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_STALE_HEARTBEAT_MS || DEFAULT_STALE_HEARTBEAT_MS),
+    lockTtlMs: Number(env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_LOCK_TTL_MS || DEFAULT_LOCK_TTL_MS),
     retention: Number(env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_RETENTION || DEFAULT_RETENTION),
     runtimeUrl: env.VTDD_RUNTIME_URL || "",
     token: env.VTDD_GATEWAY_BEARER_TOKEN || env.MVP_GATEWAY_BEARER_TOKEN || "",
     dryRun: env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_DRY_RUN === "1",
+    reportHealthy: env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_REPORT_HEALTHY === "1",
     report: env.VTDD_DASHBOARD_BRIDGE_WATCHDOG_REPORT !== "0"
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -54,11 +59,14 @@ export function parseWatchdogArgs(argv = process.argv.slice(2), env = process.en
     else if (arg === "--attempt-window-ms") options.attemptWindowMs = Number(argv[++index] || DEFAULT_ATTEMPT_WINDOW_MS);
     else if (arg === "--max-attempts") options.maxAttempts = Number(argv[++index] || DEFAULT_MAX_ATTEMPTS);
     else if (arg === "--grace-ms") options.graceMs = Number(argv[++index] || DEFAULT_GRACE_MS);
+    else if (arg === "--post-restart-settle-ms") options.postRestartSettleMs = Number(argv[++index] || DEFAULT_POST_RESTART_SETTLE_MS);
     else if (arg === "--stale-heartbeat-ms") options.staleHeartbeatMs = Number(argv[++index] || DEFAULT_STALE_HEARTBEAT_MS);
+    else if (arg === "--lock-ttl-ms") options.lockTtlMs = Number(argv[++index] || DEFAULT_LOCK_TTL_MS);
     else if (arg === "--retention") options.retention = Number(argv[++index] || DEFAULT_RETENTION);
     else if (arg === "--runtime-url") options.runtimeUrl = argv[++index] || "";
     else if (arg === "--token") options.token = argv[++index] || "";
     else if (arg === "--dry-run") options.dryRun = true;
+    else if (arg === "--report-healthy") options.reportHealthy = true;
     else if (arg === "--no-report") options.report = false;
     else if (arg === "--help") options.help = true;
     else throw new Error(`unsupported argument: ${arg}`);
@@ -109,7 +117,7 @@ export async function runDashboardBridgeWatchdog({
   assertSafeService(resolved.service);
   const startedAtMs = Number(nowMs());
   const startedAt = new Date(startedAtMs).toISOString();
-  const lock = await acquireLock({ lockDir: resolved.lockDir, fsImpl, now: startedAt });
+  const lock = await acquireLock({ lockDir: resolved.lockDir, fsImpl, nowMs: startedAtMs, ttlMs: resolved.lockTtlMs });
   if (!lock.ok) {
     return finalizeResult({
       result: {
@@ -206,6 +214,9 @@ export async function runDashboardBridgeWatchdog({
         runner,
         allowFailure: true
       });
+    }
+    if (Number(resolved.postRestartSettleMs) > 0) {
+      await delay(Number(resolved.postRestartSettleMs));
     }
     const afterRestart = await readBridgeHealth({
       service: resolved.service,
@@ -469,6 +480,9 @@ function buildWatchdogReportMessage(result = {}) {
 
 async function postWatchdogReport({ options = {}, result = {}, fetchImpl = globalThis.fetch } = {}) {
   if (options.report === false) return { ok: false, status: "skipped" };
+  if (result.status === "healthy" && !options.reportHealthy) {
+    return { ok: false, status: "skipped_healthy" };
+  }
   if (!options.runtimeUrl || !options.token || !options.repository || typeof fetchImpl !== "function") {
     return {
       ok: false,
@@ -499,20 +513,38 @@ async function postWatchdogReport({ options = {}, result = {}, fetchImpl = globa
   }
 }
 
-async function acquireLock({ lockDir, fsImpl = fs, now = new Date().toISOString() } = {}) {
+async function acquireLock({ lockDir, fsImpl = fs, nowMs = Date.now(), ttlMs = DEFAULT_LOCK_TTL_MS } = {}) {
   if (!lockDir) return { ok: true };
   try {
+    await fsImpl.mkdir(path.dirname(lockDir), { recursive: true });
     await fsImpl.mkdir(lockDir, { recursive: false });
-    await fsImpl.writeFile(path.join(lockDir, "lock.json"), `${JSON.stringify({ pid: process.pid, createdAt: now })}\n`, "utf8");
+    await fsImpl.writeFile(path.join(lockDir, "lock.json"), `${JSON.stringify({ pid: process.pid, createdAt: new Date(Number(nowMs)).toISOString() })}\n`, "utf8");
     return { ok: true };
   } catch (error) {
     if (error?.code && error.code !== "EEXIST") {
       throw error;
     }
+    const stale = await isStaleLock({ lockDir, fsImpl, nowMs, ttlMs });
+    if (stale) {
+      await fsImpl.rm(lockDir, { recursive: true, force: true });
+      await fsImpl.mkdir(lockDir, { recursive: false });
+      await fsImpl.writeFile(path.join(lockDir, "lock.json"), `${JSON.stringify({ pid: process.pid, createdAt: new Date(Number(nowMs)).toISOString(), recoveredStaleLock: true })}\n`, "utf8");
+      return { ok: true, recoveredStaleLock: true };
+    }
     return {
       ok: false,
       reason: "bridge watchdog lock is already held"
     };
+  }
+}
+
+async function isStaleLock({ lockDir, fsImpl = fs, nowMs = Date.now(), ttlMs = DEFAULT_LOCK_TTL_MS } = {}) {
+  try {
+    const stat = await fsImpl.stat(path.join(lockDir, "lock.json"));
+    const ageMs = Math.max(0, Number(nowMs) - Number(stat.mtimeMs || 0));
+    return ageMs > Math.max(1, Number(ttlMs) || DEFAULT_LOCK_TTL_MS);
+  } catch {
+    return false;
   }
 }
 

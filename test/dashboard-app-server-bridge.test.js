@@ -4180,7 +4180,9 @@ test("dashboard app-server bridge reconnects the dashboard WebSocket without rei
   assert.equal(String(sockets[1].endpoint), "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main");
 });
 
-test("dashboard app-server bridge sends heartbeat pings on an open socket", async () => {
+test("dashboard app-server bridge sends heartbeat pings and records pong-confirmed heartbeat", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-bridge-heartbeat-"));
+  const heartbeatFile = path.join(tmpDir, "heartbeat.json");
   const sockets = [];
   class MockWebSocket {
     constructor(endpoint, protocols) {
@@ -4225,11 +4227,15 @@ test("dashboard app-server bridge sends heartbeat pings on an open socket", asyn
     token: "secret-token",
     appServer,
     WebSocketImpl: MockWebSocket,
-    heartbeatMs: 1
+    heartbeatMs: 1,
+    heartbeatFile
   });
   assert.equal(sockets.length, 1);
   sockets[0].emit("open");
+  await waitForHeartbeatStatus(heartbeatFile, "connected");
   await waitFor(() => sockets[0].sent.includes("ping"));
+  sockets[0].emit("message", { data: JSON.stringify({ type: "pong", ok: true, threadId: "dashboard-main" }) });
+  await waitForHeartbeatStatus(heartbeatFile, "pong_received");
   sockets[0].emit("close");
   await once;
 });
@@ -4271,6 +4277,22 @@ async function waitFor(predicate, { timeoutMs = 1000 } = {}) {
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error("timed out waiting for condition");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
+async function waitForHeartbeatStatus(heartbeatFile, expectedStatus, { timeoutMs = 1000 } = {}) {
+  const start = Date.now();
+  while (true) {
+    try {
+      const payload = JSON.parse(await fs.readFile(heartbeatFile, "utf8"));
+      if (payload.status === expectedStatus) {
+        return payload;
+      }
+    } catch {}
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`timed out waiting for heartbeat status ${expectedStatus}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }

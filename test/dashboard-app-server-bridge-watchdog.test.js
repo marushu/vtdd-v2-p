@@ -134,7 +134,75 @@ test("dashboard bridge watchdog lock prevents duplicate restart attempts", async
   assert.equal(calls.length, 0);
 });
 
-test("dashboard bridge watchdog report requires explicit repository and hides bearer token from body", async () => {
+test("dashboard bridge watchdog creates the lock parent before first lock acquisition", async () => {
+  const mkdirs = [];
+  const result = await runDashboardBridgeWatchdog({
+    options: baseOptions(),
+    nowMs: () => NOW,
+    runner: systemctlRunner({
+      activeState: "active",
+      subState: "running",
+      mainPid: "700812"
+    }),
+    fsImpl: {
+      ...memoryFs({
+        stats: {
+          "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
+        }
+      }),
+      async mkdir(target, options) {
+        mkdirs.push({ target, options });
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(mkdirs.slice(0, 2), [
+    { target: "/tmp", options: { recursive: true } },
+    { target: "/tmp/watchdog.lock", options: { recursive: false } }
+  ]);
+});
+
+test("dashboard bridge watchdog recovers stale lock directories", async () => {
+  const rms = [];
+  const mkdirs = [];
+  let lockExists = true;
+  const result = await runDashboardBridgeWatchdog({
+    options: baseOptions({ lockTtlMs: 60_000 }),
+    nowMs: () => NOW,
+    runner: systemctlRunner({
+      activeState: "active",
+      subState: "running",
+      mainPid: "700812"
+    }),
+    fsImpl: {
+      ...memoryFs({
+        stats: {
+          "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 },
+          "/tmp/watchdog.lock/lock.json": { mtimeMs: NOW - 120_000 }
+        }
+      }),
+      async mkdir(target, options) {
+        mkdirs.push({ target, options });
+        if (target === "/tmp/watchdog.lock" && lockExists) {
+          const error = new Error("exists");
+          error.code = "EEXIST";
+          throw error;
+        }
+      },
+      async rm(target, options) {
+        rms.push({ target, options });
+        lockExists = false;
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(rms[0].target, "/tmp/watchdog.lock");
+  assert.equal(mkdirs.filter((entry) => entry.target === "/tmp/watchdog.lock").length, 2);
+});
+
+test("dashboard bridge watchdog skips Dashboard report for routine healthy checks", async () => {
   const fetchCalls = [];
   const result = await runDashboardBridgeWatchdog({
     options: baseOptions({
@@ -160,6 +228,45 @@ test("dashboard bridge watchdog report requires explicit repository and hides be
     }
   });
 
+  assert.equal(result.status, "healthy");
+  assert.equal(result.report.status, "skipped_healthy");
+  assert.equal(fetchCalls.length, 0);
+});
+
+test("dashboard bridge watchdog report requires explicit repository and hides bearer token from body", async () => {
+  const fetchCalls = [];
+  let restarted = false;
+  const result = await runDashboardBridgeWatchdog({
+    options: baseOptions({
+      report: true,
+      postRestartSettleMs: 0,
+      runtimeUrl: "https://runtime.example",
+      token: "secret-token",
+      repository: "sample-org/vtdd-v2-p"
+    }),
+    nowMs: () => NOW,
+    runner: (command, args) => {
+      if (args.includes("restart")) {
+        restarted = true;
+        return { status: 0, stdout: "", stderr: "" };
+      }
+      return systemctlRunner({
+        activeState: restarted ? "active" : "inactive",
+        subState: restarted ? "running" : "dead",
+        mainPid: restarted ? "700900" : "0"
+      })(command, args);
+    },
+    fsImpl: memoryFs({
+      stats: {
+        "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
+      }
+    }),
+    fetchImpl: async (url, init) => {
+      fetchCalls.push({ url: String(url), init });
+      return { ok: true, status: 202 };
+    }
+  });
+
   assert.equal(result.report.ok, true);
   assert.equal(fetchCalls[0].url, "https://runtime.example/v2/events/vps-runner");
   assert.equal(fetchCalls[0].init.headers.authorization, "Bearer secret-token");
@@ -168,6 +275,7 @@ test("dashboard bridge watchdog report requires explicit repository and hides be
   assert.equal(body.repository, "sample-org/vtdd-v2-p");
   assert.equal(body.threadId, "dashboard-main-unresolved");
   assert.equal(body.status, "completed");
+  assert.equal(body.lastEvent, "self_healed");
 });
 
 test("dashboard bridge watchdog keeps local log bounded", async () => {
@@ -269,6 +377,7 @@ function baseOptions(overrides = {}) {
     logPath: "/tmp/watchdog.log",
     report: false,
     graceMs: 0,
+    postRestartSettleMs: 0,
     staleHeartbeatMs: 90_000,
     ...overrides
   };

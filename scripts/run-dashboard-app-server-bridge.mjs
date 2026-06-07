@@ -2765,12 +2765,6 @@ export async function connectDashboardAppServerBridgeOnce({
       try {
         socket.send("ping");
       } catch {}
-      touchDashboardBridgeHeartbeatFile({
-        heartbeatFile: resolvedHeartbeatFile,
-        endpoint,
-        cwd,
-        status: "ping_sent"
-      });
       scheduleHeartbeat();
     }, delayMs);
   };
@@ -2802,6 +2796,15 @@ export async function connectDashboardAppServerBridgeOnce({
     try {
       payload = JSON.parse(String(event.data || ""));
     } catch {
+      return;
+    }
+    if (payload?.type === "pong") {
+      touchDashboardBridgeHeartbeatFile({
+        heartbeatFile: resolvedHeartbeatFile,
+        endpoint,
+        cwd,
+        status: "pong_received"
+      });
       return;
     }
     if (payload?.type === "app_server_turn_requested") {

@@ -11,10 +11,12 @@ Dashboard Butler から VPS Codex CLI へ投げる経路は app-server bridge �
 - restart 対象は `vtdd-dashboard-app-server-bridge-unresolved.service` だけ。
 - default では deploy、credential mutation、permission mutation、root 操作をしない。
 - lock directory で同時実行を避ける。
+- lock 親ディレクトリは初回起動時に作成し、stale lock は TTL 後に破棄して復旧する。
 - `maxAttempts` / `attemptWindowMs` で retry budget を超えたら `circuit_open` にして止める。
 - state は直近件数だけ保持する。
 - local log は追記無制限ではなく直近行数だけ保持する。
 - runtime URL、bearer token、repository が明示設定されている時だけ `/v2/events/vps-runner` に事後報告する。
+- routine healthy check は default では Dashboard に POST しない。復旧・失敗・circuit open の postmortem を優先する。
 
 ## ファイル
 
@@ -35,9 +37,14 @@ Dashboard Butler から VPS Codex CLI へ投げる経路は app-server bridge �
 - `VTDD_DASHBOARD_BRIDGE_WATCHDOG_MAX_ATTEMPTS`: default `3`。
 - `VTDD_DASHBOARD_BRIDGE_WATCHDOG_ATTEMPT_WINDOW_MS`: default `600000`。
 - `VTDD_DASHBOARD_BRIDGE_WATCHDOG_STALE_HEARTBEAT_MS`: default `90000`。
+- `VTDD_DASHBOARD_BRIDGE_WATCHDOG_POST_RESTART_SETTLE_MS`: default `30000`。restart 直後に heartbeat 更新が追いつくまで待つ。
+- `VTDD_DASHBOARD_BRIDGE_WATCHDOG_LOCK_TTL_MS`: default `600000`。異常終了で残った lock を stale と見なすまでの時間。
 - `VTDD_DASHBOARD_BRIDGE_WATCHDOG_MAX_LOG_LINES`: default `100`。
+- `VTDD_DASHBOARD_BRIDGE_WATCHDOG_REPORT_HEALTHY`: default unset。`1` にした時だけ routine healthy check も Dashboard に送る。
 
-`VTDD_DASHBOARD_BRIDGE_WATCHDOG_REPOSITORY`、`VTDD_RUNTIME_URL`、`VTDD_GATEWAY_BEARER_TOKEN` のいずれかがない場合、自動復旧と bounded local state/log は動くが Dashboard への事後報告は `unconfigured` になる。
+`VTDD_DASHBOARD_BRIDGE_WATCHDOG_REPOSITORY`、`VTDD_RUNTIME_URL`、`VTDD_GATEWAY_BEARER_TOKEN` のいずれかがない場合、自動復旧と bounded local state/log は動くが Dashboard への事後報告は `unconfigured` になる。routine healthy check は default で `skipped_healthy` になり、Dashboard event の洪水を避ける。
+
+heartbeat は bridge が ping を送った時点ではなく、Worker からの `pong` を受けた時点で fresh 化する。これにより、送信側だけが動いている stale WebSocket を healthy と誤判定しにくくする。
 
 ## 手動検証
 
