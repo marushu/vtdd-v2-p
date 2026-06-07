@@ -57998,6 +57998,11 @@ var DASHBOARD_ICON_PNG_PATH = `/dashboard-icon-${DASHBOARD_ICON_VERSION}.png`;
 var DASHBOARD_ICON_LINKS = `<link rel="icon" type="image/png" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
   <link rel="shortcut icon" href="${DASHBOARD_ICON_PNG_PATH}">
   <link rel="apple-touch-icon" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">`;
+var DASHBOARD_DEPLOY_BRIDGE_CONTROL_TTL_SECONDS = 24 * 60 * 60;
+var DASHBOARD_DEPLOY_BRIDGE_CONTROL_TYPE = "deploy_bridge_sync_restart_requested";
+var DASHBOARD_DEPLOY_BRIDGE_COMMAND_CLASS = "dashboard_bridge_unresolved_deploy_sync_restart";
+var DASHBOARD_DEPLOY_BRIDGE_SERVICE = "vtdd-dashboard-app-server-bridge-unresolved.service";
+var DASHBOARD_DEPLOY_BRIDGE_REF = "origin/main";
 var DashboardChatRoom = class {
   constructor(state, env) {
     this.ctx = state;
@@ -58091,39 +58096,62 @@ var DashboardChatRoom = class {
           reason: "threadId is required"
         });
       }
+      const message = normalizeDeployBridgeControlMessage({
+        threadId: threadId2,
+        message: payload.message
+      });
+      if (!message.ok) {
+        return json(422, {
+          ok: false,
+          error: "deploy_bridge_control_invalid",
+          reason: "app-server control only accepts deploy bridge restart requests with fixed target",
+          issues: message.issues
+        });
+      }
+      const idempotency = await this.claimDeployBridgeControlOnce(message.message);
+      if (!idempotency.ok) {
+        return json(202, {
+          ok: true,
+          control: {
+            status: "duplicate",
+            attempted: false,
+            reason: idempotency.reason,
+            requestId: normalizeDashboardEventText(message.message.requestId),
+            messageType: normalizeDashboardEventText(message.message.type),
+            deployRunId: normalizeDashboardEventText(message.message.deployRunId),
+            idempotencyKey: idempotency.key
+          }
+        });
+      }
       const bridgeSockets = this.connectedAppServerBridgeSockets(threadId2);
       if (bridgeSockets.length === 0) {
+        await this.releaseDeployBridgeControlClaim(idempotency.key);
         return json(202, {
           ok: true,
           control: {
             status: "unavailable",
             attempted: false,
-            reason: "app-server bridge socket is not connected"
+            reason: "app-server bridge socket is not connected",
+            requestId: normalizeDashboardEventText(message.message.requestId),
+            messageType: normalizeDashboardEventText(message.message.type),
+            deployRunId: normalizeDashboardEventText(message.message.deployRunId)
           }
         });
       }
-      const message = payload.message && typeof payload.message === "object" ? {
-        ...payload.message,
-        threadId: threadId2,
-        schema: "vtdd.dashboard.app_server_bridge.v1",
-        createdAt: normalizeIsoTimestamp(payload.message.createdAt || payload.message.created_at) || (/* @__PURE__ */ new Date()).toISOString()
-      } : null;
-      if (!message?.type) {
-        return json(422, {
-          ok: false,
-          error: "app_server_control_message_required",
-          reason: "message.type is required"
-        });
+      const sent = this.sendSocket(bridgeSockets[0], message.message);
+      if (!sent) {
+        await this.releaseDeployBridgeControlClaim(idempotency.key);
       }
-      const sent = this.sendSocket(bridgeSockets[0], message);
       return json(202, {
         ok: true,
         control: {
           status: sent ? "sent" : "unavailable",
           attempted: sent,
-          reason: sent ? "app-server bridge control message sent" : "failed to send app-server bridge control message",
-          requestId: normalizeDashboardEventText(message.requestId),
-          messageType: normalizeDashboardEventText(message.type)
+          reason: sent ? "deploy bridge restart control message sent" : "failed to send deploy bridge restart control message",
+          requestId: normalizeDashboardEventText(message.message.requestId),
+          messageType: normalizeDashboardEventText(message.message.type),
+          deployRunId: normalizeDashboardEventText(message.message.deployRunId),
+          idempotencyKey: sent ? idempotency.key : ""
         }
       });
     }
@@ -58676,6 +58704,62 @@ var DashboardChatRoom = class {
     }
     socket.send(JSON.stringify(payload));
     return true;
+  }
+  deployBridgeControlIdempotencyKey(message) {
+    const repository = normalizeCanonicalRepositoryInput(message?.repository);
+    const deployRunId = normalizeDashboardEventText(message?.deployRunId);
+    const requestId = normalizeDashboardEventText(message?.requestId);
+    const normalizedThreadId = normalizeDashboardThreadId(message?.threadId);
+    const identity = deployRunId || requestId;
+    if (!repository || !identity) {
+      return "";
+    }
+    return `deploy_bridge_control_once:${normalizedThreadId}:${repository}:${identity}`;
+  }
+  async claimDeployBridgeControlOnce(message) {
+    const key = this.deployBridgeControlIdempotencyKey(message);
+    if (!key || typeof this.ctx?.storage?.get !== "function" || typeof this.ctx?.storage?.put !== "function") {
+      return {
+        ok: false,
+        key,
+        reason: "deploy bridge control idempotency storage unavailable"
+      };
+    }
+    const existing = await this.ctx.storage.get(key);
+    if (existing) {
+      return {
+        ok: false,
+        key,
+        reason: "deploy bridge restart control was already claimed"
+      };
+    }
+    await this.ctx.storage.put(
+      key,
+      {
+        type: DASHBOARD_DEPLOY_BRIDGE_CONTROL_TYPE,
+        repository: normalizeCanonicalRepositoryInput(message.repository),
+        deployRunId: normalizeDashboardEventText(message.deployRunId),
+        requestId: normalizeDashboardEventText(message.requestId),
+        status: "claimed",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      },
+      { expirationTtl: DASHBOARD_DEPLOY_BRIDGE_CONTROL_TTL_SECONDS }
+    );
+    return { ok: true, key };
+  }
+  async releaseDeployBridgeControlClaim(key) {
+    if (!key || !this.ctx?.storage) {
+      return false;
+    }
+    if (typeof this.ctx.storage.delete === "function") {
+      await this.ctx.storage.delete(key);
+      return true;
+    }
+    if (typeof this.ctx.storage.put === "function") {
+      await this.ctx.storage.put(key, null, { expirationTtl: 60 });
+      return true;
+    }
+    return false;
   }
   async readAppServerThreadMapping(threadId) {
     const key = `app_server_thread:${normalizeDashboardThreadId(threadId)}`;
@@ -62611,7 +62695,7 @@ async function buildDeployBridgeFollowupChatMessage({ event, threadId, env, orig
 }
 function buildDeployBridgeFollowupControlMessage({ record: record2, executionId, repository, relatedIssue, threadId } = {}) {
   return {
-    type: "deploy_bridge_sync_restart_requested",
+    type: DASHBOARD_DEPLOY_BRIDGE_CONTROL_TYPE,
     schema: "vtdd.dashboard.app_server_bridge.v1",
     requestId: createDashboardRequestId("deploy-bridge-restart"),
     executionId,
@@ -62621,10 +62705,62 @@ function buildDeployBridgeFollowupControlMessage({ record: record2, executionId,
     deployRunId: normalizeDashboardEventText(record2?.runId),
     deployRunUrl: normalizeDashboardUrl(record2?.runUrl),
     headSha: normalizeDashboardEventText(record2?.headSha),
-    commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
-    service: "vtdd-dashboard-app-server-bridge-unresolved.service",
-    ref: "origin/main",
+    commandClass: DASHBOARD_DEPLOY_BRIDGE_COMMAND_CLASS,
+    service: DASHBOARD_DEPLOY_BRIDGE_SERVICE,
+    ref: DASHBOARD_DEPLOY_BRIDGE_REF,
     createdAt: record2?.updatedAt || record2?.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function normalizeDeployBridgeControlMessage({ threadId, message } = {}) {
+  const issues = [];
+  const source = message && typeof message === "object" ? message : {};
+  const normalized = {
+    type: normalizeDashboardEventText(source.type),
+    schema: "vtdd.dashboard.app_server_bridge.v1",
+    requestId: normalizeDashboardEventText(source.requestId),
+    executionId: normalizeDashboardEventText(source.executionId),
+    threadId: normalizeDashboardThreadId(threadId || source.threadId),
+    repository: normalizeCanonicalRepositoryInput(source.repository),
+    relatedIssue: normalizePositiveInteger10(source.relatedIssue || source.related_issue),
+    deployRunId: normalizeDashboardEventText(source.deployRunId || source.deploy_run_id),
+    deployRunUrl: normalizeDashboardUrl(source.deployRunUrl || source.deploy_run_url),
+    headSha: normalizeDashboardEventText(source.headSha || source.head_sha),
+    commandClass: normalizeDashboardEventText(source.commandClass || source.command_class),
+    service: normalizeDashboardEventText(source.service),
+    ref: normalizeDashboardEventText(source.ref),
+    createdAt: normalizeIsoTimestamp(source.createdAt || source.created_at) || (/* @__PURE__ */ new Date()).toISOString()
+  };
+  if (normalized.type !== DASHBOARD_DEPLOY_BRIDGE_CONTROL_TYPE) {
+    issues.push(`type must be ${DASHBOARD_DEPLOY_BRIDGE_CONTROL_TYPE}`);
+  }
+  if (!normalized.requestId) {
+    issues.push("requestId is required");
+  }
+  if (!normalized.executionId) {
+    issues.push("executionId is required");
+  }
+  if (!normalized.threadId) {
+    issues.push("threadId is required");
+  }
+  if (!normalized.repository) {
+    issues.push("repository is required");
+  }
+  if (!normalized.deployRunId) {
+    issues.push("deployRunId is required");
+  }
+  if (normalized.commandClass !== DASHBOARD_DEPLOY_BRIDGE_COMMAND_CLASS) {
+    issues.push(`commandClass must be ${DASHBOARD_DEPLOY_BRIDGE_COMMAND_CLASS}`);
+  }
+  if (normalized.service !== DASHBOARD_DEPLOY_BRIDGE_SERVICE) {
+    issues.push(`service must be ${DASHBOARD_DEPLOY_BRIDGE_SERVICE}`);
+  }
+  if (normalized.ref !== DASHBOARD_DEPLOY_BRIDGE_REF) {
+    issues.push(`ref must be ${DASHBOARD_DEPLOY_BRIDGE_REF}`);
+  }
+  return {
+    ok: issues.length === 0,
+    issues,
+    message: normalized
   };
 }
 function buildDeployBridgeFollowupControlMessageText({ record: record2, repository, relatedIssue, executionId, control } = {}) {

@@ -472,6 +472,52 @@ test("dashboard app-server bridge deploy restart control rejects mutable target"
   assert.equal(result.issues.includes("ref must be origin/main"), true);
 });
 
+test("dashboard app-server bridge deploy restart control dedupes repeated request", async () => {
+  const spawnCalls = [];
+  const processedRequests = new Map();
+  const request = {
+    threadId: "dashboard-main-unresolved",
+    requestId: "deploy-bridge-restart:test",
+    executionId: "deploy-bridge-followup-123",
+    deployRunId: "123",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 741,
+    commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+    service: "vtdd-dashboard-app-server-bridge-unresolved.service",
+    ref: "origin/main"
+  };
+  const first = await executeDeployBridgeSyncRestartRequest({
+    request,
+    processedRequests,
+    now: (() => {
+      const values = ["2026-06-07T00:00:00.000Z", "2026-06-07T00:00:01.000Z"];
+      return () => values.shift() || "2026-06-07T00:00:01.000Z";
+    })(),
+    spawnImpl(commandName, args, options) {
+      spawnCalls.push({ command: commandName, args, options });
+      return { unref() {} };
+    }
+  });
+  const duplicate = await executeDeployBridgeSyncRestartRequest({
+    request,
+    processedRequests,
+    now: (() => {
+      const values = ["2026-06-07T00:00:02.000Z", "2026-06-07T00:00:03.000Z"];
+      return () => values.shift() || "2026-06-07T00:00:03.000Z";
+    })(),
+    spawnImpl(commandName, args, options) {
+      spawnCalls.push({ command: commandName, args, options });
+      return { unref() {} };
+    }
+  });
+
+  assert.equal(first.status, "started");
+  assert.equal(duplicate.status, "duplicate");
+  assert.equal(duplicate.attempted, false);
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(processedRequests.size, 1);
+});
+
 test("dashboard app-server bridge wraps repository traffic-control context into turn input", () => {
   const text = buildDashboardTurnInputText({
     repository: "marushu/vtdd-v2-p",

@@ -69,6 +69,21 @@ Cloudflare Worker から VPS へ直接 HTTP/SSH する経路は作らない。br
 - Worker generated file と source が一致すること。
 - PR body に `Execution Queue Delta` と `vps_handoff_gap_found` / `recovery_gap_found` の解消範囲を明記すること。
 
+## PR #823 review blocker 対応
+
+codex fallback reviewer は `/app-server-control` が汎用制御面になっていることと、一回限り restart の冪等性がないことを merge blocker とした。これは妥当で、このままでは「fixed command のみ」「一回限り」という authority boundary が実装で保証されない。
+
+追加 bounded change contract:
+
+- target Issue: Issue #741 / Issue #637。
+- exact Success Criteria: `/app-server-control` は deploy bridge restart 専用 payload だけを受ける。DO 側で type / commandClass / service / ref / repository / deployRunId を再検証する。DO 側と bridge 側の両方で request/deployRun 単位の重複実行を拒否する。
+- Non-goals: live E2E、Action Schema 追加、GitHub secret/permission mutation、既存 Issue comment cleanup、VPS logrotate/tmpfiles 設定。
+- files expected to change: `src/worker/runtime.js`, `scripts/run-dashboard-app-server-bridge.mjs`, `test/worker.test.js`, `test/dashboard-app-server-bridge.test.js`, `worker.js`, this strategy file。
+- validation: focused worker tests, bridge control tests, `npm run build:worker`, `npm run verify:worker`。
+- stop condition: 汎用 message forwarding を残さないと実装できない、または queue/storage として restart request 本文を永続化しないと冪等性を担保できない場合は停止する。
+
+DO 側の idempotency marker は queue ではなく replay guard として TTL 付き最小 metadata に限定する。保存するのは request body ではなく request/deployRun の key、status、timestamp 程度で、stale execution を後で実行する材料にはしない。
+
 ## 実装候補と捨てた案
 
 採用: deploy success event から接続中 bridge へ one-shot WebSocket control request を送る。

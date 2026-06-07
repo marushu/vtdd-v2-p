@@ -31,6 +31,8 @@ const DEBUG_SLOW_TURN_MAX_SECONDS = 10 * 60;
 const DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS = 30 * 1000;
 const DEFAULT_REPO_SYNC_BASE_REF = "main";
 const KNOWN_BRIDGE_UNTRACKED_ARTIFACT_PREFIXES = [".tmp/", "test-results/"];
+const DEPLOY_BRIDGE_SYNC_RESTART_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
+const deployBridgeSyncRestartProcessedRequests = new Map();
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -490,7 +492,8 @@ export function buildDeployBridgeSyncRestartCommand({ logPath = "" } = {}) {
 export async function executeDeployBridgeSyncRestartRequest({
   request = {},
   spawnImpl = spawn,
-  now = () => new Date().toISOString()
+  now = () => new Date().toISOString(),
+  processedRequests = deployBridgeSyncRestartProcessedRequests
 } = {}) {
   const startedAt = now();
   const command = buildDeployBridgeSyncRestartCommand();
@@ -504,6 +507,15 @@ export async function executeDeployBridgeSyncRestartRequest({
   if (normalizeBridgeText(request.ref) !== "origin/main") {
     issues.push("ref must be origin/main");
   }
+  if (!normalizeBridgeText(request.repository)) {
+    issues.push("repository is required");
+  }
+  if (!normalizeBridgeText(request.deployRunId)) {
+    issues.push("deployRunId is required");
+  }
+  if (!normalizeBridgeText(request.requestId)) {
+    issues.push("requestId is required");
+  }
   if (issues.length > 0) {
     return {
       type: "deploy_bridge_sync_restart_result",
@@ -514,6 +526,30 @@ export async function executeDeployBridgeSyncRestartRequest({
       status: "blocked",
       attempted: false,
       issues,
+      startedAt,
+      completedAt: now()
+    };
+  }
+  const idempotencyKey = buildDeployBridgeSyncRestartIdempotencyKey(request);
+  const duplicate = claimDeployBridgeSyncRestartRequest({
+    processedRequests,
+    idempotencyKey,
+    nowMs: Date.parse(startedAt)
+  });
+  if (!duplicate.ok) {
+    return {
+      type: "deploy_bridge_sync_restart_result",
+      schema: DEFAULT_SCHEMA,
+      threadId: normalizeBridgeText(request.threadId),
+      requestId: normalizeBridgeText(request.requestId),
+      executionId: normalizeBridgeText(request.executionId),
+      deployRunId: normalizeBridgeText(request.deployRunId),
+      repository: normalizeBridgeText(request.repository),
+      relatedIssue: Number(request.relatedIssue || 0) || null,
+      status: "duplicate",
+      attempted: false,
+      idempotencyKey,
+      reason: duplicate.reason,
       startedAt,
       completedAt: now()
     };
@@ -548,6 +584,7 @@ export async function executeDeployBridgeSyncRestartRequest({
       },
       startedAt,
       completedAt: now(),
+      idempotencyKey,
       persistence: {
         githubIssueCommentQueue: false,
         vpsLocalLogPath: command.logPath,
@@ -555,6 +592,9 @@ export async function executeDeployBridgeSyncRestartRequest({
       }
     };
   } catch (error) {
+    if (processedRequests && typeof processedRequests.delete === "function") {
+      processedRequests.delete(idempotencyKey);
+    }
     return {
       type: "deploy_bridge_sync_restart_result",
       schema: DEFAULT_SCHEMA,
@@ -573,9 +613,50 @@ export async function executeDeployBridgeSyncRestartRequest({
       },
       startedAt,
       completedAt: now(),
+      idempotencyKey,
       reason: normalizeBridgeText(error?.message || "failed to start deploy bridge sync/restart").slice(0, 240)
     };
   }
+}
+
+export function buildDeployBridgeSyncRestartIdempotencyKey(request = {}) {
+  const repository = normalizeBridgeText(request.repository);
+  const deployRunId = normalizeBridgeText(request.deployRunId);
+  const requestId = normalizeBridgeText(request.requestId);
+  return `deploy_bridge_sync_restart:${repository}:${deployRunId || requestId}`;
+}
+
+export function claimDeployBridgeSyncRestartRequest({
+  processedRequests = deployBridgeSyncRestartProcessedRequests,
+  idempotencyKey = "",
+  nowMs = Date.now()
+} = {}) {
+  const key = normalizeBridgeText(idempotencyKey);
+  if (!key || !processedRequests || typeof processedRequests.get !== "function" || typeof processedRequests.set !== "function") {
+    return {
+      ok: false,
+      reason: "deploy bridge restart idempotency state unavailable"
+    };
+  }
+  const numericNow = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  for (const [existingKey, record] of processedRequests.entries()) {
+    const expiresAt = Number(record?.expiresAt || 0);
+    if (expiresAt > 0 && expiresAt <= numericNow) {
+      processedRequests.delete(existingKey);
+    }
+  }
+  if (processedRequests.has(key)) {
+    return {
+      ok: false,
+      reason: "deploy bridge restart request was already processed"
+    };
+  }
+  processedRequests.set(key, {
+    status: "claimed",
+    createdAt: new Date(numericNow).toISOString(),
+    expiresAt: numericNow + DEPLOY_BRIDGE_SYNC_RESTART_REQUEST_TTL_MS
+  });
+  return { ok: true };
 }
 
 async function materializeDashboardMediaReference({ reference, runtimeUrl, token, fetchImpl, tmpRoot }) {

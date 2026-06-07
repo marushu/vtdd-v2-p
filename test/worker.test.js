@@ -779,8 +779,8 @@ function createMockDurableObjectStorage() {
     async get(key) {
       return values.get(key);
     },
-    async put(key, value) {
-      putCalls.push({ key, value });
+    async put(key, value, options) {
+      putCalls.push({ key, value, options });
       values.set(key, value);
     },
     async delete(key) {
@@ -4766,6 +4766,97 @@ test("DashboardChatRoom sends runner wakeup requests only to connected app-serve
   assert.equal(wakeup.repository, "marushu/vtdd-v2-p");
   assert.equal(wakeup.issueNumber, 717);
   assert.equal(wakeup.queueCommentUrl, "https://github.com/marushu/vtdd-v2-p/issues/717#issuecomment-1");
+});
+
+test("DashboardChatRoom app-server control only sends fixed deploy bridge restart once", async () => {
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore() }
+  );
+  const payload = {
+    threadId: "dashboard-main-marushu-vtdd-v2-p",
+    message: {
+      type: "deploy_bridge_sync_restart_requested",
+      requestId: "deploy-bridge-restart:test",
+      executionId: "deploy-bridge-followup-123",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repository: "marushu/vtdd-v2-p",
+      deployRunId: "123",
+      commandClass: "dashboard_bridge_unresolved_deploy_sync_restart",
+      service: "vtdd-dashboard-app-server-bridge-unresolved.service",
+      ref: "origin/main"
+    }
+  };
+
+  const first = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+  );
+  const firstBody = await first.json();
+  assert.equal(first.status, 202);
+  assert.equal(firstBody.control.status, "sent");
+  assert.equal(firstBody.control.deployRunId, "123");
+  assert.equal(bridgeSocket.sent.length, 1);
+  assert.equal(JSON.parse(bridgeSocket.sent[0]).type, "deploy_bridge_sync_restart_requested");
+  assert.equal(storage.putCalls.at(-1).options.expirationTtl, 86400);
+
+  const duplicate = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+  );
+  const duplicateBody = await duplicate.json();
+  assert.equal(duplicate.status, 202);
+  assert.equal(duplicateBody.control.status, "duplicate");
+  assert.equal(duplicateBody.control.attempted, false);
+  assert.equal(bridgeSocket.sent.length, 1);
+});
+
+test("DashboardChatRoom app-server control rejects generic bridge messages", async () => {
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore() }
+  );
+
+  const response = await room.fetch(
+    new Request("https://dashboard-room.local/app-server-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        message: {
+          type: "runner_wakeup_requested",
+          requestId: "unsafe",
+          commandClass: "anything",
+          service: "other.service",
+          ref: "feature"
+        }
+      })
+    })
+  );
+  const body = await response.json();
+  assert.equal(response.status, 422);
+  assert.equal(body.error, "deploy_bridge_control_invalid");
+  assert.equal(bridgeSocket.sent.length, 0);
 });
 
 test("DashboardChatRoom attaches execution queue preflight to repository app-server turns", async () => {
