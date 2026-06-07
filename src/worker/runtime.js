@@ -16405,8 +16405,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .send-button[data-mode="stop"]::before { content: "■"; }
     .send-button[data-mode="stop"] { color: var(--page-bg); }
     .send-button[data-mode="stop"] span { display: none; }
+    .composer-actions { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
     .composer-box[data-can-send="false"] .send-button[data-mode="send"] { display: none; }
-    .composer-box[data-running="true"] .voice-button, .composer-box[data-can-send="true"] .voice-button { display: none; }
+    .composer-box[data-can-send="true"]:not([data-running="true"]) .voice-button { display: none; }
     .followup-queue { display: grid; gap: 8px; padding: 0 10px; }
     .followup-queue[hidden], .followup-draft[hidden] { display: none; }
     .followup-chip, .followup-draft { width: fit-content; max-width: min(720px, 100%); justify-self: end; border: 1px solid var(--border); border-radius: 18px; background: var(--floating-bg); box-shadow: 0 10px 34px var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text); }
@@ -16654,8 +16655,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <button class="media-button" id="butler-media-button" type="button" aria-label="画像・動画・ファイルを追加" title="画像・動画・ファイルを追加">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler にメッセージ..." aria-label="Butler にメッセージ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
-          <button class="voice-button" id="butler-voice-button" type="button" aria-label="音声入力" title="音声入力"><span class="voice-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span></button>
-          <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler に送信"><span>↑</span></button>
+          <div class="composer-actions" aria-label="入力操作">
+            <button class="voice-button" id="butler-voice-button" type="button" aria-label="音声入力" title="音声入力"><span class="voice-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></span></button>
+            <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler に送信"><span>↑</span></button>
+          </div>
         </div>
         <div class="followup-draft" id="butler-followup-draft" hidden>
           <p id="butler-followup-draft-text"></p>
