@@ -32,6 +32,7 @@ const DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS = 30 * 1000;
 const DEFAULT_REPO_SYNC_BASE_REF = "main";
 const KNOWN_BRIDGE_UNTRACKED_ARTIFACT_PREFIXES = [".tmp/", "test-results/"];
 const DEPLOY_BRIDGE_SYNC_RESTART_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_BRIDGE_HEARTBEAT_FILE = path.join(os.homedir(), "vtdd-runner", "run", "dashboard-bridge-unresolved.heartbeat.json");
 const deployBridgeSyncRestartProcessedRequests = new Map();
 
 export function buildAppServerInitializeRequest(id = 1) {
@@ -2225,7 +2226,8 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     turnTimeoutMs: Number(env.VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS || DEFAULT_TURN_TIMEOUT_MS),
     activityQuietMs: Number(env.VTDD_DASHBOARD_APP_SERVER_ACTIVITY_QUIET_MS || DEFAULT_ACTIVITY_QUIET_MS),
     reconnectDelayMs: Number(env.VTDD_DASHBOARD_BRIDGE_RECONNECT_DELAY_MS || 1000),
-    heartbeatMs: Number(env.VTDD_DASHBOARD_BRIDGE_HEARTBEAT_MS || 25000)
+    heartbeatMs: Number(env.VTDD_DASHBOARD_BRIDGE_HEARTBEAT_MS || 25000),
+    heartbeatFile: env.VTDD_DASHBOARD_BRIDGE_HEARTBEAT_FILE || DEFAULT_BRIDGE_HEARTBEAT_FILE
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -2243,6 +2245,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--activity-quiet-ms") options.activityQuietMs = Number(argv[++index] || DEFAULT_ACTIVITY_QUIET_MS);
     if (arg === "--reconnect-delay-ms") options.reconnectDelayMs = Number(argv[++index] || 1000);
     if (arg === "--heartbeat-ms") options.heartbeatMs = Number(argv[++index] || 25000);
+    if (arg === "--heartbeat-file") options.heartbeatFile = argv[++index] || "";
   }
   return options;
 }
@@ -2725,6 +2728,7 @@ export async function connectDashboardAppServerBridgeOnce({
   turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
   activityQuietMs = DEFAULT_ACTIVITY_QUIET_MS,
   heartbeatMs = 25000,
+  heartbeatFile = "",
   runtimeUrl = "",
   fetchImpl = globalThis.fetch,
   mediaTmpRoot = os.tmpdir(),
@@ -2736,6 +2740,7 @@ export async function connectDashboardAppServerBridgeOnce({
   let turnQueue = Promise.resolve();
   let settled = false;
   let heartbeatTimer = null;
+  const resolvedHeartbeatFile = normalizeBridgeText(heartbeatFile);
 
   const safeSend = (payload) => {
     try {
@@ -2760,6 +2765,12 @@ export async function connectDashboardAppServerBridgeOnce({
       try {
         socket.send("ping");
       } catch {}
+      touchDashboardBridgeHeartbeatFile({
+        heartbeatFile: resolvedHeartbeatFile,
+        endpoint,
+        cwd,
+        status: "ping_sent"
+      });
       scheduleHeartbeat();
     }, delayMs);
   };
@@ -2776,6 +2787,12 @@ export async function connectDashboardAppServerBridgeOnce({
   });
 
   socket.addEventListener("open", () => {
+    touchDashboardBridgeHeartbeatFile({
+      heartbeatFile: resolvedHeartbeatFile,
+      endpoint,
+      cwd,
+      status: "connected"
+    });
     scheduleHeartbeat();
     safeSend(buildDashboardBridgeConnectedEvent({ endpoint, cwd, costBoundary }));
   });
@@ -2891,6 +2908,49 @@ export async function connectDashboardAppServerBridgeOnce({
   });
 
   await disconnected;
+}
+
+export async function touchDashboardBridgeHeartbeatFile({
+  heartbeatFile = "",
+  endpoint = "",
+  cwd = process.cwd(),
+  status = "connected",
+  now = () => new Date().toISOString(),
+  writeFile = fs.writeFile,
+  mkdir = fs.mkdir
+} = {}) {
+  const file = normalizeBridgeText(heartbeatFile);
+  if (!file) return false;
+  const payload = {
+    schema: DEFAULT_SCHEMA,
+    kind: "dashboard_app_server_bridge_heartbeat",
+    status: normalizeBridgeText(status) || "connected",
+    endpoint: redactBridgeHeartbeatEndpoint(endpoint),
+    cwd: normalizeBridgeText(cwd),
+    pid: process.pid,
+    updatedAt: now()
+  };
+  try {
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `${JSON.stringify(payload)}\n`, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function redactBridgeHeartbeatEndpoint(endpoint = "") {
+  const text = normalizeBridgeText(endpoint);
+  if (!text) return "";
+  try {
+    const url = new URL(text);
+    if (url.searchParams.has("token")) {
+      url.searchParams.set("token", "redacted");
+    }
+    return url.toString();
+  } catch {
+    return text.replace(/token=[^&\s]+/gi, "token=redacted");
+  }
 }
 
 function normalizeReconnectDelayMs(value) {

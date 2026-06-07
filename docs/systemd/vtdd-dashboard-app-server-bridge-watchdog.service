@@ -1,0 +1,20 @@
+[Unit]
+Description=VTDD Dashboard app-server bridge watchdog
+Documentation=../../docs/ops/dashboard-app-server-bridge-watchdog.md
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/vtdd-runner/repos/vtdd-v2-p
+Environment=VTDD_DASHBOARD_BRIDGE_WATCHDOG_SERVICE=vtdd-dashboard-app-server-bridge-unresolved.service
+Environment=VTDD_DASHBOARD_BRIDGE_WATCHDOG_THREAD_ID=dashboard-main-unresolved
+Environment=VTDD_DASHBOARD_BRIDGE_WATCHDOG_MAX_ATTEMPTS=3
+Environment=VTDD_DASHBOARD_BRIDGE_WATCHDOG_ATTEMPT_WINDOW_MS=600000
+Environment=VTDD_DASHBOARD_BRIDGE_WATCHDOG_STALE_HEARTBEAT_MS=90000
+Environment=VTDD_DASHBOARD_BRIDGE_WATCHDOG_GRACE_MS=30000
+Environment=VTDD_DASHBOARD_BRIDGE_WATCHDOG_RETENTION=50
+Environment=VTDD_DASHBOARD_BRIDGE_WATCHDOG_MAX_LOG_LINES=100
+ExecStart=/usr/bin/env node scripts/watch-dashboard-app-server-bridge.mjs
+
+[Install]
+WantedBy=default.target

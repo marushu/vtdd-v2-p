@@ -47,7 +47,8 @@ import {
   postOwnerActionRequiredEvent,
   runDashboardAppServerBridge,
   runDashboardDebugSlowTurn,
-  stripDashboardAppServerModelFromUsageProfile
+  stripDashboardAppServerModelFromUsageProfile,
+  touchDashboardBridgeHeartbeatFile
 } from "../scripts/run-dashboard-app-server-bridge.mjs";
 
 test("dashboard app-server bridge builds initialize and thread requests from Codex app-server protocol", () => {
@@ -3677,6 +3678,50 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
   assert.equal(parsed.activityQuietMs, 700);
   assert.equal(parsed.reconnectDelayMs, 1000);
   assert.equal(parsed.heartbeatMs, 30000);
+  assert.match(parsed.heartbeatFile, /dashboard-bridge-unresolved\.heartbeat\.json$/);
+});
+
+test("dashboard app-server bridge args read heartbeat file from env and cli", () => {
+  const parsedFromEnv = parseBridgeArgs([], {
+    VTDD_RUNTIME_URL: "https://runtime.example",
+    VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
+    VTDD_DASHBOARD_THREAD_ID: "dashboard-main",
+    VTDD_DASHBOARD_BRIDGE_HEARTBEAT_FILE: "/run/vtdd/bridge-heartbeat.json"
+  });
+  assert.equal(parsedFromEnv.heartbeatFile, "/run/vtdd/bridge-heartbeat.json");
+
+  const parsedFromCli = parseBridgeArgs(["--heartbeat-file", "/tmp/bridge-heartbeat.json"], {
+    VTDD_RUNTIME_URL: "https://runtime.example",
+    VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
+    VTDD_DASHBOARD_THREAD_ID: "dashboard-main",
+    VTDD_DASHBOARD_BRIDGE_HEARTBEAT_FILE: "/run/vtdd/bridge-heartbeat.json"
+  });
+  assert.equal(parsedFromCli.heartbeatFile, "/tmp/bridge-heartbeat.json");
+});
+
+test("dashboard app-server bridge heartbeat file redacts endpoint token", async () => {
+  const writes = [];
+  const mkdirs = [];
+  const ok = await touchDashboardBridgeHeartbeatFile({
+    heartbeatFile: "/tmp/vtdd/bridge-heartbeat.json",
+    endpoint: "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main-unresolved&token=secret-token",
+    cwd: "/repo",
+    status: "ping_sent",
+    now: () => "2026-06-07T07:00:00.000Z",
+    mkdir: async (...args) => mkdirs.push(args),
+    writeFile: async (...args) => writes.push(args)
+  });
+
+  assert.equal(ok, true);
+  assert.equal(mkdirs[0][0], "/tmp/vtdd");
+  assert.equal(writes[0][0], "/tmp/vtdd/bridge-heartbeat.json");
+  const payload = JSON.parse(writes[0][1]);
+  assert.equal(payload.kind, "dashboard_app_server_bridge_heartbeat");
+  assert.equal(payload.status, "ping_sent");
+  assert.equal(payload.cwd, "/repo");
+  assert.equal(payload.updatedAt, "2026-06-07T07:00:00.000Z");
+  assert.equal(payload.endpoint.includes("secret-token"), false);
+  assert.equal(payload.endpoint.includes("token=redacted"), true);
 });
 
 test("dashboard app-server bridge args read app-server usage tuning from env and cli", () => {
