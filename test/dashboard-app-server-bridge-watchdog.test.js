@@ -335,6 +335,40 @@ test("dashboard bridge watchdog report requires explicit repository and hides be
   assert.equal(body.lastEvent, "self_healed");
 });
 
+test("dashboard bridge watchdog keeps optional report URL failures from breaking finalization", async () => {
+  const result = await runDashboardBridgeWatchdog({
+    options: baseOptions({
+      report: true,
+      runtimeUrl: "not a url",
+      token: "secret-token",
+      repository: "sample-org/vtdd-v2-p",
+      reportHealthy: true
+    }),
+    nowMs: () => NOW,
+    runner: systemctlRunner({
+      activeState: "active",
+      subState: "running",
+      mainPid: "700812"
+    }),
+    fsImpl: memoryFs({
+      files: {
+        "/tmp/bridge-heartbeat.json": heartbeatPayload("700812")
+      },
+      stats: {
+        "/tmp/bridge-heartbeat.json": { mtimeMs: NOW - 10_000 }
+      }
+    }),
+    fetchImpl: async () => {
+      throw new Error("fetch should not run for invalid runtime URL");
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "healthy");
+  assert.equal(result.report.ok, false);
+  assert.equal(result.report.status, "failed");
+});
+
 test("dashboard bridge watchdog keeps local log bounded", async () => {
   const fsImpl = memoryFs({
     files: {

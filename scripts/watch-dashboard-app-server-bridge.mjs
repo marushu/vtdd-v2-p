@@ -517,8 +517,8 @@ async function postWatchdogReport({ options = {}, result = {}, fetchImpl = globa
       reason: "runtimeUrl, token, repository, or fetch is unavailable"
     };
   }
-  const url = new URL("/v2/events/vps-runner", options.runtimeUrl);
   try {
+    const url = new URL("/v2/events/vps-runner", options.runtimeUrl);
     const response = await fetchImpl(url, {
       method: "POST",
       headers: {
