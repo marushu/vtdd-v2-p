@@ -538,6 +538,10 @@ test("passkey operator page focuses VPS runner admin mode on real approval only"
   assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="vps_runner_admin"'), true);
   assert.equal(html.includes("文字列としての passkey は承認ではありません"), true);
+  assert.equal(html.includes("function isVpsHelperQueueHandoffAccepted(body)"), true);
+  assert.equal(html.includes('executionStatus === "sent_to_bridge"'), true);
+  assert.equal(html.includes('runtimeStatus === "vps_local_helper_queue_control_sent"'), true);
+  assert.equal(html.includes("VPS helper queue handoff did not queue"), false);
 });
 
 test("passkey operator page supports gateway bearer vault bootstrap mode", () => {
