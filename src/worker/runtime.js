@@ -167,7 +167,11 @@ export class DashboardChatRoom {
           wakeup: {
             status: "unavailable",
             attempted: false,
+            primary: "systemd_user_service_start",
+            primaryCommand: "systemctl --user start vtdd-vps-runner.service",
             fallback: "vtdd-vps-runner.timer",
+            fallbackRole: "recovery_only",
+            fallbackUsed: true,
             reason: "app-server bridge socket is not connected"
           }
         });
@@ -189,8 +193,14 @@ export class DashboardChatRoom {
         wakeup: {
           status: sent ? "requested" : "unavailable",
           attempted: sent,
+          primary: "systemd_user_service_start",
+          primaryCommand: "systemctl --user start vtdd-vps-runner.service",
           fallback: "vtdd-vps-runner.timer",
-          reason: sent ? "runner wakeup request sent to app-server bridge" : "failed to send runner wakeup request"
+          fallbackRole: "recovery_only",
+          fallbackUsed: !sent,
+          reason: sent
+            ? "runner wakeup request sent to app-server bridge as the primary pickup path"
+            : "failed to send runner wakeup request; timer remains recovery fallback"
         }
       });
     }
@@ -5900,6 +5910,21 @@ function buildVpsLocalHelperQueueEnqueueResultMessageText({
     lines.push("", "runner wakeup:");
     lines.push(`- status: ${sanitizeDashboardChatText(normalizedWakeup.status || "unknown")}`);
     lines.push(`- attempted: ${normalizedWakeup.attempted === true ? "true" : "false"}`);
+    lines.push(
+      `- primary: ${sanitizeDashboardChatText(normalizedWakeup.primary || "systemd_user_service_start")}`
+    );
+    lines.push(
+      `- primaryCommand: ${sanitizeDashboardChatText(
+        normalizedWakeup.primaryCommand || normalizedWakeup.primary_command || "systemctl --user start vtdd-vps-runner.service"
+      )}`
+    );
+    lines.push(
+      `- fallbackRole: ${sanitizeDashboardChatText(normalizedWakeup.fallbackRole || normalizedWakeup.fallback_role || "recovery_only")}`
+    );
+    lines.push(`- fallbackUsed: ${normalizedWakeup.fallbackUsed === true || normalizedWakeup.fallback_used === true ? "true" : "false"}`);
+    if (normalizedWakeup.fallback) {
+      lines.push(`- fallback: ${sanitizeDashboardChatText(normalizedWakeup.fallback)}`);
+    }
     if (normalizedWakeup.reason) {
       lines.push(`- reason: ${sanitizeDashboardChatText(normalizedWakeup.reason)}`);
     }
@@ -10552,7 +10577,11 @@ async function requestDashboardVpsRunnerWakeup({ env, request, execution } = {})
     return {
       status: "unavailable",
       attempted: false,
+      primary: "systemd_user_service_start",
+      primaryCommand: "systemctl --user start vtdd-vps-runner.service",
       fallback: "vtdd-vps-runner.timer",
+      fallbackRole: "recovery_only",
+      fallbackUsed: true,
       reason: "dashboardThreadId is not available"
     };
   }
@@ -10561,7 +10590,11 @@ async function requestDashboardVpsRunnerWakeup({ env, request, execution } = {})
     return {
       status: "unavailable",
       attempted: false,
+      primary: "systemd_user_service_start",
+      primaryCommand: "systemctl --user start vtdd-vps-runner.service",
       fallback: "vtdd-vps-runner.timer",
+      fallbackRole: "recovery_only",
+      fallbackUsed: true,
       reason: "DASHBOARD_CHAT_ROOMS Durable Object binding is not configured"
     };
   }
@@ -10583,14 +10616,24 @@ async function requestDashboardVpsRunnerWakeup({ env, request, execution } = {})
     return {
       status: normalizeDashboardEventText(body?.wakeup?.status) || (response.ok ? "requested" : "failed"),
       attempted: body?.wakeup?.attempted === true,
+      primary: normalizeDashboardEventText(body?.wakeup?.primary) || "systemd_user_service_start",
+      primaryCommand:
+        normalizeDashboardEventText(body?.wakeup?.primaryCommand || body?.wakeup?.primary_command) ||
+        "systemctl --user start vtdd-vps-runner.service",
       fallback: normalizeDashboardEventText(body?.wakeup?.fallback) || "vtdd-vps-runner.timer",
+      fallbackRole: normalizeDashboardEventText(body?.wakeup?.fallbackRole || body?.wakeup?.fallback_role) || "recovery_only",
+      fallbackUsed: body?.wakeup?.fallbackUsed === true || body?.wakeup?.fallback_used === true,
       reason: normalizeDashboardEventText(body?.wakeup?.reason) || null
     };
   } catch (error) {
     return {
       status: "failed",
       attempted: true,
+      primary: "systemd_user_service_start",
+      primaryCommand: "systemctl --user start vtdd-vps-runner.service",
       fallback: "vtdd-vps-runner.timer",
+      fallbackRole: "recovery_only",
+      fallbackUsed: true,
       reason: sanitizeDashboardChatText(error?.message || "runner wakeup request failed")
     };
   }

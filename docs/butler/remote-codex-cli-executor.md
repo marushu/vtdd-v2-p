@@ -325,9 +325,10 @@ infrastructure or embedded in this public/core repository.
 
 ### Immediate Wakeup and Timer Fallback
 
-The systemd timer remains the recovery fallback. Operators should keep
-`vtdd-vps-runner.timer` enabled so a missed wakeup, disconnected bridge, or
-temporary Worker/DO delivery failure does not strand queued work.
+Immediate wakeup is the primary pickup path. Operators should keep
+`vtdd-vps-runner.timer` enabled only as a recovery fallback so a missed wakeup,
+temporary service start failure, or already-local pending queue item does not
+strand queued work.
 
 When Dashboard Butler has a live app-server bridge for the same dashboard
 thread, the Worker can send a bounded `runner_wakeup_requested` message after a
@@ -340,9 +341,11 @@ systemctl --user start vtdd-vps-runner.service
 
 The wakeup request does not carry arbitrary shell, command arguments, sudo,
 root-owned helper input, deploy authority, merge authority, or credential
-mutation authority. It is a latency improvement only. If it fails, the response
-must keep the GitHub queue state as `queued` and report the fallback as
-`vtdd-vps-runner.timer`.
+mutation authority. It is the normal pickup trigger, not an authority grant. If
+it succeeds, runtime truth must show `fallbackUsed=false`. If it fails after the
+queue is already local or GitHub-queued, the response must keep the queue state
+as `queued` and report `fallbackUsed=true`, `fallbackRole=recovery_only`, and
+`fallback=vtdd-vps-runner.timer`.
 
 ## Optional API-backed Runner
 
