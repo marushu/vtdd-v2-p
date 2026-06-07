@@ -387,6 +387,16 @@ export function buildVpsRunnerWakeupCommand() {
   };
 }
 
+function buildVpsRunnerWakeupFallbackTruth({ used = false } = {}) {
+  return {
+    primary: "systemd_user_service_start",
+    primaryCommand: "systemctl --user start vtdd-vps-runner.service",
+    fallback: "vtdd-vps-runner.timer",
+    fallbackRole: "recovery_only",
+    fallbackUsed: used === true
+  };
+}
+
 export async function executeVpsRunnerWakeup({
   request = {},
   spawnImpl = spawn,
@@ -404,6 +414,7 @@ export async function executeVpsRunnerWakeup({
         stdio: ["ignore", "pipe", "pipe"]
       });
     } catch (error) {
+      const fallbackTruth = buildVpsRunnerWakeupFallbackTruth({ used: true });
       resolve({
         type: "runner_wakeup_result",
         schema: DEFAULT_SCHEMA,
@@ -412,7 +423,7 @@ export async function executeVpsRunnerWakeup({
         executionId: normalizeBridgeText(request.executionId),
         status: "failed",
         attempted: true,
-        fallback: "vtdd-vps-runner.timer",
+        ...fallbackTruth,
         command,
         startedAt,
         completedAt: now(),
@@ -428,6 +439,7 @@ export async function executeVpsRunnerWakeup({
       stderr += String(chunk || "");
     });
     child.on("error", (error) => {
+      const fallbackTruth = buildVpsRunnerWakeupFallbackTruth({ used: true });
       resolve({
         type: "runner_wakeup_result",
         schema: DEFAULT_SCHEMA,
@@ -436,7 +448,7 @@ export async function executeVpsRunnerWakeup({
         executionId: normalizeBridgeText(request.executionId),
         status: "failed",
         attempted: true,
-        fallback: "vtdd-vps-runner.timer",
+        ...fallbackTruth,
         command,
         startedAt,
         completedAt: now(),
@@ -447,6 +459,8 @@ export async function executeVpsRunnerWakeup({
     child.on("close", (exitCode) => {
       const normalizedExitCode = Number.isInteger(exitCode) ? exitCode : null;
       const reason = normalizeBridgeText(stderr || stdout);
+      const started = normalizedExitCode === 0;
+      const fallbackTruth = buildVpsRunnerWakeupFallbackTruth({ used: !started });
       resolve({
         type: "runner_wakeup_result",
         schema: DEFAULT_SCHEMA,
@@ -456,9 +470,9 @@ export async function executeVpsRunnerWakeup({
         repository: normalizeBridgeText(request.repository),
         issueNumber: Number(request.issueNumber || 0) || null,
         queueCommentUrl: normalizeBridgeText(request.queueCommentUrl),
-        status: normalizedExitCode === 0 ? "started" : "failed",
+        status: started ? "started" : "failed",
         attempted: true,
-        fallback: "vtdd-vps-runner.timer",
+        ...fallbackTruth,
         command,
         startedAt,
         completedAt: now(),
@@ -686,7 +700,11 @@ export async function executeVpsLocalHelperQueueEnqueueRequest({
     wakeup: {
       status: wakeup.status,
       attempted: wakeup.attempted,
+      primary: wakeup.primary,
+      primaryCommand: wakeup.primaryCommand,
       fallback: wakeup.fallback,
+      fallbackRole: wakeup.fallbackRole,
+      fallbackUsed: wakeup.fallbackUsed,
       reason: wakeup.reason || null
     },
     persistence: {

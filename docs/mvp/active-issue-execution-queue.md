@@ -205,7 +205,11 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   passkey operator continuation は Issue comment を作らず、接続中
   app-server bridge へ VPS local helper queue enqueue control を送り、bridge が
   VPS local queue/state/log に一回保存し、VPS runner が local pending を GitHub
-  Issue comments より先に pickup する。bridge 未接続時は store-and-forward せず
+  Issue comments より先に pickup する。runner pickup は timer poll を主経路に
+  せず、bridge から `systemctl --user start vtdd-vps-runner.service` を即時
+  wake する。`vtdd-vps-runner.timer` は wake 失敗または既存 pending の
+  recovery fallback として owner-facing runtime truth に明示する。
+  bridge 未接続時は store-and-forward せず
   `vps_local_helper_queue_unavailable` blocked として扱い、Worker では
   root/helper execution を開始しない。watchdog live install/enable、production
   deploy、Issue #741 close はこの PR では行わない。

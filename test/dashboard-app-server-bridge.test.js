@@ -395,9 +395,46 @@ test("dashboard app-server bridge runner wakeup uses only fixed user systemd sta
   assert.equal(result.type, "runner_wakeup_result");
   assert.equal(result.status, "started");
   assert.equal(result.attempted, true);
+  assert.equal(result.primary, "systemd_user_service_start");
+  assert.equal(result.primaryCommand, "systemctl --user start vtdd-vps-runner.service");
   assert.equal(result.fallback, "vtdd-vps-runner.timer");
+  assert.equal(result.fallbackRole, "recovery_only");
+  assert.equal(result.fallbackUsed, false);
   assert.equal(result.threadId, "dashboard-main");
   assert.equal(result.executionId, "remote-codex-issue717");
+});
+
+test("dashboard app-server bridge marks runner timer fallback used only when immediate wake fails", async () => {
+  const result = await executeVpsRunnerWakeup({
+    request: {
+      threadId: "dashboard-main",
+      requestId: "runner-wakeup:failed",
+      executionId: "remote-codex-issue741"
+    },
+    now: (() => {
+      const values = ["2026-06-07T00:00:00.000Z", "2026-06-07T00:00:01.000Z"];
+      return () => values.shift() || "2026-06-07T00:00:01.000Z";
+    })(),
+    spawnImpl() {
+      return {
+        stdout: { on() {} },
+        stderr: { on(type, handler) {
+          if (type === "data") queueMicrotask(() => handler("unit start failed"));
+        } },
+        on(type, handler) {
+          if (type === "close") queueMicrotask(() => handler(1));
+        }
+      };
+    }
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.attempted, true);
+  assert.equal(result.primary, "systemd_user_service_start");
+  assert.equal(result.fallback, "vtdd-vps-runner.timer");
+  assert.equal(result.fallbackRole, "recovery_only");
+  assert.equal(result.fallbackUsed, true);
+  assert.match(result.reason, /unit start failed/);
 });
 
 test("dashboard app-server bridge enqueues VPS helper execution into local queue and wakes runner", async () => {
@@ -460,6 +497,10 @@ test("dashboard app-server bridge enqueues VPS helper execution into local queue
     assert.equal(result.status, "queued");
     assert.equal(result.persistence.githubIssueCommentQueue, false);
     assert.equal(result.queue.transport, "vps_local_helper_queue");
+    assert.equal(result.wakeup.status, "started");
+    assert.equal(result.wakeup.primary, "systemd_user_service_start");
+    assert.equal(result.wakeup.fallbackRole, "recovery_only");
+    assert.equal(result.wakeup.fallbackUsed, false);
     assert.equal(spawnCalls.length, 1);
     const pending = JSON.parse(await fs.readFile(path.join(queueRoot, "pending", "vps-maint-local-741.json"), "utf8"));
     assert.equal(pending.executionId, "vps-maint-local-741");

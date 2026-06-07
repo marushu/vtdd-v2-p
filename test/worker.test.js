@@ -5000,7 +5000,11 @@ test("DashboardChatRoom sends runner wakeup requests only to connected app-serve
   const body = await response.json();
   assert.equal(body.wakeup.status, "requested");
   assert.equal(body.wakeup.attempted, true);
+  assert.equal(body.wakeup.primary, "systemd_user_service_start");
+  assert.equal(body.wakeup.primaryCommand, "systemctl --user start vtdd-vps-runner.service");
   assert.equal(body.wakeup.fallback, "vtdd-vps-runner.timer");
+  assert.equal(body.wakeup.fallbackRole, "recovery_only");
+  assert.equal(body.wakeup.fallbackUsed, false);
   assert.equal(dashboardSocket.sent.length, 0);
   assert.equal(bridgeSocket.sent.length, 1);
   const wakeup = JSON.parse(bridgeSocket.sent[0]);
@@ -10738,8 +10742,12 @@ test("worker dispatches VPS runner execution by posting a bounded queue comment"
                   wakeup: {
                     status: "requested",
                     attempted: true,
+                    primary: "systemd_user_service_start",
+                    primaryCommand: "systemctl --user start vtdd-vps-runner.service",
                     fallback: "vtdd-vps-runner.timer",
-                    reason: "runner wakeup request sent to app-server bridge"
+                    fallbackRole: "recovery_only",
+                    fallbackUsed: false,
+                    reason: "runner wakeup request sent to app-server bridge as the primary pickup path"
                   }
                 }),
                 { status: 202, headers: { "content-type": "application/json" } }
@@ -10792,8 +10800,12 @@ test("worker dispatches VPS runner execution by posting a bounded queue comment"
   assert.deepEqual(body.execution.wakeup, {
     status: "requested",
     attempted: true,
+    primary: "systemd_user_service_start",
+    primaryCommand: "systemctl --user start vtdd-vps-runner.service",
     fallback: "vtdd-vps-runner.timer",
-    reason: "runner wakeup request sent to app-server bridge"
+    fallbackRole: "recovery_only",
+    fallbackUsed: false,
+    reason: "runner wakeup request sent to app-server bridge as the primary pickup path"
   });
   assert.equal(calls.length, 2);
   assert.equal(roomCalls.length, 1);
