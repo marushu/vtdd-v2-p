@@ -60,6 +60,62 @@ const dashboardAccessEnv = {
   })
 };
 
+test("worker Custom GPT facade requires machine auth", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/custom-gpt/github", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "nickname_list" })
+    }),
+    gatewayAuthEnv
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "unauthorized");
+});
+
+test("worker Custom GPT setup facade dispatches read-only page directory", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/custom-gpt/setup", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({ action: "cloudflare_pages", repository: "sample-org/vtdd-v2-p" })
+    }),
+    gatewayAuthEnv
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(Array.isArray(body.pages), true);
+});
+
+test("worker Custom GPT ops facade returns passkey operator guidance without direct deploy", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/custom-gpt/ops", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        action: "deploy_request",
+        repository: "sample-org/vtdd-v2-p",
+        issueNumber: 841
+      })
+    }),
+    gatewayAuthEnv
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.status, "operator_required");
+  assert.equal(body.executionStarted, false);
+  assert.equal(body.deployStarted, false);
+  assert.equal(body.operatorUrl.includes("/v2/approval/passkey/operator"), true);
+  assert.equal(body.operatorUrl.includes("actionType=deploy_production"), true);
+});
+
 function extractDashboardInlineFunction(html, name) {
   const script = String(html || "").match(/<script>([\s\S]*?)<\/script>/)?.[1] || "";
   const asyncStart = script.indexOf(`async function ${name}(`);

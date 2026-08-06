@@ -39130,6 +39130,7 @@ var CustomGptSetupArtifact = Object.freeze({
   OPENAPI_YAML: "openapi_yaml",
   OPENAPI_JSON: "openapi_json"
 });
+var CUSTOM_GPT_ACTION_OPERATION_LIMIT = 30;
 var SETUP_ARTIFACT_SPECS = Object.freeze({
   [CustomGptSetupArtifact.INSTRUCTIONS]: {
     path: "docs/setup/custom-gpt-instructions.md",
@@ -39157,6 +39158,12 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/setup/openapi.json",
     "/setup/instructions.txt",
     "/setup/diagnostics",
+    "/v2/custom-gpt/gateway",
+    "/v2/custom-gpt/memory",
+    "/v2/custom-gpt/github",
+    "/v2/custom-gpt/setup",
+    "/v2/custom-gpt/execution",
+    "/v2/custom-gpt/ops",
     "/v2/gateway",
     "/v2/action/execute",
     "/v2/action/github",
@@ -39194,6 +39201,12 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
   ],
   operationIds: [
     "getHealth",
+    "vtddCustomGptGateway",
+    "vtddCustomGptMemory",
+    "vtddCustomGptGitHub",
+    "vtddCustomGptSetup",
+    "vtddCustomGptExecution",
+    "vtddCustomGptOps",
     "vtddGateway",
     "vtddExecute",
     "vtddWriteGitHub",
@@ -39230,6 +39243,12 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddRetrieveSetupDiagnostics"
   ],
   instructionTokens: [
+    "vtddCustomGptGateway",
+    "vtddCustomGptMemory",
+    "vtddCustomGptGitHub",
+    "vtddCustomGptSetup",
+    "vtddCustomGptExecution",
+    "vtddCustomGptOps",
     "vtddGateway",
     "vtddExecute",
     "vtddWriteGitHub",
@@ -39696,13 +39715,19 @@ function evaluateRuntimeSetupManifestParity(input = {}) {
   const runtimeMissingInstructionTokens = canonicalInstructionTokens.filter(
     (token) => !(runtimeManifest.instructionTokens ?? []).includes(token)
   );
+  const operationLimit = {
+    limit: CUSTOM_GPT_ACTION_OPERATION_LIMIT,
+    count: canonicalOperationIds.length,
+    exceeded: canonicalOperationIds.length > CUSTOM_GPT_ACTION_OPERATION_LIMIT
+  };
   return {
-    ok: runtimeMissingRoutes.length === 0 && runtimeMissingOperationIds.length === 0 && runtimeMissingInstructionTokens.length === 0,
+    ok: runtimeMissingRoutes.length === 0 && runtimeMissingOperationIds.length === 0 && runtimeMissingInstructionTokens.length === 0 && !operationLimit.exceeded,
     canonical: {
       routes: canonicalRoutes,
       operationIds: canonicalOperationIds,
       instructionTokens: canonicalInstructionTokens
     },
+    operationLimit,
     runtimeManifest,
     runtimeMissing: {
       routes: runtimeMissingRoutes,
@@ -40405,13 +40430,15 @@ function evaluateActionSchemaDiagnostics({ openApiContent, runtimeOrigin }) {
   const operationIds = extractOperationIds(content);
   const routes = extractOpenApiRoutes(content);
   const hasGatewayBearerAuth = content.includes("GatewayBearerAuth") && content.includes("scheme: bearer");
-  const hasResponseModeActionVisible = content.includes("name: responseMode") && content.includes("action_visible");
-  const hasSelfParity = operationIds.includes("vtddRetrieveSelfParity");
-  const hasSetupArtifact = operationIds.includes("vtddRetrieveSetupArtifact");
-  const hasSetupDiagnostics = operationIds.includes("vtddRetrieveSetupDiagnostics");
+  const hasResponseModeActionVisible = (content.includes("name: responseMode") || content.includes("responseMode:")) && content.includes("action_visible");
+  const setupSchemaBlock = extractYamlSchemaBlock(content, "VtddCustomGptSetupRequest");
+  const hasSelfParity = operationIds.includes("vtddRetrieveSelfParity") || setupSchemaBlock.includes("- self_parity");
+  const hasSetupArtifact = operationIds.includes("vtddRetrieveSetupArtifact") || setupSchemaBlock.includes("- setup_artifact");
+  const hasSetupDiagnostics = operationIds.includes("vtddRetrieveSetupDiagnostics") || setupSchemaBlock.includes("- diagnostics");
   const executeSchemaBlock = extractYamlSchemaBlock(content, "VtddExecuteRequest");
   const gatewaySchemaBlock = extractYamlSchemaBlock(content, "VtddGatewayRequest");
-  const buildUnderExecute = executeSchemaBlock.includes("- build");
+  const customGptExecutionSchemaBlock = extractYamlSchemaBlock(content, "VtddCustomGptExecutionRequest");
+  const buildUnderExecute = executeSchemaBlock.includes("- build") || customGptExecutionSchemaBlock.includes("- execute");
   const buildUnderGateway = gatewaySchemaBlock.includes("- build");
   const serverUrl = extractOpenApiServerUrl(content);
   const expectedServerUrl = normalizeOrigin2(runtimeOrigin);
@@ -40758,7 +40785,16 @@ function extractOpenApiRoutes(content) {
   return [...content.matchAll(/^ {2}(\/[^:\n]+):$/gm)].map((match) => match[1]);
 }
 function extractOperationIds(content) {
-  return [...content.matchAll(/^\s+operationId:\s+([^\s]+)\s*$/gm)].map((match) => match[1]);
+  return [...content.matchAll(/^\s+operationId:\s+([^\n]+?)\s*$/gm)].map(
+    (match) => normalizeYamlScalar(match[1])
+  );
+}
+function normalizeYamlScalar(value) {
+  const text = normalizeText27(value);
+  if (text.startsWith('"') && text.endsWith('"') || text.startsWith("'") && text.endsWith("'")) {
+    return text.slice(1, -1);
+  }
+  return text;
 }
 function extractInstructionTokens(content, operationIds) {
   const requiredTokens = [
@@ -59625,6 +59661,18 @@ var runtime_default = {
       await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
       return handlePasskeyOperatorPageRequest(request, env);
     }
+    if (request.method === "POST" && isCustomGptFacadeApiPath(url.pathname)) {
+      const apiSuffix = url.pathname.replace(CANONICAL_API_PREFIX, "").replace(LEGACY_API_PREFIX, "");
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleCustomGptFacadeRequest({ request, url, env });
+    }
     if (request.method === "POST" && isApiPath(url.pathname, "/gateway")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/gateway" });
       if (!auth.ok) {
@@ -59635,19 +59683,12 @@ var runtime_default = {
         });
       }
       const payload = await readJson(request);
-      const prepared = await prepareGatewayPayload({ payload, env });
-      const result = appendWarnings(runMvpGateway(prepared.payload), prepared.warnings);
-      const gatewayOutcome = result.allowed ? await completeGatewayRuntime({
-        payload: prepared.payload,
-        gatewayResult: result,
-        env
-      }) : { status: 422, body: result };
-      const auditedGatewayOutcome = await appendGuardedAbsenceExecutionLog({
-        payload: prepared.payload,
-        gatewayOutcome,
-        env
+      return runGatewayEvaluationRequest({
+        payload,
+        env,
+        allowRemoteCodexHandoffNormalization: false,
+        allowButlerRemoteCodexHandoff: false
       });
-      return json(auditedGatewayOutcome.status, auditedGatewayOutcome.body);
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/action/execute")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/execute" });
@@ -59659,57 +59700,7 @@ var runtime_default = {
         });
       }
       const payload = await readJson(request);
-      const prepared = await prepareGatewayPayload({
-        payload,
-        env,
-        allowRemoteCodexHandoffNormalization: true
-      });
-      const result = appendWarnings(
-        runMvpGateway(prepared.payload, {
-          allowButlerRemoteCodexHandoff: true
-        }),
-        prepared.warnings
-      );
-      if (!result.allowed) {
-        return json(422, result);
-      }
-      const requestValidation = createRemoteCodexExecutionRequest({
-        payload: prepared.payload,
-        gatewayResult: result
-      });
-      if (!requestValidation.ok) {
-        return json(422, {
-          ok: false,
-          error: "remote_codex_execution_request_invalid",
-          issues: requestValidation.issues
-        });
-      }
-      const dispatched = await dispatchRemoteCodexExecution({
-        payload: prepared.payload,
-        gatewayResult: result,
-        env
-      });
-      if (!dispatched.ok) {
-        return json(dispatched.status ?? 503, {
-          ok: false,
-          error: dispatched.error ?? "remote_codex_dispatch_failed",
-          blockedByRule: dispatched.blockedByRule ?? null,
-          reason: dispatched.reason,
-          issues: dispatched.issues ?? []
-        });
-      }
-      if (dispatched.execution?.transport === "vps_runner") {
-        dispatched.execution.wakeup = await requestDashboardVpsRunnerWakeup({
-          env,
-          request: requestValidation.request,
-          execution: dispatched.execution
-        });
-      }
-      return json(202, {
-        ok: true,
-        allowed: true,
-        execution: dispatched.execution
-      });
+      return runRemoteCodexExecutionRequest({ payload, env });
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/github" });
@@ -61847,6 +61838,444 @@ function normalizeRejectedReasons2(value) {
 }
 function makeOperationalMemoryRecordId(record2) {
   return `mem_${crypto.randomUUID()}`;
+}
+async function handleCustomGptFacadeRequest({ request, url, env }) {
+  const payload = await readJson(request);
+  if (!payload || typeof payload !== "object") {
+    return json(422, {
+      ok: false,
+      error: "request_body_required",
+      reason: "valid JSON request body is required"
+    });
+  }
+  const category = normalizeCustomGptFacadeCategory(url.pathname);
+  const action = normalizeText33(payload.action || payload.operation || payload.intent);
+  const parameters = payload.parameters && typeof payload.parameters === "object" ? payload.parameters : payload;
+  const actionPayload = {
+    ...parameters,
+    action
+  };
+  if (category === "gateway") {
+    return handleCustomGptGatewayFacade({ request, payload: actionPayload, env });
+  }
+  if (category === "memory") {
+    return handleCustomGptMemoryFacade({ request, payload: actionPayload, env });
+  }
+  if (category === "github") {
+    return handleCustomGptGitHubFacade({ request, payload: actionPayload, env });
+  }
+  if (category === "setup") {
+    return handleCustomGptSetupFacade({ request, payload: actionPayload, env });
+  }
+  if (category === "execution") {
+    return handleCustomGptExecutionFacade({ request, payload: actionPayload, env });
+  }
+  if (category === "ops") {
+    return handleCustomGptOpsFacade({ request, url, payload: actionPayload });
+  }
+  return json(404, {
+    ok: false,
+    error: "custom_gpt_facade_not_found",
+    reason: "unknown Custom GPT facade category"
+  });
+}
+async function handleCustomGptGatewayFacade({ request, payload, env }) {
+  const action = normalize7(payload.action || "evaluate");
+  if (!["evaluate", "gateway", "policy", "preflight"].includes(action)) {
+    return customGptFacadeUnknownAction("gateway", action, ["evaluate"]);
+  }
+  return runGatewayEvaluationRequest({
+    payload: removeFacadeAction(payload),
+    env,
+    allowRemoteCodexHandoffNormalization: false,
+    allowButlerRemoteCodexHandoff: false
+  });
+}
+async function handleCustomGptMemoryFacade({ request, payload, env }) {
+  const action = normalize7(payload.action || "retrieve_operational_memory");
+  if (["write", "remember", "checkpoint", "memory_write"].includes(action)) {
+    return handleMemoryWriteRequest(cloneJsonRequest(request, removeFacadeAction(payload)), env);
+  }
+  if (["operational", "retrieve", "retrieve_operational_memory", "recall", "search"].includes(action)) {
+    return handleRetrieveOperationalMemoryRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["cross", "retrieve_cross_memory"].includes(action)) {
+    return handleRetrieveCrossIssueRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["constitution", "retrieve_constitution"].includes(action)) {
+    return handleRetrieveConstitutionRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["decisions", "decision_logs", "retrieve_decisions"].includes(action)) {
+    return handleRetrieveDecisionLogsRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["proposals", "proposal_logs", "retrieve_proposals"].includes(action)) {
+    return handleRetrieveProposalLogsRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["codex_usage_snapshot", "usage_snapshot"].includes(action)) {
+    return handleCodexAnalyticsUsageSnapshotIngestRequest(
+      cloneJsonRequest(request, removeFacadeAction(payload)),
+      env
+    );
+  }
+  if (["codex_usage", "retrieve_codex_usage"].includes(action)) {
+    return handleRetrieveCodexAnalyticsUsageRequest(buildFacadeUrl(request, payload), env);
+  }
+  return customGptFacadeUnknownAction("memory", action, [
+    "retrieve_operational_memory",
+    "write",
+    "retrieve_cross_memory",
+    "retrieve_decisions",
+    "retrieve_proposals",
+    "retrieve_constitution",
+    "retrieve_codex_usage",
+    "codex_usage_snapshot"
+  ]);
+}
+async function handleCustomGptGitHubFacade({ request, payload, env }) {
+  const action = normalize7(payload.action || "read");
+  if (["read", "retrieve", "github_read"].includes(action)) {
+    return handleRetrieveGitHubReadPlaneRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["write", "github_write"].includes(action)) {
+    return handleGitHubWritePlaneRequest(cloneJsonRequest(request, removeFacadeAction(payload)), env);
+  }
+  if (["nickname_list", "repository_nicknames", "retrieve_repository_nicknames"].includes(action)) {
+    return handleRetrieveRepositoryNicknamesRequest(env);
+  }
+  if (["nickname_upsert", "repository_nickname_upsert"].includes(action)) {
+    return handleRepositoryNicknameUpsertRequest(
+      cloneJsonRequest(request, removeFacadeAction(payload)),
+      env
+    );
+  }
+  if (["nickname_delete", "repository_nickname_delete"].includes(action)) {
+    return handleRepositoryNicknameDeleteRequest(
+      cloneJsonRequest(request, removeFacadeAction(payload)),
+      env
+    );
+  }
+  return customGptFacadeUnknownAction("github", action, [
+    "read",
+    "write",
+    "nickname_list",
+    "nickname_upsert",
+    "nickname_delete"
+  ]);
+}
+async function handleCustomGptSetupFacade({ request, payload, env }) {
+  const action = normalize7(payload.action || "self_parity");
+  if (["self_parity", "retrieve_self_parity"].includes(action)) {
+    return handleRetrieveButlerSelfParityRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["diagnostics", "setup_diagnostics"].includes(action)) {
+    return handleRetrieveCustomGptSetupDiagnosticsRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["setup_artifact", "artifact"].includes(action)) {
+    return handleRetrieveCustomGptSetupArtifactRequest(buildFacadeUrl(request, payload), env);
+  }
+  if (["cloudflare_pages", "pages"].includes(action)) {
+    return handleRetrieveCloudflarePagesRequest(buildFacadeUrl(request, payload));
+  }
+  return customGptFacadeUnknownAction("setup", action, [
+    "self_parity",
+    "diagnostics",
+    "setup_artifact",
+    "cloudflare_pages"
+  ]);
+}
+async function handleCustomGptExecutionFacade({ request, payload, env }) {
+  const action = normalize7(payload.action || "progress");
+  if (["execute", "request", "handoff"].includes(action)) {
+    return runRemoteCodexExecutionRequest({
+      payload: removeFacadeAction(payload),
+      env
+    });
+  }
+  if (["progress", "execution_progress"].includes(action)) {
+    const progress = await retrieveRemoteCodexExecutionProgress({
+      executionId: payload.executionId,
+      repository: payload.repository,
+      issueNumber: payload.issueNumber,
+      branch: payload.branch,
+      executorTransport: payload.executorTransport,
+      env
+    });
+    if (!progress.ok) {
+      return json(progress.status ?? 503, {
+        ok: false,
+        error: progress.error,
+        reason: progress.reason
+      });
+    }
+    return json(200, {
+      ok: true,
+      progress: progress.progress
+    });
+  }
+  if (["vps_runner_status", "runner_status"].includes(action)) {
+    const status = await retrieveVpsRunnerHealthStatus({
+      executionId: payload.executionId,
+      repository: payload.repository,
+      issueNumber: payload.issueNumber,
+      branch: payload.branch,
+      env
+    });
+    if (!status.ok) {
+      return json(status.status ?? 503, {
+        ok: false,
+        error: status.error,
+        reason: status.reason
+      });
+    }
+    return json(200, {
+      ok: true,
+      health: status.health,
+      progress: status.progress
+    });
+  }
+  if (["vps_runner_cancel", "cancel"].includes(action)) {
+    const cancellation = await cancelVpsRunnerQueue({
+      repository: payload.repository,
+      issueNumber: payload.issueNumber,
+      executionId: payload.executionId,
+      mode: payload.mode,
+      reason: payload.reason,
+      actor: payload.actor,
+      env
+    });
+    if (!cancellation.ok) {
+      return json(cancellation.status ?? 503, {
+        ok: false,
+        error: cancellation.error,
+        reason: cancellation.reason,
+        issues: cancellation.issues ?? []
+      });
+    }
+    return json(200, {
+      ok: true,
+      cancellation: cancellation.cancellation
+    });
+  }
+  return customGptFacadeUnknownAction("execution", action, [
+    "execute",
+    "progress",
+    "vps_runner_status",
+    "vps_runner_cancel"
+  ]);
+}
+function handleCustomGptOpsFacade({ url, payload }) {
+  const action = normalize7(payload.action || "operator_required");
+  const highRiskMap = {
+    deploy_request: {
+      actionType: "deploy_production",
+      highRiskKind: "deploy_production"
+    },
+    deploy: {
+      actionType: "deploy_production",
+      highRiskKind: "deploy_production"
+    },
+    github_authority_request: {
+      actionType: mapGitHubHighRiskOperationToActionType(payload.operation),
+      highRiskKind: normalizeText33(payload.operation) || "github_authority"
+    },
+    secret_sync_request: {
+      actionType: "destructive",
+      highRiskKind: "github_actions_secret_sync"
+    },
+    variable_sync_request: {
+      actionType: "destructive",
+      highRiskKind: "github_actions_variable_sync"
+    },
+    vps_maintenance_request: {
+      actionType: "destructive",
+      highRiskKind: "vps_privileged_maintenance"
+    },
+    issue_close_request: {
+      actionType: "issue_close",
+      highRiskKind: "issue_close"
+    }
+  };
+  const scope = highRiskMap[action];
+  if (!scope) {
+    return customGptFacadeUnknownAction("ops", action, Object.keys(highRiskMap));
+  }
+  const operatorUrl = buildCustomGptFacadePasskeyOperatorUrl({
+    origin: url.origin,
+    repository: payload.repository || payload.repositoryInput,
+    phase: payload.phase || "execution",
+    actionType: scope.actionType,
+    highRiskKind: scope.highRiskKind,
+    issueNumber: payload.issueNumber ?? payload.relatedIssue,
+    pullNumber: payload.pullNumber
+  });
+  return json(200, {
+    ok: true,
+    action,
+    status: "operator_required",
+    executionStarted: false,
+    deployStarted: false,
+    reason: "Custom GPT facade does not directly execute high-risk operations; open the same-origin passkey operator and approve the scoped action.",
+    operatorUrl,
+    operatorMarkdownLink: operatorUrl ? `[Open operator](${operatorUrl})` : null,
+    requiredApproval: {
+      type: "passkey",
+      actionType: scope.actionType,
+      highRiskKind: scope.highRiskKind,
+      repository: payload.repository || payload.repositoryInput || null,
+      issueNumber: payload.issueNumber ?? payload.relatedIssue ?? null,
+      pullNumber: payload.pullNumber ?? null
+    }
+  });
+}
+async function runGatewayEvaluationRequest({
+  payload,
+  env,
+  allowRemoteCodexHandoffNormalization,
+  allowButlerRemoteCodexHandoff
+}) {
+  const prepared = await prepareGatewayPayload({
+    payload,
+    env,
+    allowRemoteCodexHandoffNormalization
+  });
+  const result = appendWarnings(
+    runMvpGateway(prepared.payload, {
+      allowButlerRemoteCodexHandoff
+    }),
+    prepared.warnings
+  );
+  const gatewayOutcome = result.allowed ? await completeGatewayRuntime({
+    payload: prepared.payload,
+    gatewayResult: result,
+    env
+  }) : { status: 422, body: result };
+  const auditedGatewayOutcome = await appendGuardedAbsenceExecutionLog({
+    payload: prepared.payload,
+    gatewayOutcome,
+    env
+  });
+  return json(auditedGatewayOutcome.status, auditedGatewayOutcome.body);
+}
+async function runRemoteCodexExecutionRequest({ payload, env }) {
+  const prepared = await prepareGatewayPayload({
+    payload,
+    env,
+    allowRemoteCodexHandoffNormalization: true
+  });
+  const result = appendWarnings(
+    runMvpGateway(prepared.payload, {
+      allowButlerRemoteCodexHandoff: true
+    }),
+    prepared.warnings
+  );
+  if (!result.allowed) {
+    return json(422, result);
+  }
+  const requestValidation = createRemoteCodexExecutionRequest({
+    payload: prepared.payload,
+    gatewayResult: result
+  });
+  if (!requestValidation.ok) {
+    return json(422, {
+      ok: false,
+      error: "remote_codex_execution_request_invalid",
+      issues: requestValidation.issues
+    });
+  }
+  const dispatched = await dispatchRemoteCodexExecution({
+    payload: prepared.payload,
+    gatewayResult: result,
+    env
+  });
+  if (!dispatched.ok) {
+    return json(dispatched.status ?? 503, {
+      ok: false,
+      error: dispatched.error ?? "remote_codex_dispatch_failed",
+      blockedByRule: dispatched.blockedByRule ?? null,
+      reason: dispatched.reason,
+      issues: dispatched.issues ?? []
+    });
+  }
+  if (dispatched.execution?.transport === "vps_runner") {
+    dispatched.execution.wakeup = await requestDashboardVpsRunnerWakeup({
+      env,
+      request: requestValidation.request,
+      execution: dispatched.execution
+    });
+  }
+  return json(202, {
+    ok: true,
+    allowed: true,
+    execution: dispatched.execution
+  });
+}
+function cloneJsonRequest(request, payload) {
+  return new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(payload ?? {})
+  });
+}
+function buildFacadeUrl(request, payload) {
+  const url = new URL(request.url);
+  url.search = "";
+  const values = {
+    ...payload?.parameters && typeof payload.parameters === "object" ? payload.parameters : {},
+    ...payload
+  };
+  for (const [key, value] of Object.entries(values)) {
+    if (["action", "parameters", "operation", "intent"].includes(key)) {
+      continue;
+    }
+    if (value === void 0 || value === null || typeof value === "object") {
+      continue;
+    }
+    url.searchParams.set(key, String(value));
+  }
+  return url;
+}
+function removeFacadeAction(payload) {
+  const { action, parameters, intent, ...rest } = payload ?? {};
+  return rest;
+}
+function customGptFacadeUnknownAction(category, action, allowedActions) {
+  return json(422, {
+    ok: false,
+    error: "custom_gpt_facade_action_unknown",
+    reason: `unknown Custom GPT ${category} facade action: ${action || "(empty)"}`,
+    allowedActions
+  });
+}
+function buildCustomGptFacadePasskeyOperatorUrl({
+  origin,
+  repository,
+  phase,
+  actionType,
+  highRiskKind,
+  issueNumber,
+  pullNumber
+}) {
+  const normalizedOrigin = normalizeText33(origin);
+  if (!normalizedOrigin) {
+    return null;
+  }
+  const url = new URL("/v2/approval/passkey/operator", normalizedOrigin);
+  const repositoryInput = normalizeText33(repository);
+  if (repositoryInput) {
+    url.searchParams.set("repositoryInput", repositoryInput);
+  }
+  url.searchParams.set("phase", normalizeText33(phase) || "execution");
+  url.searchParams.set("actionType", normalizeText33(actionType) || "destructive");
+  url.searchParams.set("highRiskKind", normalizeText33(highRiskKind) || "custom_gpt_ops");
+  const normalizedIssueNumber = normalizeIssue6(issueNumber);
+  if (normalizedIssueNumber) {
+    url.searchParams.set("issueNumber", String(normalizedIssueNumber));
+  }
+  const normalizedPullNumber = normalizeIssue6(pullNumber);
+  if (normalizedPullNumber) {
+    url.searchParams.set("pullNumber", String(normalizedPullNumber));
+  }
+  return url.toString();
 }
 async function handleRetrieveGitHubReadPlaneRequest(url, env) {
   const retrieved = await retrieveGitHubReadPlane({
@@ -77520,6 +77949,13 @@ function parseBearerToken(value) {
 }
 function isApiPath(pathname, suffix) {
   return pathname === `${CANONICAL_API_PREFIX}${suffix}` || pathname === `${LEGACY_API_PREFIX}${suffix}`;
+}
+function isCustomGptFacadeApiPath(pathname) {
+  return pathname === `${CANONICAL_API_PREFIX}/custom-gpt/gateway` || pathname === `${CANONICAL_API_PREFIX}/custom-gpt/memory` || pathname === `${CANONICAL_API_PREFIX}/custom-gpt/github` || pathname === `${CANONICAL_API_PREFIX}/custom-gpt/setup` || pathname === `${CANONICAL_API_PREFIX}/custom-gpt/execution` || pathname === `${CANONICAL_API_PREFIX}/custom-gpt/ops` || pathname === `${LEGACY_API_PREFIX}/custom-gpt/gateway` || pathname === `${LEGACY_API_PREFIX}/custom-gpt/memory` || pathname === `${LEGACY_API_PREFIX}/custom-gpt/github` || pathname === `${LEGACY_API_PREFIX}/custom-gpt/setup` || pathname === `${LEGACY_API_PREFIX}/custom-gpt/execution` || pathname === `${LEGACY_API_PREFIX}/custom-gpt/ops`;
+}
+function normalizeCustomGptFacadeCategory(pathname) {
+  const text = normalizeText33(pathname);
+  return normalizeText33(text.split("/").filter(Boolean).at(-1));
 }
 
 // src/worker.js
