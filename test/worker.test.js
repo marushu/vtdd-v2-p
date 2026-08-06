@@ -4242,6 +4242,163 @@ test("worker stores dashboard chat without repository instead of dispatching han
   assert.equal(JSON.stringify(body.messages).includes("Custom GPT Butler"), false);
 });
 
+test("worker renders Custom GPT voice handoff page with mobile voice controls", async () => {
+  const handoffPayload = Buffer.from(
+    JSON.stringify({
+      mode: "voice_handoff",
+      sourceSurface: "custom_gpt_voice",
+      intent: "save",
+      title: "VTDD 外部記憶",
+      text: "10年後にも取り出せる記憶として残す。sk-proj-abcdefghijklmnopqrstuvwxyz"
+    }),
+    "utf8"
+  )
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+
+  const response = await worker.fetch(
+    new Request(`https://example.com/dashboard/handoff?payload=${handoffPayload}`, {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("Custom GPT voice handoff"), true);
+  assert.equal(html.includes("Issue #835"), true);
+  assert.equal(html.includes("speechSynthesis"), true);
+  assert.equal(html.includes("SpeechRecognition"), true);
+  assert.equal(html.includes("webkitSpeechRecognition"), true);
+  assert.equal(html.includes("保存"), true);
+  assert.equal(html.includes("開発 GO"), true);
+  assert.equal(html.includes("キャンセル"), true);
+  assert.equal(html.includes("/v2/dashboard/handoff"), true);
+  assert.equal(html.includes("Codex app-server bridge を起動しません"), true);
+  assert.equal(html.includes("window.location.hash"), true);
+  assert.equal(html.includes("sk-proj-abcdefghijklmnopqrstuvwxyz"), false);
+});
+
+test("worker saves Custom GPT voice handoff without starting Codex bridge or leaking secrets", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/handoff", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        action: "保存",
+        handoff: {
+          mode: "voice_handoff",
+          sourceSurface: "custom_gpt_voice",
+          intent: "save",
+          title: "外部記憶メモ",
+          text: "VTDD は外部記憶装置。sk-proj-abcdefghijklmnopqrstuvwxyz は保存しない。",
+          summary: "短く残す。"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  const serialized = JSON.stringify(body);
+  assert.equal(body.ok, true);
+  assert.equal(body.action, "save");
+  assert.equal(body.codexBridgeStarted, false);
+  assert.equal(body.vpsCodexStarted, false);
+  assert.equal(body.handoff.mode, "voice_handoff");
+  assert.equal(body.handoff.sourceSurface, "custom_gpt_voice");
+  assert.equal(body.handoff.savedAs, "memory_note");
+  assert.equal(body.handoff.ownerFacingStatus, "saved_without_codex_execution");
+  assert.equal(body.authorityBoundary, "no Codex app-server bridge or VPS Codex CLI execution was started");
+  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages[0].role, "owner");
+  assert.equal(body.messages[1].role, "butler");
+  assert.equal(body.messages[1].text.includes("Codex app-server bridge は起動していません"), true);
+  assert.equal(serialized.includes("sk-proj-abcdefghijklmnopqrstuvwxyz"), false);
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 2);
+  assert.equal(JSON.stringify(stored).includes("sk-proj-abcdefghijklmnopqrstuvwxyz"), false);
+});
+
+test("worker bounds Custom GPT voice handoff text before saving dashboard records", async () => {
+  const longText = `${"あ".repeat(1300)}TAIL_SHOULD_NOT_BE_SAVED`;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/handoff", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        action: "保存",
+        handoff: {
+          mode: "voice_handoff",
+          sourceSurface: "custom_gpt_voice",
+          intent: "save",
+          title: "長文 transcript 防止",
+          text: longText
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore()
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(JSON.stringify(body).includes("TAIL_SHOULD_NOT_BE_SAVED"), false);
+  assert.equal(body.messages[0].text.length < 1400, true);
+});
+
+test("worker keeps Custom GPT voice development GO waiting for explicit execution approval", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/handoff", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        action: "開発 GO",
+        handoff: {
+          mode: "voice_handoff",
+          sourceSurface: "custom_gpt_voice",
+          intent: "development",
+          title: "Issue #835 実装候補",
+          summary: "Dashboard handoff を開発待ちにする。"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore()
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.action, "development_go");
+  assert.equal(body.codexBridgeStarted, false);
+  assert.equal(body.vpsCodexStarted, false);
+  assert.equal(body.handoff.savedAs, "development_waiting");
+  assert.equal(
+    body.handoff.ownerFacingStatus,
+    "development_go_waiting_for_explicit_execution_approval"
+  );
+  assert.equal(
+    body.authorityBoundary,
+    "explicit GO / passkey remains required before VPS Codex CLI, deploy, merge, credential mutation, or root/sudo work"
+  );
+  assert.equal(body.messages[1].text.includes("開発 GO 候補として保存"), true);
+  assert.equal(body.messages[1].text.includes("VPS Codex CLI / app-server bridge はまだ起動していません"), true);
+});
+
 test("worker rejects unauthenticated dashboard chat VPS runner dispatch", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/messages", {
@@ -9219,6 +9376,12 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   assert.equal(html.includes("Custom GPT Action Authentication"), true);
   assert.equal(html.includes("Authentication type"), true);
   assert.equal(html.includes("Auth type"), true);
+  assert.equal(html.includes("Custom GPT voice handoff"), true);
+  assert.equal(html.includes("Handoff URL base"), true);
+  assert.equal(html.includes("/dashboard/handoff"), true);
+  assert.equal(html.includes("voice-handoff-guidance"), true);
+  assert.equal(html.includes("保存 / 開発 GO / キャンセル"), true);
+  assert.equal(html.includes("Actions を前提にしません"), true);
   assert.equal(html.includes("Authorization: Bearer &lt;VTDD_GATEWAY_BEARER_TOKEN&gt;"), true);
   assert.equal(html.includes("Unauthenticated route"), true);
   assert.equal(html.includes("copy payload: raw YAML, not URL encoded"), true);
