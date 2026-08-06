@@ -1415,6 +1415,10 @@ export default {
       return html(200, await renderDashboardMemoryPage({ url, env }));
     }
 
+    if (request.method === "GET" && url.pathname === "/dashboard/handoff") {
+      return html(200, renderDashboardHandoffPage({ url }));
+    }
+
     if (request.method === "GET" && url.pathname === "/dashboard/self-parity") {
       return html(200, await renderDashboardSelfParityPage({ url, env }));
     }
@@ -1469,6 +1473,10 @@ export default {
 
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/ack")) {
       return handleDashboardPushAckRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/handoff")) {
+      return handleDashboardHandoffRequest(request, env);
     }
 
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
@@ -7245,6 +7253,143 @@ async function handleDashboardChatMessageRequest(request, env) {
     messages,
     execution: prepared.execution || null
   });
+}
+
+async function handleDashboardHandoffRequest(request, env) {
+  const payload = normalizeObject(await readJson(request));
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/handoff"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+
+  const action = normalizeDashboardHandoffAction(payload.action);
+  const handoff = normalizeDashboardHandoffPayload(payload.handoff || payload);
+  if (!handoff.text && !handoff.summary) {
+    return json(422, {
+      ok: false,
+      error: "dashboard_handoff_payload_required",
+      reason: "handoff text or summary is required"
+    });
+  }
+
+  const store = resolveDashboardChatStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+
+  const threadId = normalizeDashboardSingleMainChatThreadId(payload.threadId || payload.thread_id) || "dashboard-main-unresolved";
+  const now = new Date().toISOString();
+  const title = handoff.title || "Custom GPT voice handoff";
+  const bodyLines = [
+    `Custom GPT voice handoff: ${title}`,
+    "",
+    handoff.text || handoff.summary,
+    handoff.summary && handoff.summary !== handoff.text ? `\nGPT summary: ${handoff.summary}` : "",
+    handoff.intent ? `\nIntent: ${handoff.intent}` : ""
+  ].filter(Boolean);
+  const ownerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "owner",
+      status: "sent",
+      text: bodyLines.join("\n").trim(),
+      messageId: sanitizeDashboardChatText(payload.clientMessageId || payload.client_message_id) || undefined,
+      createdAt: now
+    },
+    { threadId }
+  );
+  const butlerText =
+    action === "cancel"
+      ? "音声ハンドオフをキャンセルしました。保存も開発実行も開始していません。"
+      : action === "development_go"
+        ? "開発 GO 候補として保存しました。VPS Codex CLI / app-server bridge はまだ起動していません。Issue 化または実行キュー投入は、後続の明示 GO / passkey 境界で扱います。"
+        : "音声ハンドオフを保存しました。Codex app-server bridge は起動していません。";
+  const butlerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      status: "replied",
+      text: butlerText,
+      replyToMessageId: ownerMessage?.messageId,
+      createdAt: new Date(Date.parse(now) + 1).toISOString()
+    },
+    { threadId }
+  );
+
+  const messages = await store.appendMany(threadId, [ownerMessage, butlerMessage].filter(Boolean));
+  return json(202, {
+    ok: true,
+    threadId,
+    action,
+    handoff: {
+      mode: handoff.mode,
+      intent: handoff.intent || null,
+      sourceSurface: handoff.sourceSurface,
+      title: handoff.title || title,
+      savedAs: action === "development_go" ? "development_waiting" : action === "cancel" ? "cancelled" : "memory_note",
+      ownerFacingStatus:
+        action === "development_go"
+          ? "development_go_waiting_for_explicit_execution_approval"
+          : action === "cancel"
+            ? "cancelled_without_execution"
+            : "saved_without_codex_execution"
+    },
+    codexBridgeStarted: false,
+    vpsCodexStarted: false,
+    authorityBoundary:
+      action === "development_go"
+        ? "explicit GO / passkey remains required before VPS Codex CLI, deploy, merge, credential mutation, or root/sudo work"
+        : "no Codex app-server bridge or VPS Codex CLI execution was started",
+    messages
+  });
+}
+
+function normalizeDashboardHandoffAction(value) {
+  const action = normalizeDashboardEventText(value).toLowerCase().replace(/[-\s]+/g, "_");
+  if (["save", "保存", "memory"].includes(action)) return "save";
+  if (
+    [
+      "development_go",
+      "development",
+      "develop",
+      "go",
+      "開発",
+      "開発go",
+      "開発_go",
+      "開発ゴー",
+      "開発_ゴー",
+      "実装",
+      "実行"
+    ].includes(action)
+  ) {
+    return "development_go";
+  }
+  if (["cancel", "キャンセル", "取消", "取り消し"].includes(action)) return "cancel";
+  return "save";
+}
+
+function normalizeDashboardHandoffPayload(value) {
+  const input = normalizeObject(value);
+  return {
+    mode: normalizeDashboardEventText(input.mode) || "voice_handoff",
+    intent: sanitizeDashboardChatText(input.intent || input.type || input.kind),
+    title: sanitizeDashboardChatText(input.title),
+    text: sanitizeDashboardChatText(input.text || input.rawUserNote || input.raw_user_note || input.memo || input.body),
+    summary: sanitizeDashboardChatText(input.summary || input.gptSummary || input.gpt_summary),
+    sourceSurface: normalizeDashboardEventText(input.sourceSurface || input.source_surface) || "custom_gpt_voice"
+  };
 }
 
 async function authorizeDashboardVpsApprovalContinuation({ payload, env } = {}) {
@@ -16665,6 +16810,7 @@ function renderDashboardUtilityNavLinks() {
     ["Execution progress", "/dashboard/progress"],
     ["VPS runner", "/dashboard/vps-runner"],
     ["Operational RAG", "/dashboard/memory"],
+    ["Voice handoff", "/dashboard/handoff"],
     ["Self parity", "/dashboard/self-parity"]
   ];
   return items
@@ -16854,6 +17000,243 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
   })}
 </body>
 </html>`;
+}
+
+function renderDashboardHandoffPage({ url } = {}) {
+  const queryPayload = normalizeText(url?.searchParams?.get("payload") || "");
+  const queryText = sanitizeDashboardChatText(url?.searchParams?.get("text") || "");
+  const querySummary = sanitizeDashboardChatText(url?.searchParams?.get("summary") || "");
+  const queryIntent = sanitizeDashboardChatText(url?.searchParams?.get("intent") || "");
+  const queryTitle = sanitizeDashboardChatText(url?.searchParams?.get("title") || "");
+  const body = `
+    <div class="hero" data-dashboard-handoff>
+      <div class="lane-title">
+        <h2>Custom GPT voice handoff</h2>
+        <span class="pill">Issue #835</span>
+      </div>
+      <p>Custom GPT の音声会話から渡された内容を読み上げ、音声で「保存」「開発 GO」「キャンセル」を待ちます。保存・開発待ち化では Codex app-server bridge を起動しません。</p>
+      <dl class="summary-list">
+        <div><dt>Title</dt><dd id="handoff-title">未取得</dd></div>
+        <div><dt>Intent</dt><dd id="handoff-intent">未取得</dd></div>
+        <div><dt>Payload</dt><dd><pre id="handoff-text" class="wrap-code">URL fragment または parameter を待っています。</pre></dd></div>
+        <div><dt>Status</dt><dd id="handoff-status">読み込み中</dd></div>
+      </dl>
+      <div class="actions">
+        <button class="dashboard-action" type="button" id="handoff-speak">読み上げ</button>
+        <button class="dashboard-action" type="button" id="handoff-listen">音声指示を待つ</button>
+        <button class="dashboard-action" type="button" id="handoff-save">保存</button>
+        <button class="dashboard-action" type="button" id="handoff-development">開発 GO 待ち</button>
+        <button class="dashboard-action" type="button" id="handoff-cancel">キャンセル</button>
+      </div>
+    </div>
+    <div class="notice">
+      <p>Custom GPT 音声会話では Actions を前提にしません。長文・秘密情報は URL に入れず、短い要約か Owner が最後に確認した一文だけを渡します。</p>
+      <p>運転中は保存または開発待ち化まで。deploy、merge、credential、root/sudo はここから即実行しません。</p>
+    </div>
+    <script>
+      (() => {
+        const queryPayload = ${JSON.stringify(queryPayload)};
+        const queryFallback = ${JSON.stringify({ title: queryTitle, intent: queryIntent, text: queryText, summary: querySummary, mode: "voice_handoff", sourceSurface: "custom_gpt_voice" })};
+        const titleEl = document.getElementById("handoff-title");
+        const intentEl = document.getElementById("handoff-intent");
+        const textEl = document.getElementById("handoff-text");
+        const statusEl = document.getElementById("handoff-status");
+        const speakButton = document.getElementById("handoff-speak");
+        const listenButton = document.getElementById("handoff-listen");
+        const saveButton = document.getElementById("handoff-save");
+        const developmentButton = document.getElementById("handoff-development");
+        const cancelButton = document.getElementById("handoff-cancel");
+        let handoff = {};
+        let recognizer = null;
+        let listening = false;
+
+        function setStatus(text) {
+          if (statusEl) statusEl.textContent = text;
+        }
+
+        function decodeBase64Url(value) {
+          const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+          const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+          return decodeURIComponent(escape(window.atob(padded)));
+        }
+
+        function parsePayloadValue(value) {
+          const text = String(value || "").trim();
+          if (!text) return {};
+          try {
+            return JSON.parse(text);
+          } catch {}
+          try {
+            return JSON.parse(decodeBase64Url(text));
+          } catch {}
+          try {
+            return Object.fromEntries(new URLSearchParams(text));
+          } catch {}
+          return { text };
+        }
+
+        function readHandoffFromUrl() {
+          const hash = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+          const hashPayload = hash.get("payload") || "";
+          const parsed = {
+            ...queryFallback,
+            ...parsePayloadValue(queryPayload),
+            ...Object.fromEntries(hash.entries()),
+            ...parsePayloadValue(hashPayload)
+          };
+          parsed.mode = parsed.mode || "voice_handoff";
+          parsed.sourceSurface = parsed.sourceSurface || parsed.source_surface || "custom_gpt_voice";
+          parsed.text = parsed.text || parsed.rawUserNote || parsed.raw_user_note || parsed.memo || parsed.body || "";
+          parsed.summary = parsed.summary || parsed.gptSummary || parsed.gpt_summary || "";
+          parsed.intent = parsed.intent || parsed.type || parsed.kind || "";
+          parsed.title = parsed.title || "Custom GPT voice handoff";
+          return parsed;
+        }
+
+        function renderHandoff() {
+          handoff = readHandoffFromUrl();
+          titleEl.textContent = handoff.title || "Custom GPT voice handoff";
+          intentEl.textContent = handoff.intent || "未指定";
+          textEl.textContent = handoff.text || handoff.summary || "payload が空です。Custom GPT から短い保存文を渡してください。";
+          setStatus(handoff.text || handoff.summary ? "読み上げ準備完了" : "payload が空です");
+        }
+
+        function speechText() {
+          const content = handoff.text || handoff.summary || "";
+          const intent = handoff.intent ? "意図は、" + handoff.intent + "。" : "";
+          return "カスタム GPT からの引き継ぎです。" + intent + "内容は、" + content + "。保存、開発ゴー、キャンセルのどれかを話してください。";
+        }
+
+        function speak() {
+          if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") {
+            setStatus("このブラウザでは読み上げに未対応です。");
+            return false;
+          }
+          try {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(speechText());
+            utterance.lang = "ja-JP";
+            utterance.onend = () => startListening();
+            utterance.onerror = () => setStatus("読み上げに失敗しました。音声指示ボタンを押してください。");
+            window.speechSynthesis.speak(utterance);
+            setStatus("読み上げ中です。");
+            return true;
+          } catch {
+            setStatus("読み上げを開始できませんでした。");
+            return false;
+          }
+        }
+
+        async function submitHandoff(action) {
+          setStatus(action === "development_go" ? "開発 GO 待ちとして保存しています。" : action === "cancel" ? "キャンセルを保存しています。" : "保存しています。");
+          const response = await fetch("/v2/dashboard/handoff", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action, handoff })
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || body.ok === false) {
+            setStatus(body.reason || body.error || "handoff 保存に失敗しました。");
+            return;
+          }
+          const message = action === "development_go"
+            ? "開発 GO 待ちとして保存しました。実行はまだ開始していません。"
+            : action === "cancel"
+              ? "キャンセルしました。"
+              : "保存しました。";
+          setStatus(message);
+          speakShort(message);
+          if (window.history?.replaceState) {
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+        }
+
+        function speakShort(text) {
+          if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") return;
+          try {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = "ja-JP";
+            window.speechSynthesis.speak(utterance);
+          } catch {}
+        }
+
+        function handleTranscript(text) {
+          const normalized = String(text || "").replace(/[\\s、。.!！?？]/g, "").toLowerCase();
+          if (!normalized) return false;
+          if (normalized.includes("キャンセル") || normalized.includes("取消") || normalized.includes("取り消し")) {
+            submitHandoff("cancel").catch(() => setStatus("キャンセル処理に失敗しました。"));
+            return true;
+          }
+          if (normalized.includes("開発go") || normalized.includes("開発ゴー") || normalized.includes("実装") || normalized.includes("開発")) {
+            submitHandoff("development_go").catch(() => setStatus("開発 GO 待ち保存に失敗しました。"));
+            return true;
+          }
+          if (normalized.includes("保存") || normalized.includes("覚え") || normalized.includes("メモ")) {
+            submitHandoff("save").catch(() => setStatus("保存に失敗しました。"));
+            return true;
+          }
+          setStatus("認識しましたが、保存・開発 GO・キャンセルのどれかを判断できませんでした: " + text);
+          return false;
+        }
+
+        function startListening() {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (typeof SpeechRecognition !== "function") {
+            setStatus("このブラウザでは音声入力に未対応です。ボタンで保存できます。");
+            return false;
+          }
+          if (listening) return true;
+          recognizer = new SpeechRecognition();
+          recognizer.lang = "ja-JP";
+          recognizer.continuous = false;
+          recognizer.interimResults = false;
+          recognizer.onstart = () => {
+            listening = true;
+            setStatus("音声指示待ちです。「保存」「開発 GO」「キャンセル」と話してください。");
+          };
+          recognizer.onend = () => {
+            listening = false;
+          };
+          recognizer.onerror = () => {
+            listening = false;
+            setStatus("音声入力を開始できませんでした。ボタンで保存できます。");
+          };
+          recognizer.onresult = (event) => {
+            const transcript = Array.from(event.results || [])
+              .map((result) => result?.[0]?.transcript || "")
+              .join(" ")
+              .trim();
+            handleTranscript(transcript);
+          };
+          try {
+            recognizer.start();
+            return true;
+          } catch {
+            listening = false;
+            setStatus("音声入力を開始できませんでした。");
+            return false;
+          }
+        }
+
+        speakButton?.addEventListener("click", speak);
+        listenButton?.addEventListener("click", startListening);
+        saveButton?.addEventListener("click", () => submitHandoff("save"));
+        developmentButton?.addEventListener("click", () => submitHandoff("development_go"));
+        cancelButton?.addEventListener("click", () => submitHandoff("cancel"));
+        renderHandoff();
+        window.setTimeout(() => {
+          if (!speak()) setStatus("自動読み上げできませんでした。読み上げボタンを押してください。");
+        }, 250);
+      })();
+    </script>
+  `;
+  return renderDashboardUtilityPage({
+    title: "Voice handoff",
+    subtitle: "Custom GPT 音声会話から Dashboard へ渡された内容を、読み上げと音声指示で保存・開発待ち化します。",
+    backHref: "/dashboard",
+    body
+  });
 }
 
 function renderDashboardNewsPage({ runtimeOrigin, env } = {}) {

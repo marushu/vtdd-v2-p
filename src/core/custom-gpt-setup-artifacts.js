@@ -821,6 +821,10 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
         knownGoodComparison: selfParity.selfParity.knownGoodComparison,
         surfaceUpdateChecklist: selfParity.selfParity.surfaceUpdateChecklist
       },
+      voiceHandoff: buildCustomGptVoiceHandoffGuide({
+        runtimeOrigin,
+        issueNumber
+      }),
       safety: {
         displaysSecrets: false,
         displaysTokens: false,
@@ -1153,6 +1157,35 @@ function expandOpenApiServerUrl(content, runtimeOrigin) {
   return content.replace(/https:\/\/your-runtime-host\.example\.workers\.dev/g, runtimeOrigin);
 }
 
+function buildCustomGptVoiceHandoffGuide({ runtimeOrigin, issueNumber } = {}) {
+  const origin = normalizeOrigin(runtimeOrigin);
+  const handoffUrlBase = origin ? `${origin}/dashboard/handoff` : "/dashboard/handoff";
+  const exampleUrl = buildVoiceHandoffExampleUrl({ handoffUrlBase, issueNumber });
+  return {
+    status: "ready_for_manual_custom_gpt_setup",
+    issueNumber: Number.isInteger(issueNumber) ? issueNumber : null,
+    handoffUrlBase,
+    exampleUrl,
+    sourceSurface: "custom_gpt_voice",
+    mode: "voice_handoff",
+    requiredFields: ["mode", "sourceSurface", "intent", "text or summary"],
+    forbiddenFields: ["secrets", "passwords", "api keys", "db credentials", "full transcript"],
+    voiceCommands: ["保存", "開発 GO", "キャンセル"],
+    guidance:
+      "Custom GPT の音声会話では Actions を前提にせず、保存または開発候補だけ Dashboard handoff URL で渡す。Dashboard は読み上げ後に音声指示を待ち、保存は Codex app-server bridge を起動せず、開発 GO は即実行ではなく明示承認待ちにする。"
+  };
+}
+
+function buildVoiceHandoffExampleUrl({ handoffUrlBase, issueNumber } = {}) {
+  const url = new URL(handoffUrlBase || "https://example.com/dashboard/handoff");
+  url.searchParams.set("mode", "voice_handoff");
+  url.searchParams.set("sourceSurface", "custom_gpt_voice");
+  url.searchParams.set("intent", "save");
+  url.searchParams.set("title", issueNumber ? `Issue #${issueNumber} voice handoff` : "voice handoff");
+  url.searchParams.set("summary", "Owner-confirmed short summary only. No secrets or full transcript.");
+  return url.toString();
+}
+
 function renderRecoveryBundleSections(recovery) {
   const instructions = recovery.instructionsShortMin;
   const actionSchema = recovery.actionSchema;
@@ -1160,6 +1193,7 @@ function renderRecoveryBundleSections(recovery) {
   const selfParity = recovery.runtime.selfParity;
   const surfaceUpdateChecklist = recovery.runtime.surfaceUpdateChecklist;
   const knownGoodComparison = recovery.runtime.knownGoodComparison;
+  const voiceHandoff = recovery.voiceHandoff;
   const isKnownGoodChannel = recovery.channel === CustomGptSetupChannel.KNOWN_GOOD;
   const warning = instructions.limitExceeded
     ? `<section class="warning"><strong>Instructions exceed ${instructions.characterLimit} characters.</strong><p>${instructions.characterCount} characters. Shorten before pasting into the Custom GPT editor.</p></section>`
@@ -1203,6 +1237,30 @@ function renderRecoveryBundleSections(recovery) {
         <div><strong>Unauthenticated route</strong><br>/health only</div>
       </div>
       <p class="small">token value はここには表示しません。iPhone の保管場所から Custom GPT Action Authentication に貼り直してください。</p>
+    </section>
+    <section>
+      <h2>Custom GPT voice handoff</h2>
+      <p class="small">音声会話中は Actions を前提にしません。Custom GPT は短い handoff URL を返し、Dashboard が読み上げと音声指示待ちを担当します。</p>
+      <div class="meta">
+        <div><strong>Status</strong><br>${escapeHtml(voiceHandoff.status)}</div>
+        <div><strong>Handoff URL base</strong><br>${escapeHtml(voiceHandoff.handoffUrlBase)}</div>
+        <div><strong>Mode</strong><br>${escapeHtml(voiceHandoff.mode)}</div>
+        <div><strong>Source surface</strong><br>${escapeHtml(voiceHandoff.sourceSurface)}</div>
+        <div><strong>Voice commands</strong><br>${escapeHtml(voiceHandoff.voiceCommands.join(" / "))}</div>
+        <div><strong>Forbidden</strong><br>${escapeHtml(voiceHandoff.forbiddenFields.join(", "))}</div>
+      </div>
+      <p><button type="button" data-copy-target="voice-handoff-guidance" data-copy-label="Copy voice handoff guidance">Copy voice handoff guidance</button></p>
+      <textarea id="voice-handoff-guidance" spellcheck="false">${escapeHtml(
+        [
+          voiceHandoff.guidance,
+          "",
+          `handoffUrlBase: ${voiceHandoff.handoffUrlBase}`,
+          `exampleUrl: ${voiceHandoff.exampleUrl}`,
+          `requiredFields: ${voiceHandoff.requiredFields.join(", ")}`,
+          `voiceCommands: ${voiceHandoff.voiceCommands.join(", ")}`,
+          `forbiddenFields: ${voiceHandoff.forbiddenFields.join(", ")}`
+        ].join("\n")
+      )}</textarea>
     </section>
     <section>
       <h2>Copy-ready Action Schema</h2>

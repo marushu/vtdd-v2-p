@@ -39825,6 +39825,10 @@ async function buildCustomGptRecoveryBundle(input = {}) {
         knownGoodComparison: selfParity.selfParity.knownGoodComparison,
         surfaceUpdateChecklist: selfParity.selfParity.surfaceUpdateChecklist
       },
+      voiceHandoff: buildCustomGptVoiceHandoffGuide({
+        runtimeOrigin,
+        issueNumber
+      }),
       safety: {
         displaysSecrets: false,
         displaysTokens: false,
@@ -40118,6 +40122,32 @@ function expandOpenApiServerUrl(content, runtimeOrigin) {
   }
   return content.replace(/https:\/\/your-runtime-host\.example\.workers\.dev/g, runtimeOrigin);
 }
+function buildCustomGptVoiceHandoffGuide({ runtimeOrigin, issueNumber } = {}) {
+  const origin = normalizeOrigin2(runtimeOrigin);
+  const handoffUrlBase = origin ? `${origin}/dashboard/handoff` : "/dashboard/handoff";
+  const exampleUrl = buildVoiceHandoffExampleUrl({ handoffUrlBase, issueNumber });
+  return {
+    status: "ready_for_manual_custom_gpt_setup",
+    issueNumber: Number.isInteger(issueNumber) ? issueNumber : null,
+    handoffUrlBase,
+    exampleUrl,
+    sourceSurface: "custom_gpt_voice",
+    mode: "voice_handoff",
+    requiredFields: ["mode", "sourceSurface", "intent", "text or summary"],
+    forbiddenFields: ["secrets", "passwords", "api keys", "db credentials", "full transcript"],
+    voiceCommands: ["\u4FDD\u5B58", "\u958B\u767A GO", "\u30AD\u30E3\u30F3\u30BB\u30EB"],
+    guidance: "Custom GPT \u306E\u97F3\u58F0\u4F1A\u8A71\u3067\u306F Actions \u3092\u524D\u63D0\u306B\u305B\u305A\u3001\u4FDD\u5B58\u307E\u305F\u306F\u958B\u767A\u5019\u88DC\u3060\u3051 Dashboard handoff URL \u3067\u6E21\u3059\u3002Dashboard \u306F\u8AAD\u307F\u4E0A\u3052\u5F8C\u306B\u97F3\u58F0\u6307\u793A\u3092\u5F85\u3061\u3001\u4FDD\u5B58\u306F Codex app-server bridge \u3092\u8D77\u52D5\u305B\u305A\u3001\u958B\u767A GO \u306F\u5373\u5B9F\u884C\u3067\u306F\u306A\u304F\u660E\u793A\u627F\u8A8D\u5F85\u3061\u306B\u3059\u308B\u3002"
+  };
+}
+function buildVoiceHandoffExampleUrl({ handoffUrlBase, issueNumber } = {}) {
+  const url = new URL(handoffUrlBase || "https://example.com/dashboard/handoff");
+  url.searchParams.set("mode", "voice_handoff");
+  url.searchParams.set("sourceSurface", "custom_gpt_voice");
+  url.searchParams.set("intent", "save");
+  url.searchParams.set("title", issueNumber ? `Issue #${issueNumber} voice handoff` : "voice handoff");
+  url.searchParams.set("summary", "Owner-confirmed short summary only. No secrets or full transcript.");
+  return url.toString();
+}
 function renderRecoveryBundleSections(recovery) {
   const instructions = recovery.instructionsShortMin;
   const actionSchema = recovery.actionSchema;
@@ -40125,6 +40155,7 @@ function renderRecoveryBundleSections(recovery) {
   const selfParity = recovery.runtime.selfParity;
   const surfaceUpdateChecklist = recovery.runtime.surfaceUpdateChecklist;
   const knownGoodComparison = recovery.runtime.knownGoodComparison;
+  const voiceHandoff = recovery.voiceHandoff;
   const isKnownGoodChannel = recovery.channel === CustomGptSetupChannel.KNOWN_GOOD;
   const warning = instructions.limitExceeded ? `<section class="warning"><strong>Instructions exceed ${instructions.characterLimit} characters.</strong><p>${instructions.characterCount} characters. Shorten before pasting into the Custom GPT editor.</p></section>` : "";
   return `
@@ -40165,6 +40196,30 @@ function renderRecoveryBundleSections(recovery) {
         <div><strong>Unauthenticated route</strong><br>/health only</div>
       </div>
       <p class="small">token value \u306F\u3053\u3053\u306B\u306F\u8868\u793A\u3057\u307E\u305B\u3093\u3002iPhone \u306E\u4FDD\u7BA1\u5834\u6240\u304B\u3089 Custom GPT Action Authentication \u306B\u8CBC\u308A\u76F4\u3057\u3066\u304F\u3060\u3055\u3044\u3002</p>
+    </section>
+    <section>
+      <h2>Custom GPT voice handoff</h2>
+      <p class="small">\u97F3\u58F0\u4F1A\u8A71\u4E2D\u306F Actions \u3092\u524D\u63D0\u306B\u3057\u307E\u305B\u3093\u3002Custom GPT \u306F\u77ED\u3044 handoff URL \u3092\u8FD4\u3057\u3001Dashboard \u304C\u8AAD\u307F\u4E0A\u3052\u3068\u97F3\u58F0\u6307\u793A\u5F85\u3061\u3092\u62C5\u5F53\u3057\u307E\u3059\u3002</p>
+      <div class="meta">
+        <div><strong>Status</strong><br>${escapeHtml3(voiceHandoff.status)}</div>
+        <div><strong>Handoff URL base</strong><br>${escapeHtml3(voiceHandoff.handoffUrlBase)}</div>
+        <div><strong>Mode</strong><br>${escapeHtml3(voiceHandoff.mode)}</div>
+        <div><strong>Source surface</strong><br>${escapeHtml3(voiceHandoff.sourceSurface)}</div>
+        <div><strong>Voice commands</strong><br>${escapeHtml3(voiceHandoff.voiceCommands.join(" / "))}</div>
+        <div><strong>Forbidden</strong><br>${escapeHtml3(voiceHandoff.forbiddenFields.join(", "))}</div>
+      </div>
+      <p><button type="button" data-copy-target="voice-handoff-guidance" data-copy-label="Copy voice handoff guidance">Copy voice handoff guidance</button></p>
+      <textarea id="voice-handoff-guidance" spellcheck="false">${escapeHtml3(
+    [
+      voiceHandoff.guidance,
+      "",
+      `handoffUrlBase: ${voiceHandoff.handoffUrlBase}`,
+      `exampleUrl: ${voiceHandoff.exampleUrl}`,
+      `requiredFields: ${voiceHandoff.requiredFields.join(", ")}`,
+      `voiceCommands: ${voiceHandoff.voiceCommands.join(", ")}`,
+      `forbiddenFields: ${voiceHandoff.forbiddenFields.join(", ")}`
+    ].join("\n")
+  )}</textarea>
     </section>
     <section>
       <h2>Copy-ready Action Schema</h2>
@@ -59401,6 +59456,9 @@ var runtime_default = {
     if (request.method === "GET" && url.pathname === "/dashboard/memory") {
       return html(200, await renderDashboardMemoryPage({ url, env }));
     }
+    if (request.method === "GET" && url.pathname === "/dashboard/handoff") {
+      return html(200, renderDashboardHandoffPage({ url }));
+    }
     if (request.method === "GET" && url.pathname === "/dashboard/self-parity") {
       return html(200, await renderDashboardSelfParityPage({ url, env }));
     }
@@ -59444,6 +59502,9 @@ var runtime_default = {
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/ack")) {
       return handleDashboardPushAckRequest(request, env);
+    }
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/handoff")) {
+      return handleDashboardHandoffRequest(request, env);
     }
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
       return handleDashboardChatSocketRequest(request, url, env);
@@ -64499,6 +64560,123 @@ async function handleDashboardChatMessageRequest(request, env) {
     messages,
     execution: prepared.execution || null
   });
+}
+async function handleDashboardHandoffRequest(request, env) {
+  const payload = normalizeObject12(await readJson(request));
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/handoff"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+  const action = normalizeDashboardHandoffAction(payload.action);
+  const handoff = normalizeDashboardHandoffPayload(payload.handoff || payload);
+  if (!handoff.text && !handoff.summary) {
+    return json(422, {
+      ok: false,
+      error: "dashboard_handoff_payload_required",
+      reason: "handoff text or summary is required"
+    });
+  }
+  const store = resolveDashboardChatStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+  const threadId = normalizeDashboardSingleMainChatThreadId(payload.threadId || payload.thread_id) || "dashboard-main-unresolved";
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const title = handoff.title || "Custom GPT voice handoff";
+  const bodyLines = [
+    `Custom GPT voice handoff: ${title}`,
+    "",
+    handoff.text || handoff.summary,
+    handoff.summary && handoff.summary !== handoff.text ? `
+GPT summary: ${handoff.summary}` : "",
+    handoff.intent ? `
+Intent: ${handoff.intent}` : ""
+  ].filter(Boolean);
+  const ownerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "owner",
+      status: "sent",
+      text: bodyLines.join("\n").trim(),
+      messageId: sanitizeDashboardChatText(payload.clientMessageId || payload.client_message_id) || void 0,
+      createdAt: now
+    },
+    { threadId }
+  );
+  const butlerText = action === "cancel" ? "\u97F3\u58F0\u30CF\u30F3\u30C9\u30AA\u30D5\u3092\u30AD\u30E3\u30F3\u30BB\u30EB\u3057\u307E\u3057\u305F\u3002\u4FDD\u5B58\u3082\u958B\u767A\u5B9F\u884C\u3082\u958B\u59CB\u3057\u3066\u3044\u307E\u305B\u3093\u3002" : action === "development_go" ? "\u958B\u767A GO \u5019\u88DC\u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002VPS Codex CLI / app-server bridge \u306F\u307E\u3060\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002Issue \u5316\u307E\u305F\u306F\u5B9F\u884C\u30AD\u30E5\u30FC\u6295\u5165\u306F\u3001\u5F8C\u7D9A\u306E\u660E\u793A GO / passkey \u5883\u754C\u3067\u6271\u3044\u307E\u3059\u3002" : "\u97F3\u58F0\u30CF\u30F3\u30C9\u30AA\u30D5\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002Codex app-server bridge \u306F\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002";
+  const butlerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      status: "replied",
+      text: butlerText,
+      replyToMessageId: ownerMessage?.messageId,
+      createdAt: new Date(Date.parse(now) + 1).toISOString()
+    },
+    { threadId }
+  );
+  const messages = await store.appendMany(threadId, [ownerMessage, butlerMessage].filter(Boolean));
+  return json(202, {
+    ok: true,
+    threadId,
+    action,
+    handoff: {
+      mode: handoff.mode,
+      intent: handoff.intent || null,
+      sourceSurface: handoff.sourceSurface,
+      title: handoff.title || title,
+      savedAs: action === "development_go" ? "development_waiting" : action === "cancel" ? "cancelled" : "memory_note",
+      ownerFacingStatus: action === "development_go" ? "development_go_waiting_for_explicit_execution_approval" : action === "cancel" ? "cancelled_without_execution" : "saved_without_codex_execution"
+    },
+    codexBridgeStarted: false,
+    vpsCodexStarted: false,
+    authorityBoundary: action === "development_go" ? "explicit GO / passkey remains required before VPS Codex CLI, deploy, merge, credential mutation, or root/sudo work" : "no Codex app-server bridge or VPS Codex CLI execution was started",
+    messages
+  });
+}
+function normalizeDashboardHandoffAction(value) {
+  const action = normalizeDashboardEventText(value).toLowerCase().replace(/[-\s]+/g, "_");
+  if (["save", "\u4FDD\u5B58", "memory"].includes(action)) return "save";
+  if ([
+    "development_go",
+    "development",
+    "develop",
+    "go",
+    "\u958B\u767A",
+    "\u958B\u767Ago",
+    "\u958B\u767A_go",
+    "\u958B\u767A\u30B4\u30FC",
+    "\u958B\u767A_\u30B4\u30FC",
+    "\u5B9F\u88C5",
+    "\u5B9F\u884C"
+  ].includes(action)) {
+    return "development_go";
+  }
+  if (["cancel", "\u30AD\u30E3\u30F3\u30BB\u30EB", "\u53D6\u6D88", "\u53D6\u308A\u6D88\u3057"].includes(action)) return "cancel";
+  return "save";
+}
+function normalizeDashboardHandoffPayload(value) {
+  const input = normalizeObject12(value);
+  return {
+    mode: normalizeDashboardEventText(input.mode) || "voice_handoff",
+    intent: sanitizeDashboardChatText(input.intent || input.type || input.kind),
+    title: sanitizeDashboardChatText(input.title),
+    text: sanitizeDashboardChatText(input.text || input.rawUserNote || input.raw_user_note || input.memo || input.body),
+    summary: sanitizeDashboardChatText(input.summary || input.gptSummary || input.gpt_summary),
+    sourceSurface: normalizeDashboardEventText(input.sourceSurface || input.source_surface) || "custom_gpt_voice"
+  };
 }
 async function authorizeDashboardVpsApprovalContinuation({ payload, env } = {}) {
   const input = normalizeObject12(payload);
@@ -72847,6 +73025,7 @@ function renderDashboardUtilityNavLinks() {
     ["Execution progress", "/dashboard/progress"],
     ["VPS runner", "/dashboard/vps-runner"],
     ["Operational RAG", "/dashboard/memory"],
+    ["Voice handoff", "/dashboard/handoff"],
     ["Self parity", "/dashboard/self-parity"]
   ];
   return items.map(([label, href]) => `<a class="dashboard-nav-link" href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(label)}</a>`).join("");
@@ -73032,6 +73211,242 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
   })}
 </body>
 </html>`;
+}
+function renderDashboardHandoffPage({ url } = {}) {
+  const queryPayload = normalizeText33(url?.searchParams?.get("payload") || "");
+  const queryText = sanitizeDashboardChatText(url?.searchParams?.get("text") || "");
+  const querySummary = sanitizeDashboardChatText(url?.searchParams?.get("summary") || "");
+  const queryIntent = sanitizeDashboardChatText(url?.searchParams?.get("intent") || "");
+  const queryTitle = sanitizeDashboardChatText(url?.searchParams?.get("title") || "");
+  const body = `
+    <div class="hero" data-dashboard-handoff>
+      <div class="lane-title">
+        <h2>Custom GPT voice handoff</h2>
+        <span class="pill">Issue #835</span>
+      </div>
+      <p>Custom GPT \u306E\u97F3\u58F0\u4F1A\u8A71\u304B\u3089\u6E21\u3055\u308C\u305F\u5185\u5BB9\u3092\u8AAD\u307F\u4E0A\u3052\u3001\u97F3\u58F0\u3067\u300C\u4FDD\u5B58\u300D\u300C\u958B\u767A GO\u300D\u300C\u30AD\u30E3\u30F3\u30BB\u30EB\u300D\u3092\u5F85\u3061\u307E\u3059\u3002\u4FDD\u5B58\u30FB\u958B\u767A\u5F85\u3061\u5316\u3067\u306F Codex app-server bridge \u3092\u8D77\u52D5\u3057\u307E\u305B\u3093\u3002</p>
+      <dl class="summary-list">
+        <div><dt>Title</dt><dd id="handoff-title">\u672A\u53D6\u5F97</dd></div>
+        <div><dt>Intent</dt><dd id="handoff-intent">\u672A\u53D6\u5F97</dd></div>
+        <div><dt>Payload</dt><dd><pre id="handoff-text" class="wrap-code">URL fragment \u307E\u305F\u306F parameter \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002</pre></dd></div>
+        <div><dt>Status</dt><dd id="handoff-status">\u8AAD\u307F\u8FBC\u307F\u4E2D</dd></div>
+      </dl>
+      <div class="actions">
+        <button class="dashboard-action" type="button" id="handoff-speak">\u8AAD\u307F\u4E0A\u3052</button>
+        <button class="dashboard-action" type="button" id="handoff-listen">\u97F3\u58F0\u6307\u793A\u3092\u5F85\u3064</button>
+        <button class="dashboard-action" type="button" id="handoff-save">\u4FDD\u5B58</button>
+        <button class="dashboard-action" type="button" id="handoff-development">\u958B\u767A GO \u5F85\u3061</button>
+        <button class="dashboard-action" type="button" id="handoff-cancel">\u30AD\u30E3\u30F3\u30BB\u30EB</button>
+      </div>
+    </div>
+    <div class="notice">
+      <p>Custom GPT \u97F3\u58F0\u4F1A\u8A71\u3067\u306F Actions \u3092\u524D\u63D0\u306B\u3057\u307E\u305B\u3093\u3002\u9577\u6587\u30FB\u79D8\u5BC6\u60C5\u5831\u306F URL \u306B\u5165\u308C\u305A\u3001\u77ED\u3044\u8981\u7D04\u304B Owner \u304C\u6700\u5F8C\u306B\u78BA\u8A8D\u3057\u305F\u4E00\u6587\u3060\u3051\u3092\u6E21\u3057\u307E\u3059\u3002</p>
+      <p>\u904B\u8EE2\u4E2D\u306F\u4FDD\u5B58\u307E\u305F\u306F\u958B\u767A\u5F85\u3061\u5316\u307E\u3067\u3002deploy\u3001merge\u3001credential\u3001root/sudo \u306F\u3053\u3053\u304B\u3089\u5373\u5B9F\u884C\u3057\u307E\u305B\u3093\u3002</p>
+    </div>
+    <script>
+      (() => {
+        const queryPayload = ${JSON.stringify(queryPayload)};
+        const queryFallback = ${JSON.stringify({ title: queryTitle, intent: queryIntent, text: queryText, summary: querySummary, mode: "voice_handoff", sourceSurface: "custom_gpt_voice" })};
+        const titleEl = document.getElementById("handoff-title");
+        const intentEl = document.getElementById("handoff-intent");
+        const textEl = document.getElementById("handoff-text");
+        const statusEl = document.getElementById("handoff-status");
+        const speakButton = document.getElementById("handoff-speak");
+        const listenButton = document.getElementById("handoff-listen");
+        const saveButton = document.getElementById("handoff-save");
+        const developmentButton = document.getElementById("handoff-development");
+        const cancelButton = document.getElementById("handoff-cancel");
+        let handoff = {};
+        let recognizer = null;
+        let listening = false;
+
+        function setStatus(text) {
+          if (statusEl) statusEl.textContent = text;
+        }
+
+        function decodeBase64Url(value) {
+          const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+          const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+          return decodeURIComponent(escape(window.atob(padded)));
+        }
+
+        function parsePayloadValue(value) {
+          const text = String(value || "").trim();
+          if (!text) return {};
+          try {
+            return JSON.parse(text);
+          } catch {}
+          try {
+            return JSON.parse(decodeBase64Url(text));
+          } catch {}
+          try {
+            return Object.fromEntries(new URLSearchParams(text));
+          } catch {}
+          return { text };
+        }
+
+        function readHandoffFromUrl() {
+          const hash = new URLSearchParams(String(window.location.hash || "").replace(/^#/, ""));
+          const hashPayload = hash.get("payload") || "";
+          const parsed = {
+            ...queryFallback,
+            ...parsePayloadValue(queryPayload),
+            ...Object.fromEntries(hash.entries()),
+            ...parsePayloadValue(hashPayload)
+          };
+          parsed.mode = parsed.mode || "voice_handoff";
+          parsed.sourceSurface = parsed.sourceSurface || parsed.source_surface || "custom_gpt_voice";
+          parsed.text = parsed.text || parsed.rawUserNote || parsed.raw_user_note || parsed.memo || parsed.body || "";
+          parsed.summary = parsed.summary || parsed.gptSummary || parsed.gpt_summary || "";
+          parsed.intent = parsed.intent || parsed.type || parsed.kind || "";
+          parsed.title = parsed.title || "Custom GPT voice handoff";
+          return parsed;
+        }
+
+        function renderHandoff() {
+          handoff = readHandoffFromUrl();
+          titleEl.textContent = handoff.title || "Custom GPT voice handoff";
+          intentEl.textContent = handoff.intent || "\u672A\u6307\u5B9A";
+          textEl.textContent = handoff.text || handoff.summary || "payload \u304C\u7A7A\u3067\u3059\u3002Custom GPT \u304B\u3089\u77ED\u3044\u4FDD\u5B58\u6587\u3092\u6E21\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+          setStatus(handoff.text || handoff.summary ? "\u8AAD\u307F\u4E0A\u3052\u6E96\u5099\u5B8C\u4E86" : "payload \u304C\u7A7A\u3067\u3059");
+        }
+
+        function speechText() {
+          const content = handoff.text || handoff.summary || "";
+          const intent = handoff.intent ? "\u610F\u56F3\u306F\u3001" + handoff.intent + "\u3002" : "";
+          return "\u30AB\u30B9\u30BF\u30E0 GPT \u304B\u3089\u306E\u5F15\u304D\u7D99\u304E\u3067\u3059\u3002" + intent + "\u5185\u5BB9\u306F\u3001" + content + "\u3002\u4FDD\u5B58\u3001\u958B\u767A\u30B4\u30FC\u3001\u30AD\u30E3\u30F3\u30BB\u30EB\u306E\u3069\u308C\u304B\u3092\u8A71\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+        }
+
+        function speak() {
+          if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") {
+            setStatus("\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u3067\u306F\u8AAD\u307F\u4E0A\u3052\u306B\u672A\u5BFE\u5FDC\u3067\u3059\u3002");
+            return false;
+          }
+          try {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(speechText());
+            utterance.lang = "ja-JP";
+            utterance.onend = () => startListening();
+            utterance.onerror = () => setStatus("\u8AAD\u307F\u4E0A\u3052\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u97F3\u58F0\u6307\u793A\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+            window.speechSynthesis.speak(utterance);
+            setStatus("\u8AAD\u307F\u4E0A\u3052\u4E2D\u3067\u3059\u3002");
+            return true;
+          } catch {
+            setStatus("\u8AAD\u307F\u4E0A\u3052\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002");
+            return false;
+          }
+        }
+
+        async function submitHandoff(action) {
+          setStatus(action === "development_go" ? "\u958B\u767A GO \u5F85\u3061\u3068\u3057\u3066\u4FDD\u5B58\u3057\u3066\u3044\u307E\u3059\u3002" : action === "cancel" ? "\u30AD\u30E3\u30F3\u30BB\u30EB\u3092\u4FDD\u5B58\u3057\u3066\u3044\u307E\u3059\u3002" : "\u4FDD\u5B58\u3057\u3066\u3044\u307E\u3059\u3002");
+          const response = await fetch("/v2/dashboard/handoff", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action, handoff })
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || body.ok === false) {
+            setStatus(body.reason || body.error || "handoff \u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+            return;
+          }
+          const message = action === "development_go"
+            ? "\u958B\u767A GO \u5F85\u3061\u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u5B9F\u884C\u306F\u307E\u3060\u958B\u59CB\u3057\u3066\u3044\u307E\u305B\u3093\u3002"
+            : action === "cancel"
+              ? "\u30AD\u30E3\u30F3\u30BB\u30EB\u3057\u307E\u3057\u305F\u3002"
+              : "\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002";
+          setStatus(message);
+          speakShort(message);
+          if (window.history?.replaceState) {
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+        }
+
+        function speakShort(text) {
+          if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") return;
+          try {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = "ja-JP";
+            window.speechSynthesis.speak(utterance);
+          } catch {}
+        }
+
+        function handleTranscript(text) {
+          const normalized = String(text || "").replace(/[\\s\u3001\u3002.!\uFF01?\uFF1F]/g, "").toLowerCase();
+          if (!normalized) return false;
+          if (normalized.includes("\u30AD\u30E3\u30F3\u30BB\u30EB") || normalized.includes("\u53D6\u6D88") || normalized.includes("\u53D6\u308A\u6D88\u3057")) {
+            submitHandoff("cancel").catch(() => setStatus("\u30AD\u30E3\u30F3\u30BB\u30EB\u51E6\u7406\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002"));
+            return true;
+          }
+          if (normalized.includes("\u958B\u767Ago") || normalized.includes("\u958B\u767A\u30B4\u30FC") || normalized.includes("\u5B9F\u88C5") || normalized.includes("\u958B\u767A")) {
+            submitHandoff("development_go").catch(() => setStatus("\u958B\u767A GO \u5F85\u3061\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002"));
+            return true;
+          }
+          if (normalized.includes("\u4FDD\u5B58") || normalized.includes("\u899A\u3048") || normalized.includes("\u30E1\u30E2")) {
+            submitHandoff("save").catch(() => setStatus("\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002"));
+            return true;
+          }
+          setStatus("\u8A8D\u8B58\u3057\u307E\u3057\u305F\u304C\u3001\u4FDD\u5B58\u30FB\u958B\u767A GO\u30FB\u30AD\u30E3\u30F3\u30BB\u30EB\u306E\u3069\u308C\u304B\u3092\u5224\u65AD\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F: " + text);
+          return false;
+        }
+
+        function startListening() {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (typeof SpeechRecognition !== "function") {
+            setStatus("\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u3067\u306F\u97F3\u58F0\u5165\u529B\u306B\u672A\u5BFE\u5FDC\u3067\u3059\u3002\u30DC\u30BF\u30F3\u3067\u4FDD\u5B58\u3067\u304D\u307E\u3059\u3002");
+            return false;
+          }
+          if (listening) return true;
+          recognizer = new SpeechRecognition();
+          recognizer.lang = "ja-JP";
+          recognizer.continuous = false;
+          recognizer.interimResults = false;
+          recognizer.onstart = () => {
+            listening = true;
+            setStatus("\u97F3\u58F0\u6307\u793A\u5F85\u3061\u3067\u3059\u3002\u300C\u4FDD\u5B58\u300D\u300C\u958B\u767A GO\u300D\u300C\u30AD\u30E3\u30F3\u30BB\u30EB\u300D\u3068\u8A71\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+          };
+          recognizer.onend = () => {
+            listening = false;
+          };
+          recognizer.onerror = () => {
+            listening = false;
+            setStatus("\u97F3\u58F0\u5165\u529B\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30DC\u30BF\u30F3\u3067\u4FDD\u5B58\u3067\u304D\u307E\u3059\u3002");
+          };
+          recognizer.onresult = (event) => {
+            const transcript = Array.from(event.results || [])
+              .map((result) => result?.[0]?.transcript || "")
+              .join(" ")
+              .trim();
+            handleTranscript(transcript);
+          };
+          try {
+            recognizer.start();
+            return true;
+          } catch {
+            listening = false;
+            setStatus("\u97F3\u58F0\u5165\u529B\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002");
+            return false;
+          }
+        }
+
+        speakButton?.addEventListener("click", speak);
+        listenButton?.addEventListener("click", startListening);
+        saveButton?.addEventListener("click", () => submitHandoff("save"));
+        developmentButton?.addEventListener("click", () => submitHandoff("development_go"));
+        cancelButton?.addEventListener("click", () => submitHandoff("cancel"));
+        renderHandoff();
+        window.setTimeout(() => {
+          if (!speak()) setStatus("\u81EA\u52D5\u8AAD\u307F\u4E0A\u3052\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u8AAD\u307F\u4E0A\u3052\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+        }, 250);
+      })();
+    <\/script>
+  `;
+  return renderDashboardUtilityPage({
+    title: "Voice handoff",
+    subtitle: "Custom GPT \u97F3\u58F0\u4F1A\u8A71\u304B\u3089 Dashboard \u3078\u6E21\u3055\u308C\u305F\u5185\u5BB9\u3092\u3001\u8AAD\u307F\u4E0A\u3052\u3068\u97F3\u58F0\u6307\u793A\u3067\u4FDD\u5B58\u30FB\u958B\u767A\u5F85\u3061\u5316\u3057\u307E\u3059\u3002",
+    backHref: "/dashboard",
+    body
+  });
 }
 function renderDashboardNewsPage({ runtimeOrigin, env } = {}) {
   const origin = normalize7(runtimeOrigin);
