@@ -281,6 +281,7 @@ export {
 } from "./github-app-repository-index.js";
 export {
   buildCustomGptRecoveryBundle,
+  buildCustomGptSetupImportArtifact,
   CustomGptSetupArtifact,
   CustomGptSetupChannel,
   evaluateButlerSelfParity,

@@ -2,6 +2,8 @@ import {
   AutonomyMode,
   ActorRole,
   buildCustomGptRecoveryBundle,
+  buildCustomGptSetupImportArtifact,
+  CustomGptSetupArtifact,
   CustomGptSetupChannel,
   MemoryRecordType,
   appendDecisionLogFromGateway,
@@ -1318,6 +1320,15 @@ export default {
         url.pathname === "/setup/known-good")
     ) {
       return handleCustomGptRecoveryPageRequest(url, env);
+    }
+
+    if (
+      request.method === "GET" &&
+      (url.pathname === "/setup/openapi.yaml" ||
+        url.pathname === "/setup/openapi.json" ||
+        url.pathname === "/setup/instructions.txt")
+    ) {
+      return handleCustomGptSetupImportArtifactRequest(url, env);
     }
 
     if (request.method === "GET" && url.pathname === "/setup/diagnostics") {
@@ -8776,6 +8787,50 @@ async function handleCustomGptRecoveryPageRequest(url, env) {
           }
     })
   );
+}
+
+async function handleCustomGptSetupImportArtifactRequest(url, env) {
+  const routeConfig = {
+    "/setup/openapi.yaml": {
+      artifact: CustomGptSetupArtifact.OPENAPI_YAML,
+      contentType: "text/yaml; charset=utf-8"
+    },
+    "/setup/openapi.json": {
+      artifact: CustomGptSetupArtifact.OPENAPI_JSON,
+      contentType: "application/json; charset=utf-8"
+    },
+    "/setup/instructions.txt": {
+      artifact: CustomGptSetupArtifact.INSTRUCTIONS_SHORT_MIN,
+      contentType: "text/plain; charset=utf-8"
+    }
+  }[url.pathname];
+
+  if (!routeConfig) {
+    return json(404, { ok: false, error: "not_found" });
+  }
+
+  const result = await buildCustomGptSetupImportArtifact({
+    artifact: routeConfig.artifact,
+    repository: url.searchParams.get("repository") || undefined,
+    ref: url.searchParams.get("ref") || undefined,
+    runtimeOrigin: url.origin,
+    env
+  });
+
+  if (!result.ok) {
+    return json(result.status ?? 503, {
+      ok: false,
+      error: result.error ?? "custom_gpt_setup_import_unavailable",
+      reason: result.reason ?? "failed to build Custom GPT setup import artifact",
+      issues: result.issues ?? []
+    });
+  }
+
+  return rawSetupArtifact(200, result.artifact.content, routeConfig.contentType, {
+    "x-vtdd-setup-artifact": result.artifact.artifact,
+    "x-vtdd-setup-source-path": result.artifact.path,
+    "x-vtdd-setup-source-sha": result.artifact.sha || "unknown"
+  });
 }
 
 async function handlePasskeyOperatorPageRequest(request, env) {
@@ -21172,6 +21227,19 @@ function html(status, body, extraHeaders = {}) {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
       pragma: "no-cache",
+      ...extraHeaders
+    }
+  });
+}
+
+function rawSetupArtifact(status, body, contentType, extraHeaders = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": contentType,
+      "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+      pragma: "no-cache",
+      "x-content-type-options": "nosniff",
       ...extraHeaders
     }
   });
