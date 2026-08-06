@@ -149,6 +149,27 @@ node scripts/vtdd-memory.mjs retrieve-operational \
   --pretty true
 ```
 
+Operational-memory natural-language recall is deterministic bounded retrieval,
+not a guarantee that vector/semantic search is active. The response exposes:
+
+- `retrievalSignals.queryCandidateRetrieval`: whether the runtime expanded the
+  query into bounded token / tag / `issue:<number>` candidate retrieval.
+- `compactContext[].retrievalMatch`: why each record matched, including query
+  tokens, matched tags, related Issue, repository, and record type.
+- `retrievalSignals.semanticRetrieval.enabled`: currently `false` unless a
+  separate semantic/vector provider is wired.
+
+For owner-facing memory confirmation, prefer a two-step proof:
+
+1. retrieve by `recordId` immediately after write;
+2. retrieve again by natural text, tags, or `relatedIssue` and verify the same
+   record appears near the top with visible `retrievalMatch` evidence.
+
+If direct D1 inventory is unavailable because local Wrangler auth expired, use
+the runtime route above with the local gateway bearer vault. Do not fall back
+to pasting Cloudflare credentials into chat or starting the Codex app-server
+bridge just to verify memory save/search.
+
 Recover a known `working_memory` checkpoint that was saved while repository was
 unresolved:
 

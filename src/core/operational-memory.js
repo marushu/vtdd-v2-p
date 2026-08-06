@@ -25,6 +25,7 @@ export const OPERATIONAL_MEMORY_STORAGE_CANDIDATES = Object.freeze([
 ]);
 
 const DEFAULT_LIMIT = 8;
+const DEFAULT_QUERY_CANDIDATE_LIMIT = 40;
 
 const LAYER_CONTRACTS = Object.freeze([
   {
@@ -131,6 +132,7 @@ export async function retrieveOperationalMemory(provider, input = {}) {
   const recordId = normalizeText(input.recordId);
   const now = normalizeTimestamp(input.now) || new Date().toISOString();
   const currentRepository = normalizeText(input.repository);
+  const relatedIssue = normalizePositiveInteger(input.relatedIssue);
   const runtimeTruth = normalizeRuntimeTruth(input.runtimeTruth);
 
   try {
@@ -146,20 +148,23 @@ export async function retrieveOperationalMemory(provider, input = {}) {
       : await retrieveStructuredOperationalRecords(provider, {
           limit: Math.max(limit * 4, limit)
         });
-    const semanticRecords =
+    const queryMatchedRecords =
       queryText && !recordId
-        ? await provider.query({
-            text: queryText,
-            limit: Math.max(limit * 4, limit)
+        ? await retrieveQueryMatchedOperationalRecords(provider, {
+            queryText,
+            relatedIssue,
+            limit: Math.max(DEFAULT_QUERY_CANDIDATE_LIMIT, limit * 8)
           })
         : [];
+    const semanticRecords = [];
 
     const recordIdReference = normalizeQueriedRecords(recordIdRecords)
       .map((record) =>
         toOperationalMemoryReference(record, {
           queryText,
           now,
-          currentRepository
+          currentRepository,
+          relatedIssue
         })
       )
       .filter(Boolean)[0] ?? null;
@@ -171,12 +176,16 @@ export async function retrieveOperationalMemory(provider, input = {}) {
         })
       : null;
     const recordIdContextRecords = recordIdLookup?.found ? normalizeQueriedRecords(recordIdRecords) : [];
-    const candidates = mergeRecords(recordIdContextRecords, mergeRecords(structuredRecords, normalizeQueriedRecords(semanticRecords)))
+    const candidates = mergeRecords(
+      recordIdContextRecords,
+      mergeRecords(structuredRecords, mergeRecords(queryMatchedRecords, normalizeQueriedRecords(semanticRecords)))
+    )
       .map((record) =>
         toOperationalMemoryReference(record, {
           queryText,
           now,
-          currentRepository
+          currentRepository,
+          relatedIssue
         })
       )
       .filter(Boolean)
@@ -206,7 +215,21 @@ export async function retrieveOperationalMemory(provider, input = {}) {
         ],
         limit,
         dumpedAllMemory: false,
-        explicitRecordIdLookup: Boolean(recordId)
+        explicitRecordIdLookup: Boolean(recordId),
+        queryCandidateRetrieval: buildQueryCandidateRetrievalTruth({
+          queryText,
+          relatedIssue,
+          queryMatchedRecords,
+          recordId
+        }),
+        semanticRetrieval: {
+          enabled: false,
+          mode: "disabled",
+          providerAgnostic: true,
+          impact:
+            "semantic/vector retrieval is not enabled for operational-memory; ranking uses bounded structured retrieval plus token/tag/issue candidate retrieval.",
+          extensionPoint: "memory_provider.query"
+        }
       }
     };
   } catch (error) {
@@ -256,6 +279,74 @@ async function retrieveStructuredOperationalRecords(provider, input = {}) {
   return retrievedByType.flatMap((retrieved) => normalizeQueriedRecords(retrieved));
 }
 
+async function retrieveQueryMatchedOperationalRecords(provider, input = {}) {
+  const queryText = normalizeText(input.queryText);
+  const relatedIssue = normalizePositiveInteger(input.relatedIssue);
+  const limit = normalizeLimit(input.limit, DEFAULT_QUERY_CANDIDATE_LIMIT);
+  const queryTerms = buildOperationalMemoryQueryTerms({ queryText, relatedIssue });
+  const tagHints = buildOperationalMemoryTagHints({ queryText, relatedIssue });
+  const calls = [];
+
+  for (const term of queryTerms) {
+    calls.push(provider.query({ text: term, limit }));
+  }
+  for (const tag of tagHints) {
+    calls.push(provider.retrieve({ tags: [tag], limit }));
+  }
+
+  if (calls.length === 0) {
+    return [];
+  }
+
+  const settled = await Promise.allSettled(calls);
+  const records = [];
+  for (const result of settled) {
+    if (result.status === "fulfilled") {
+      records.push(...normalizeQueriedRecords(result.value));
+    }
+  }
+  return mergeRecords([], records);
+}
+
+function buildOperationalMemoryQueryTerms({ queryText, relatedIssue } = {}) {
+  const fullText = normalizeText(queryText);
+  const tokens = tokenizeSearchText(fullText)
+    .filter((token) => token.length >= 2)
+    .filter((token) => !isLowValueQueryToken(token));
+  const issueTokens = relatedIssue ? [`issue:${relatedIssue}`, `#${relatedIssue}`, String(relatedIssue)] : [];
+  return [...new Set([fullText, ...tokens, ...issueTokens].map(normalizeText).filter(Boolean))].slice(0, 20);
+}
+
+function buildOperationalMemoryTagHints({ queryText, relatedIssue } = {}) {
+  const tokens = tokenizeSearchText(queryText)
+    .filter((token) => token.length >= 2)
+    .map((token) => token.toLowerCase());
+  const issueTags = [
+    ...extractIssueNumbers(queryText).map((issue) => `issue:${issue}`),
+    ...(relatedIssue ? [`issue:${relatedIssue}`] : [])
+  ];
+  const tagLikeTokens = tokens.filter((token) =>
+    token.includes("-") ||
+    token.includes("_") ||
+    ["mcp", "rag", "bridge", "cloudflare", "memory", "dashboard", "codex"].includes(token)
+  );
+  return [...new Set([...issueTags, ...tagLikeTokens])].slice(0, 20);
+}
+
+function buildQueryCandidateRetrievalTruth({ queryText, relatedIssue, queryMatchedRecords, recordId } = {}) {
+  const queryTerms = recordId ? [] : buildOperationalMemoryQueryTerms({ queryText, relatedIssue });
+  const tagHints = recordId ? [] : buildOperationalMemoryTagHints({ queryText, relatedIssue });
+  return {
+    enabled: Boolean(!recordId && (queryTerms.length > 0 || tagHints.length > 0)),
+    mode: "bounded_token_tag_issue_match",
+    candidateCount: Array.isArray(queryMatchedRecords) ? queryMatchedRecords.length : 0,
+    queryTerms,
+    tagHints,
+    note:
+      "This is deterministic candidate expansion for operational memory recall. It is not semantic/vector search."
+  };
+}
+
 function toOperationalMemoryReference(record, input = {}) {
   const layer = resolveLayerForType(record?.type);
   if (!layer) {
@@ -266,17 +357,30 @@ function toOperationalMemoryReference(record, input = {}) {
   const content = normalizeObject(record?.content);
   const tags = normalizeTags(record?.tags);
   const queryText = normalizeText(input.queryText);
+  const relatedIssue = normalizePositiveInteger(input.relatedIssue);
   const repository = normalizeText(metadata.repository ?? content.repository);
   const currentRepository = normalizeText(input.currentRepository);
   const textBlob = `${JSON.stringify(content)} ${JSON.stringify(metadata)} ${tags.join(" ")}`.toLowerCase();
+  const retrievalMatch = buildRetrievalMatch({
+    record,
+    content,
+    metadata,
+    tags,
+    textBlob,
+    queryText,
+    currentRepository,
+    repository,
+    relatedIssue
+  });
 
   const scoreSignals = {
-    relevance: scoreRelevance(textBlob, queryText),
+    relevance: scoreRelevance(textBlob, queryText, retrievalMatch),
     governanceImportance: scoreGovernanceImportance(record, tags),
     recurrence: scoreRecurrence(record, tags),
     recency: scoreRecency(record?.createdAt, input.now),
     operationalRisk: scoreOperationalRisk(record, tags),
-    reconstructionValue: scoreReconstructionValue(record, tags)
+    reconstructionValue: scoreReconstructionValue(record, tags),
+    retrievalMatch: scoreRetrievalMatch(retrievalMatch)
   };
 
   return {
@@ -294,6 +398,7 @@ function toOperationalMemoryReference(record, input = {}) {
     successPattern: normalizeSummaryObject(content.successPattern),
     tension: buildTensionReference(content),
     handoffMemory: normalizeSummaryObject(content.handoffMemory),
+    retrievalMatch,
     score: calculateOperationalMemoryScore(scoreSignals),
     scoreSignals,
     use: "background_reference"
@@ -304,16 +409,95 @@ function resolveLayerForType(type) {
   return MEMORY_TYPE_LAYER_MAP[normalizeText(type)] ?? null;
 }
 
-function scoreRelevance(textBlob, queryText) {
+function scoreRelevance(textBlob, queryText, retrievalMatch = null) {
   if (!queryText) {
     return 0;
   }
-  const tokens = tokenize(queryText);
+  const tokens = tokenizeSearchText(queryText).filter((token) => token.length >= 2);
   if (tokens.length === 0) {
     return 0;
   }
   const matches = tokens.filter((token) => textBlob.includes(token)).length;
-  return Math.round((matches / tokens.length) * 100);
+  const tokenScore = Math.round((matches / tokens.length) * 100);
+  const tagScore = Array.isArray(retrievalMatch?.matchedTags) && retrievalMatch.matchedTags.length > 0 ? 15 : 0;
+  const issueScore = retrievalMatch?.relatedIssueMatched ? 15 : 0;
+  const repositoryScore = retrievalMatch?.repositoryMatched ? 5 : 0;
+  return Math.min(100, tokenScore + tagScore + issueScore + repositoryScore);
+}
+
+function buildRetrievalMatch({
+  record,
+  content,
+  metadata,
+  tags,
+  textBlob,
+  queryText,
+  currentRepository,
+  repository,
+  relatedIssue
+}) {
+  const queryTokens = tokenizeSearchText(queryText).filter((token) => token.length >= 2);
+  const matchedTokens = queryTokens.filter((token) => textBlob.includes(token));
+  const normalizedTags = tags.map((tag) => normalizeText(tag).toLowerCase()).filter(Boolean);
+  const matchedTags = queryTokens
+    .map((token) => normalizeText(token).toLowerCase())
+    .filter((token) => normalizedTags.includes(token) || normalizedTags.includes(token.replace(/^#/, "issue:")));
+  const issueNumbers = new Set([
+    ...extractIssueNumbers(queryText),
+    ...(relatedIssue ? [relatedIssue] : [])
+  ]);
+  const recordIssues = extractRecordIssueNumbers({ content, metadata, tags });
+  const relatedIssueMatched = [...issueNumbers].some((issue) => recordIssues.has(issue));
+  const repositoryMatched = Boolean(currentRepository && repository && normalizeText(currentRepository) === normalizeText(repository));
+  const fullQueryMatched = Boolean(queryText && textBlob.includes(normalizeText(queryText).toLowerCase()));
+  const matchedBy = [
+    ...(fullQueryMatched ? ["full_query"] : []),
+    ...(matchedTokens.length > 0 ? ["query_token"] : []),
+    ...(matchedTags.length > 0 ? ["tag"] : []),
+    ...(relatedIssueMatched ? ["related_issue"] : []),
+    ...(repositoryMatched ? ["repository"] : []),
+    ...(record?.type ? ["record_type"] : [])
+  ];
+
+  return {
+    matchedBy,
+    fullQueryMatched,
+    matchedTokens: [...new Set(matchedTokens)],
+    matchedTags: [...new Set(matchedTags)],
+    relatedIssueMatched,
+    repositoryMatched,
+    recordType: normalizeText(record?.type) || null,
+    recordIssues: [...recordIssues].sort((left, right) => left - right)
+  };
+}
+
+function extractRecordIssueNumbers({ content, metadata, tags }) {
+  const issues = new Set();
+  for (const value of [
+    content?.relatedIssue,
+    metadata?.relatedIssue,
+    metadata?.issue,
+    ...(Array.isArray(tags) ? tags : [])
+  ]) {
+    for (const issue of extractIssueNumbers(String(value ?? ""))) {
+      issues.add(issue);
+    }
+  }
+  return issues;
+}
+
+function scoreRetrievalMatch(retrievalMatch) {
+  if (!retrievalMatch || typeof retrievalMatch !== "object") {
+    return 0;
+  }
+  return Math.min(
+    100,
+    (retrievalMatch.fullQueryMatched ? 35 : 0) +
+      Math.min(35, retrievalMatch.matchedTokens.length * 7) +
+      Math.min(20, retrievalMatch.matchedTags.length * 10) +
+      (retrievalMatch.relatedIssueMatched ? 25 : 0) +
+      (retrievalMatch.repositoryMatched ? 10 : 0)
+  );
 }
 
 function scoreGovernanceImportance(record, tags) {
@@ -383,11 +567,12 @@ function scoreRecency(createdAt, now) {
 
 function calculateOperationalMemoryScore(signals) {
   return Math.round(
-    signals.relevance * 0.3 +
-      signals.governanceImportance * 0.2 +
-      signals.recurrence * 0.15 +
-      signals.operationalRisk * 0.15 +
-      signals.reconstructionValue * 0.1 +
+    signals.relevance * 0.24 +
+      signals.retrievalMatch * 0.24 +
+      signals.governanceImportance * 0.14 +
+      signals.recurrence * 0.1 +
+      signals.operationalRisk * 0.1 +
+      signals.reconstructionValue * 0.08 +
       signals.recency * 0.1
   );
 }
@@ -617,6 +802,14 @@ function normalizeLimit(value, fallback) {
   return Math.min(Math.floor(numeric), 50);
 }
 
+function normalizePositiveInteger(value) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    return null;
+  }
+  return numeric;
+}
+
 function normalizeTimestamp(value) {
   const text = normalizeText(value);
   if (!text || !Number.isFinite(Date.parse(text))) {
@@ -636,10 +829,33 @@ function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
-function tokenize(value) {
-  return normalizeText(value)
-    .toLowerCase()
-    .split(/[^a-z0-9_#-]+/)
-    .map((token) => token.trim())
-    .filter(Boolean);
+function tokenizeSearchText(value) {
+  return (
+    normalizeText(value)
+      .toLowerCase()
+      .match(/[a-z0-9_#:-]+|[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー]+/giu)
+      ?.map((token) => token.trim())
+      .filter(Boolean) ?? []
+  );
+}
+
+function extractIssueNumbers(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return [];
+  }
+  const issues = [];
+  for (const match of text.matchAll(/(?:issue:|issue\s*#?|#)(\d+)/giu)) {
+    const issue = normalizePositiveInteger(match[1]);
+    if (issue) {
+      issues.push(issue);
+    }
+  }
+  return [...new Set(issues)];
+}
+
+function isLowValueQueryToken(token) {
+  return ["the", "and", "for", "with", "from", "this", "that", "true", "false"].includes(
+    normalizeText(token).toLowerCase()
+  );
 }

@@ -16433,7 +16433,10 @@ test("worker returns compact operational memory through retrieve route", async (
   assert.equal(body.compactContext.length, 2);
   assert.equal(body.compactContext[0].id, "operational-decision-1");
   assert.equal(body.compactContext[0].crossRepository, true);
+  assert.equal(body.compactContext[0].retrievalMatch.matchedTokens.includes("reviewer"), true);
   assert.equal(body.retrievalSignals.dumpedAllMemory, false);
+  assert.equal(body.retrievalSignals.queryCandidateRetrieval.enabled, true);
+  assert.equal(body.retrievalSignals.semanticRetrieval.enabled, false);
 });
 
 test("codex analytics usage ingest requires gateway bearer auth", async () => {
