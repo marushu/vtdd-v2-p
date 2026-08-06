@@ -35,6 +35,9 @@ export const RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/health",
     "/setup",
     "/setup/recovery",
+    "/setup/openapi.yaml",
+    "/setup/openapi.json",
+    "/setup/instructions.txt",
     "/setup/diagnostics",
     "/v2/gateway",
     "/v2/action/execute",
@@ -1157,6 +1160,90 @@ function expandOpenApiServerUrl(content, runtimeOrigin) {
   return content.replace(/https:\/\/your-runtime-host\.example\.workers\.dev/g, runtimeOrigin);
 }
 
+export async function buildCustomGptSetupImportArtifact(input = {}) {
+  const artifact = normalizeText(input.artifact);
+  const repository = normalizeText(input.repository) || VTDD_SETUP_REPOSITORY;
+  const ref = normalizeText(input.ref) || "main";
+  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const env = input.env ?? {};
+
+  if (!runtimeOrigin) {
+    return {
+      ok: false,
+      status: 422,
+      error: "custom_gpt_setup_import_request_invalid",
+      reason: "runtimeOrigin is required"
+    };
+  }
+
+  const allowedArtifacts = new Set([
+    CustomGptSetupArtifact.OPENAPI_YAML,
+    CustomGptSetupArtifact.OPENAPI_JSON,
+    CustomGptSetupArtifact.INSTRUCTIONS_SHORT_MIN
+  ]);
+  if (!allowedArtifacts.has(artifact)) {
+    return {
+      ok: false,
+      status: 422,
+      error: "custom_gpt_setup_import_request_invalid",
+      reason: "unsupported setup import artifact"
+    };
+  }
+
+  const retrieved = await retrieveCustomGptSetupArtifact({
+    artifact,
+    repository,
+    ref,
+    env
+  });
+  if (!retrieved.ok) {
+    return {
+      ok: false,
+      status: retrieved.status ?? 503,
+      error: retrieved.error ?? "custom_gpt_setup_import_unavailable",
+      reason: retrieved.reason ?? "failed to retrieve setup import artifact",
+      issues: retrieved.issues ?? []
+    };
+  }
+
+  const content =
+    artifact === CustomGptSetupArtifact.OPENAPI_YAML
+      ? expandOpenApiServerUrl(retrieved.artifact.content, runtimeOrigin)
+      : artifact === CustomGptSetupArtifact.OPENAPI_JSON
+        ? expandOpenApiJsonServerUrl(retrieved.artifact.content, runtimeOrigin)
+        : retrieved.artifact.content;
+
+  return {
+    ok: true,
+    artifact: {
+      ...retrieved.artifact,
+      content,
+      runtimeOrigin,
+      importUrlReady: true
+    }
+  };
+}
+
+function expandOpenApiJsonServerUrl(content, runtimeOrigin) {
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed.servers)) {
+      parsed.servers = parsed.servers.map((server) => {
+        if (!server || typeof server !== "object") {
+          return server;
+        }
+        return {
+          ...server,
+          url: runtimeOrigin
+        };
+      });
+    }
+    return `${JSON.stringify(parsed, null, 2)}\n`;
+  } catch {
+    return content.replace(/https:\/\/your-runtime-host\.example\.workers\.dev/g, runtimeOrigin);
+  }
+}
+
 function buildCustomGptVoiceHandoffGuide({ runtimeOrigin, issueNumber } = {}) {
   const origin = normalizeOrigin(runtimeOrigin);
   const handoffUrlBase = origin ? `${origin}/dashboard/handoff` : "/dashboard/handoff";
@@ -1225,8 +1312,12 @@ function renderRecoveryBundleSections(recovery) {
         <div><strong>Recovery page URL</strong><br>${escapeHtml(recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "/setup/known-good" : "/setup/latest")}</div>
         <div><strong>Runtime origin</strong><br>${escapeHtml(recovery.runtimeOrigin)}</div>
         <div><strong>Action Schema server URL</strong><br>${escapeHtml(actionSchema.serverUrl)}</div>
+        <div><strong>Action Schema import URL</strong><br>${escapeHtml(`${recovery.runtimeOrigin}/setup/openapi.yaml?ref=${encodeURIComponent(recovery.ref)}`)}</div>
+        <div><strong>Action Schema JSON import URL</strong><br>${escapeHtml(`${recovery.runtimeOrigin}/setup/openapi.json?ref=${encodeURIComponent(recovery.ref)}`)}</div>
+        <div><strong>Instructions raw URL</strong><br>${escapeHtml(`${recovery.runtimeOrigin}/setup/instructions.txt?ref=${encodeURIComponent(recovery.ref)}`)}</div>
         <div><strong>Operator URL</strong><br>別用途。passkey / deploy / high-risk approval でのみ使う。</div>
       </div>
+      <p class="small">iPhone で Schema 本文が URL エンコードされる場合は、本文を貼らずに Custom GPT Actions の「URL からインポートする」へ Action Schema import URL を入れてください。</p>
     </section>
     <section>
       <h2>Custom GPT Action Authentication</h2>

@@ -39153,6 +39153,9 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/health",
     "/setup",
     "/setup/recovery",
+    "/setup/openapi.yaml",
+    "/setup/openapi.json",
+    "/setup/instructions.txt",
     "/setup/diagnostics",
     "/v2/gateway",
     "/v2/action/execute",
@@ -40122,6 +40125,79 @@ function expandOpenApiServerUrl(content, runtimeOrigin) {
   }
   return content.replace(/https:\/\/your-runtime-host\.example\.workers\.dev/g, runtimeOrigin);
 }
+async function buildCustomGptSetupImportArtifact(input = {}) {
+  const artifact = normalizeText27(input.artifact);
+  const repository = normalizeText27(input.repository) || VTDD_SETUP_REPOSITORY;
+  const ref = normalizeText27(input.ref) || "main";
+  const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
+  const env = input.env ?? {};
+  if (!runtimeOrigin) {
+    return {
+      ok: false,
+      status: 422,
+      error: "custom_gpt_setup_import_request_invalid",
+      reason: "runtimeOrigin is required"
+    };
+  }
+  const allowedArtifacts = /* @__PURE__ */ new Set([
+    CustomGptSetupArtifact.OPENAPI_YAML,
+    CustomGptSetupArtifact.OPENAPI_JSON,
+    CustomGptSetupArtifact.INSTRUCTIONS_SHORT_MIN
+  ]);
+  if (!allowedArtifacts.has(artifact)) {
+    return {
+      ok: false,
+      status: 422,
+      error: "custom_gpt_setup_import_request_invalid",
+      reason: "unsupported setup import artifact"
+    };
+  }
+  const retrieved = await retrieveCustomGptSetupArtifact({
+    artifact,
+    repository,
+    ref,
+    env
+  });
+  if (!retrieved.ok) {
+    return {
+      ok: false,
+      status: retrieved.status ?? 503,
+      error: retrieved.error ?? "custom_gpt_setup_import_unavailable",
+      reason: retrieved.reason ?? "failed to retrieve setup import artifact",
+      issues: retrieved.issues ?? []
+    };
+  }
+  const content = artifact === CustomGptSetupArtifact.OPENAPI_YAML ? expandOpenApiServerUrl(retrieved.artifact.content, runtimeOrigin) : artifact === CustomGptSetupArtifact.OPENAPI_JSON ? expandOpenApiJsonServerUrl(retrieved.artifact.content, runtimeOrigin) : retrieved.artifact.content;
+  return {
+    ok: true,
+    artifact: {
+      ...retrieved.artifact,
+      content,
+      runtimeOrigin,
+      importUrlReady: true
+    }
+  };
+}
+function expandOpenApiJsonServerUrl(content, runtimeOrigin) {
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed.servers)) {
+      parsed.servers = parsed.servers.map((server) => {
+        if (!server || typeof server !== "object") {
+          return server;
+        }
+        return {
+          ...server,
+          url: runtimeOrigin
+        };
+      });
+    }
+    return `${JSON.stringify(parsed, null, 2)}
+`;
+  } catch {
+    return content.replace(/https:\/\/your-runtime-host\.example\.workers\.dev/g, runtimeOrigin);
+  }
+}
 function buildCustomGptVoiceHandoffGuide({ runtimeOrigin, issueNumber } = {}) {
   const origin = normalizeOrigin2(runtimeOrigin);
   const handoffUrlBase = origin ? `${origin}/dashboard/handoff` : "/dashboard/handoff";
@@ -40184,8 +40260,12 @@ function renderRecoveryBundleSections(recovery) {
         <div><strong>Recovery page URL</strong><br>${escapeHtml3(recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "/setup/known-good" : "/setup/latest")}</div>
         <div><strong>Runtime origin</strong><br>${escapeHtml3(recovery.runtimeOrigin)}</div>
         <div><strong>Action Schema server URL</strong><br>${escapeHtml3(actionSchema.serverUrl)}</div>
+        <div><strong>Action Schema import URL</strong><br>${escapeHtml3(`${recovery.runtimeOrigin}/setup/openapi.yaml?ref=${encodeURIComponent(recovery.ref)}`)}</div>
+        <div><strong>Action Schema JSON import URL</strong><br>${escapeHtml3(`${recovery.runtimeOrigin}/setup/openapi.json?ref=${encodeURIComponent(recovery.ref)}`)}</div>
+        <div><strong>Instructions raw URL</strong><br>${escapeHtml3(`${recovery.runtimeOrigin}/setup/instructions.txt?ref=${encodeURIComponent(recovery.ref)}`)}</div>
         <div><strong>Operator URL</strong><br>\u5225\u7528\u9014\u3002passkey / deploy / high-risk approval \u3067\u306E\u307F\u4F7F\u3046\u3002</div>
       </div>
+      <p class="small">iPhone \u3067 Schema \u672C\u6587\u304C URL \u30A8\u30F3\u30B3\u30FC\u30C9\u3055\u308C\u308B\u5834\u5408\u306F\u3001\u672C\u6587\u3092\u8CBC\u3089\u305A\u306B Custom GPT Actions \u306E\u300CURL \u304B\u3089\u30A4\u30F3\u30DD\u30FC\u30C8\u3059\u308B\u300D\u3078 Action Schema import URL \u3092\u5165\u308C\u3066\u304F\u3060\u3055\u3044\u3002</p>
     </section>
     <section>
       <h2>Custom GPT Action Authentication</h2>
@@ -59382,6 +59462,9 @@ var runtime_default = {
     if (request.method === "GET" && (url.pathname === "/setup" || url.pathname === "/setup/recovery" || url.pathname === "/setup/latest" || url.pathname === "/setup/known-good")) {
       return handleCustomGptRecoveryPageRequest(url, env);
     }
+    if (request.method === "GET" && (url.pathname === "/setup/openapi.yaml" || url.pathname === "/setup/openapi.json" || url.pathname === "/setup/instructions.txt")) {
+      return handleCustomGptSetupImportArtifactRequest(url, env);
+    }
     if (request.method === "GET" && url.pathname === "/setup/diagnostics") {
       return handleCustomGptSetupDiagnosticsPageRequest(url, env);
     }
@@ -65960,6 +66043,45 @@ async function handleCustomGptRecoveryPageRequest(url, env) {
       }
     })
   );
+}
+async function handleCustomGptSetupImportArtifactRequest(url, env) {
+  const routeConfig = {
+    "/setup/openapi.yaml": {
+      artifact: CustomGptSetupArtifact.OPENAPI_YAML,
+      contentType: "text/yaml; charset=utf-8"
+    },
+    "/setup/openapi.json": {
+      artifact: CustomGptSetupArtifact.OPENAPI_JSON,
+      contentType: "application/json; charset=utf-8"
+    },
+    "/setup/instructions.txt": {
+      artifact: CustomGptSetupArtifact.INSTRUCTIONS_SHORT_MIN,
+      contentType: "text/plain; charset=utf-8"
+    }
+  }[url.pathname];
+  if (!routeConfig) {
+    return json(404, { ok: false, error: "not_found" });
+  }
+  const result = await buildCustomGptSetupImportArtifact({
+    artifact: routeConfig.artifact,
+    repository: url.searchParams.get("repository") || void 0,
+    ref: url.searchParams.get("ref") || void 0,
+    runtimeOrigin: url.origin,
+    env
+  });
+  if (!result.ok) {
+    return json(result.status ?? 503, {
+      ok: false,
+      error: result.error ?? "custom_gpt_setup_import_unavailable",
+      reason: result.reason ?? "failed to build Custom GPT setup import artifact",
+      issues: result.issues ?? []
+    });
+  }
+  return rawSetupArtifact(200, result.artifact.content, routeConfig.contentType, {
+    "x-vtdd-setup-artifact": result.artifact.artifact,
+    "x-vtdd-setup-source-path": result.artifact.path,
+    "x-vtdd-setup-source-sha": result.artifact.sha || "unknown"
+  });
 }
 async function handlePasskeyOperatorPageRequest(request, env) {
   const url = new URL(request.url);
@@ -77319,6 +77441,18 @@ function html(status, body, extraHeaders = {}) {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
       pragma: "no-cache",
+      ...extraHeaders
+    }
+  });
+}
+function rawSetupArtifact(status, body, contentType, extraHeaders = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": contentType,
+      "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+      pragma: "no-cache",
+      "x-content-type-options": "nosniff",
       ...extraHeaders
     }
   });

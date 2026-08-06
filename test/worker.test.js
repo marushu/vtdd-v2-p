@@ -9373,6 +9373,11 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   assert.equal(instructionsTextarea?.includes("VTDD%20Butler"), false);
   assert.equal(html.includes("URL separation"), true);
   assert.equal(html.includes("Action Schema server URL"), true);
+  assert.equal(html.includes("Action Schema import URL"), true);
+  assert.equal(html.includes("https://example.com/setup/openapi.yaml?ref=main"), true);
+  assert.equal(html.includes("https://example.com/setup/openapi.json?ref=main"), true);
+  assert.equal(html.includes("https://example.com/setup/instructions.txt?ref=main"), true);
+  assert.equal(html.includes("URL からインポートする"), true);
   assert.equal(html.includes("Custom GPT Action Authentication"), true);
   assert.equal(html.includes("Authentication type"), true);
   assert.equal(html.includes("Auth type"), true);
@@ -9403,6 +9408,82 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   assert.equal(html.includes("unverified_editor_state"), true);
   assert.equal(html.includes("No secret values, tokens, or approval grants are displayed."), true);
   assert.equal(html.includes("ghs_setup_read"), false);
+});
+
+test("worker setup import URLs serve raw Custom GPT artifacts without URL encoding", async () => {
+  const canonicalOpenApiYaml = [
+    "openapi: 3.1.1",
+    "servers:",
+    "  - url: https://your-runtime-host.example.workers.dev",
+    "paths:",
+    "  /health:",
+    "    get:",
+    "      operationId: getHealth"
+  ].join("\n");
+  const canonicalOpenApiJson = JSON.stringify({
+    openapi: "3.1.1",
+    servers: [{ url: "https://your-runtime-host.example.workers.dev" }],
+    paths: {
+      "/health": {
+        get: {
+          operationId: "getHealth"
+        }
+      }
+    }
+  });
+  const shortMin = "VTDD Butler short-min instructions\nDo not URL encode this.";
+
+  const env = {
+    GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+    GITHUB_API_FETCH: async (url) => {
+      const parsed = new URL(url);
+      let content = canonicalOpenApiYaml;
+      let sha = "openapi-yaml-sha";
+      if (parsed.pathname.endsWith("/docs/setup/custom-gpt-actions-openapi.json")) {
+        content = canonicalOpenApiJson;
+        sha = "openapi-json-sha";
+      }
+      if (parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions-short-min.md")) {
+        content = shortMin;
+        sha = "instructions-short-min-sha";
+      }
+      return new Response(
+        JSON.stringify({
+          sha,
+          encoding: "base64",
+          content: Buffer.from(content, "utf8").toString("base64")
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+  };
+
+  const yamlResponse = await worker.fetch(new Request("https://example.com/setup/openapi.yaml?ref=main"), env);
+  assert.equal(yamlResponse.status, 200);
+  assert.match(yamlResponse.headers.get("content-type"), /text\/yaml/);
+  assert.equal(yamlResponse.headers.get("x-vtdd-setup-artifact"), "openapi_yaml");
+  const yaml = await yamlResponse.text();
+  assert.equal(yaml.includes("openapi: 3.1.1"), true);
+  assert.equal(yaml.includes("  - url: https://example.com"), true);
+  assert.equal(yaml.includes("https%3A%2F%2Fexample.com"), false);
+  assert.equal(yaml.includes("your-runtime-host.example.workers.dev"), false);
+
+  const jsonResponse = await worker.fetch(new Request("https://example.com/setup/openapi.json?ref=main"), env);
+  assert.equal(jsonResponse.status, 200);
+  assert.match(jsonResponse.headers.get("content-type"), /application\/json/);
+  const json = await jsonResponse.json();
+  assert.equal(json.servers[0].url, "https://example.com");
+
+  const instructionsResponse = await worker.fetch(
+    new Request("https://example.com/setup/instructions.txt?ref=main"),
+    env
+  );
+  assert.equal(instructionsResponse.status, 200);
+  assert.match(instructionsResponse.headers.get("content-type"), /text\/plain/);
+  const instructions = await instructionsResponse.text();
+  assert.equal(instructions, shortMin);
+  assert.equal(instructions.includes("VTDD%20Butler"), false);
+  assert.equal(instructions.includes("ghs_setup_read"), false);
 });
 
 test("worker setup diagnostics page surfaces Action Schema and auth root-cause checks without Action auth", async () => {
