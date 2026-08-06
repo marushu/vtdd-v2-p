@@ -640,6 +640,12 @@ test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min leng
   assert.equal(result.recovery.voiceHandoff.exampleUrl.includes("mode=voice_handoff"), true);
   assert.equal(result.recovery.voiceHandoff.exampleUrl.includes("sourceSurface=custom_gpt_voice"), true);
   assert.deepEqual(result.recovery.voiceHandoff.voiceCommands, ["保存", "開発 GO", "キャンセル"]);
+  assert.deepEqual(result.recovery.voiceHandoff.maxFields, {
+    title: 160,
+    intent: 80,
+    text: 1200,
+    summary: 800
+  });
   assert.equal(result.recovery.voiceHandoff.forbiddenFields.includes("api keys"), true);
   assert.equal(result.recovery.voiceHandoff.guidance.includes("Actions を前提にせず"), true);
   assert.equal(result.recovery.voiceHandoff.guidance.includes("Codex app-server bridge"), true);

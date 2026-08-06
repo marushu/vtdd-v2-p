@@ -1169,10 +1169,11 @@ function buildCustomGptVoiceHandoffGuide({ runtimeOrigin, issueNumber } = {}) {
     sourceSurface: "custom_gpt_voice",
     mode: "voice_handoff",
     requiredFields: ["mode", "sourceSurface", "intent", "text or summary"],
+    maxFields: { title: 160, intent: 80, text: 1200, summary: 800 },
     forbiddenFields: ["secrets", "passwords", "api keys", "db credentials", "full transcript"],
     voiceCommands: ["保存", "開発 GO", "キャンセル"],
     guidance:
-      "Custom GPT の音声会話では Actions を前提にせず、保存または開発候補だけ Dashboard handoff URL で渡す。Dashboard は読み上げ後に音声指示を待ち、保存は Codex app-server bridge を起動せず、開発 GO は即実行ではなく明示承認待ちにする。"
+      "Custom GPT の音声会話では Actions を前提にせず、保存または開発候補だけ Dashboard handoff URL で渡す。handoff は短文のみで、秘密情報や全文 transcript を含めない。Dashboard は読み上げ後に音声指示を待ち、保存は Codex app-server bridge を起動せず、開発 GO は即実行ではなく明示承認待ちにする。"
   };
 }
 
@@ -1257,6 +1258,7 @@ function renderRecoveryBundleSections(recovery) {
           `handoffUrlBase: ${voiceHandoff.handoffUrlBase}`,
           `exampleUrl: ${voiceHandoff.exampleUrl}`,
           `requiredFields: ${voiceHandoff.requiredFields.join(", ")}`,
+          `maxFields: title ${voiceHandoff.maxFields.title}, intent ${voiceHandoff.maxFields.intent}, text ${voiceHandoff.maxFields.text}, summary ${voiceHandoff.maxFields.summary}`,
           `voiceCommands: ${voiceHandoff.voiceCommands.join(", ")}`,
           `forbiddenFields: ${voiceHandoff.forbiddenFields.join(", ")}`
         ].join("\n")

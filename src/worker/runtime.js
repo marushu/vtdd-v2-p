@@ -7384,12 +7384,16 @@ function normalizeDashboardHandoffPayload(value) {
   const input = normalizeObject(value);
   return {
     mode: normalizeDashboardEventText(input.mode) || "voice_handoff",
-    intent: sanitizeDashboardChatText(input.intent || input.type || input.kind),
-    title: sanitizeDashboardChatText(input.title),
-    text: sanitizeDashboardChatText(input.text || input.rawUserNote || input.raw_user_note || input.memo || input.body),
-    summary: sanitizeDashboardChatText(input.summary || input.gptSummary || input.gpt_summary),
+    intent: sanitizeDashboardHandoffText(input.intent || input.type || input.kind, 80),
+    title: sanitizeDashboardHandoffText(input.title, 160),
+    text: sanitizeDashboardHandoffText(input.text || input.rawUserNote || input.raw_user_note || input.memo || input.body, 1200),
+    summary: sanitizeDashboardHandoffText(input.summary || input.gptSummary || input.gpt_summary, 800),
     sourceSurface: normalizeDashboardEventText(input.sourceSurface || input.source_surface) || "custom_gpt_voice"
   };
+}
+
+function sanitizeDashboardHandoffText(value, maxLength = 1200) {
+  return sanitizeDashboardChatText(value).slice(0, Math.max(0, maxLength));
 }
 
 async function authorizeDashboardVpsApprovalContinuation({ payload, env } = {}) {

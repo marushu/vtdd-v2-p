@@ -106,6 +106,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("/dashboard/handoff"), true);
   assert.equal(doc.includes("mode=voice_handoff"), true);
   assert.equal(doc.includes("sourceSurface=custom_gpt_voice"), true);
+  assert.equal(doc.includes("text <=1200 chars"), true);
   assert.equal(doc.includes("保存, 開発 GO, or キャンセル"), true);
   assert.equal(doc.includes("After writing a RAG checkpoint, confirm it with `vtddRetrieveOperationalMemory`"), true);
   assert.equal(doc.includes("confirm by explicit `recordId` lookup instead of inventing a repository"), true);
@@ -253,6 +254,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("Voice handoff"), true);
   assert.equal(doc.includes("mode=voice_handoff"), true);
   assert.equal(doc.includes("sourceSurface=custom_gpt_voice"), true);
+  assert.equal(doc.includes("text<=1200 summary<=800"), true);
   assert.equal(doc.includes("No secrets/full transcript"), true);
   assert.equal(doc.includes("recordType=working_memory"), true);
   assert.equal(doc.includes("decision_log only for rationale-backed decided judgments"), true);
@@ -342,6 +344,7 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "Voice handoff",
     "mode=voice_handoff",
     "sourceSurface=custom_gpt_voice",
+    "text<=1200 summary<=800",
     "No secrets/full transcript",
     "recordType=working_memory",
     "decision_log only for rationale-backed decided judgments",

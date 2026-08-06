@@ -26,13 +26,13 @@ npm run check:generated-worker
 
 2026-08-06 JST, branch `issue-835-custom-gpt-voice-handoff`:
 
-- `node --test test/worker.test.js --test-name-pattern "voice handoff|setup latest page"`: pass, 296 tests passed.
+- `node --test test/worker.test.js --test-name-pattern "voice handoff|setup latest page"`: pass, 297 tests passed.
 - `node --test test/custom-gpt-setup-docs.test.js test/custom-gpt-setup-artifacts.test.js --test-name-pattern "buildCustomGptRecoveryBundle|custom gpt instructions|short custom|short-min custom"`: pass, 21 tests passed.
 - `node --test test/thread-independent-startup-contract.test.js test/custom-gpt-setup-docs.test.js --test-name-pattern "thread-independent|short custom|short-min"`: pass, 13 tests passed.
 - `npm run build:worker`: pass.
 - `npm run check:self-parity`: pass, 35 routes / 35 operationIds checked.
 - `npm run check:generated-worker`: pass.
-- `npm test`: pass, 1255 tests passed, 1 skipped, then self-parity and generated-worker checks passed.
+- `npm test`: pass, 1256 tests passed, 1 skipped, then self-parity and generated-worker checks passed.
 
 ## Evidence mapping
 

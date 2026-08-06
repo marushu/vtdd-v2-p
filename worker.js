@@ -40134,9 +40134,10 @@ function buildCustomGptVoiceHandoffGuide({ runtimeOrigin, issueNumber } = {}) {
     sourceSurface: "custom_gpt_voice",
     mode: "voice_handoff",
     requiredFields: ["mode", "sourceSurface", "intent", "text or summary"],
+    maxFields: { title: 160, intent: 80, text: 1200, summary: 800 },
     forbiddenFields: ["secrets", "passwords", "api keys", "db credentials", "full transcript"],
     voiceCommands: ["\u4FDD\u5B58", "\u958B\u767A GO", "\u30AD\u30E3\u30F3\u30BB\u30EB"],
-    guidance: "Custom GPT \u306E\u97F3\u58F0\u4F1A\u8A71\u3067\u306F Actions \u3092\u524D\u63D0\u306B\u305B\u305A\u3001\u4FDD\u5B58\u307E\u305F\u306F\u958B\u767A\u5019\u88DC\u3060\u3051 Dashboard handoff URL \u3067\u6E21\u3059\u3002Dashboard \u306F\u8AAD\u307F\u4E0A\u3052\u5F8C\u306B\u97F3\u58F0\u6307\u793A\u3092\u5F85\u3061\u3001\u4FDD\u5B58\u306F Codex app-server bridge \u3092\u8D77\u52D5\u305B\u305A\u3001\u958B\u767A GO \u306F\u5373\u5B9F\u884C\u3067\u306F\u306A\u304F\u660E\u793A\u627F\u8A8D\u5F85\u3061\u306B\u3059\u308B\u3002"
+    guidance: "Custom GPT \u306E\u97F3\u58F0\u4F1A\u8A71\u3067\u306F Actions \u3092\u524D\u63D0\u306B\u305B\u305A\u3001\u4FDD\u5B58\u307E\u305F\u306F\u958B\u767A\u5019\u88DC\u3060\u3051 Dashboard handoff URL \u3067\u6E21\u3059\u3002handoff \u306F\u77ED\u6587\u306E\u307F\u3067\u3001\u79D8\u5BC6\u60C5\u5831\u3084\u5168\u6587 transcript \u3092\u542B\u3081\u306A\u3044\u3002Dashboard \u306F\u8AAD\u307F\u4E0A\u3052\u5F8C\u306B\u97F3\u58F0\u6307\u793A\u3092\u5F85\u3061\u3001\u4FDD\u5B58\u306F Codex app-server bridge \u3092\u8D77\u52D5\u305B\u305A\u3001\u958B\u767A GO \u306F\u5373\u5B9F\u884C\u3067\u306F\u306A\u304F\u660E\u793A\u627F\u8A8D\u5F85\u3061\u306B\u3059\u308B\u3002"
   };
 }
 function buildVoiceHandoffExampleUrl({ handoffUrlBase, issueNumber } = {}) {
@@ -40216,6 +40217,7 @@ function renderRecoveryBundleSections(recovery) {
       `handoffUrlBase: ${voiceHandoff.handoffUrlBase}`,
       `exampleUrl: ${voiceHandoff.exampleUrl}`,
       `requiredFields: ${voiceHandoff.requiredFields.join(", ")}`,
+      `maxFields: title ${voiceHandoff.maxFields.title}, intent ${voiceHandoff.maxFields.intent}, text ${voiceHandoff.maxFields.text}, summary ${voiceHandoff.maxFields.summary}`,
       `voiceCommands: ${voiceHandoff.voiceCommands.join(", ")}`,
       `forbiddenFields: ${voiceHandoff.forbiddenFields.join(", ")}`
     ].join("\n")
@@ -64671,12 +64673,15 @@ function normalizeDashboardHandoffPayload(value) {
   const input = normalizeObject12(value);
   return {
     mode: normalizeDashboardEventText(input.mode) || "voice_handoff",
-    intent: sanitizeDashboardChatText(input.intent || input.type || input.kind),
-    title: sanitizeDashboardChatText(input.title),
-    text: sanitizeDashboardChatText(input.text || input.rawUserNote || input.raw_user_note || input.memo || input.body),
-    summary: sanitizeDashboardChatText(input.summary || input.gptSummary || input.gpt_summary),
+    intent: sanitizeDashboardHandoffText(input.intent || input.type || input.kind, 80),
+    title: sanitizeDashboardHandoffText(input.title, 160),
+    text: sanitizeDashboardHandoffText(input.text || input.rawUserNote || input.raw_user_note || input.memo || input.body, 1200),
+    summary: sanitizeDashboardHandoffText(input.summary || input.gptSummary || input.gpt_summary, 800),
     sourceSurface: normalizeDashboardEventText(input.sourceSurface || input.source_surface) || "custom_gpt_voice"
   };
+}
+function sanitizeDashboardHandoffText(value, maxLength = 1200) {
+  return sanitizeDashboardChatText(value).slice(0, Math.max(0, maxLength));
 }
 async function authorizeDashboardVpsApprovalContinuation({ payload, env } = {}) {
   const input = normalizeObject12(payload);

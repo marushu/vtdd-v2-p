@@ -4328,6 +4328,36 @@ test("worker saves Custom GPT voice handoff without starting Codex bridge or lea
   assert.equal(JSON.stringify(stored).includes("sk-proj-abcdefghijklmnopqrstuvwxyz"), false);
 });
 
+test("worker bounds Custom GPT voice handoff text before saving dashboard records", async () => {
+  const longText = `${"あ".repeat(1300)}TAIL_SHOULD_NOT_BE_SAVED`;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/handoff", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        action: "保存",
+        handoff: {
+          mode: "voice_handoff",
+          sourceSurface: "custom_gpt_voice",
+          intent: "save",
+          title: "長文 transcript 防止",
+          text: longText
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore()
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(JSON.stringify(body).includes("TAIL_SHOULD_NOT_BE_SAVED"), false);
+  assert.equal(body.messages[0].text.length < 1400, true);
+});
+
 test("worker keeps Custom GPT voice development GO waiting for explicit execution approval", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/handoff", {
