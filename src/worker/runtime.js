@@ -2455,12 +2455,14 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
     normalizeText(url.searchParams.get("text")) || normalizeText(url.searchParams.get("q"));
   const recordId = normalizeText(url.searchParams.get("recordId"));
   const repository = normalizeText(url.searchParams.get("repository"));
+  const relatedIssue = normalizeIssue(url.searchParams.get("relatedIssue"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
 
   const retrieved = await retrieveOperationalMemory(provider, {
     text: queryText,
     recordId,
     repository,
+    relatedIssue,
     limit,
     runtimeTruth
   });
@@ -10247,6 +10249,7 @@ function buildOperationalMemoryRetrievalInput({ payload, operationalMemoryReques
   return {
     text: operationalMemoryRequest.text || operationalMemoryRequest.queryHint,
     repository,
+    relatedIssue: normalizeIssue(operationalMemoryRequest.relatedIssue),
     limit: operationalMemoryRequest.limit,
     runtimeTruth: {
       currentState: "conversation-time operational memory recall",

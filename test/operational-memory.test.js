@@ -246,6 +246,81 @@ test("operational memory retrieves success pattern and tension checkpoint refere
   assert.equal(reference.handoffMemory.nextActorMustKnow, "Check runner truth before declaring progress.");
 });
 
+test("operational memory ranks freshly saved checkpoint by token tag and issue matches without semantic vector search", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "old-bridge-failure",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Dashboard Butler app-server failures can originate from VPS bridge runtime state.",
+      failureReasoning: {
+        whatFailed: "Old bridge runtime mapping failed.",
+        inspectNextTime: "Check app-server bridge state."
+      }
+    },
+    metadata: {
+      repository: "marushu/vtdd-v2-p",
+      recurrenceCount: 2
+    },
+    priority: 90,
+    tags: ["working_memory", "dashboard-app-server-bridge", "vps-codex-cli", "issue:455", "failure"],
+    createdAt: "2026-06-04T17:33:53.175Z"
+  });
+  await provider.store({
+    id: "mem-d7d425a0",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary:
+        "VTDD MCP入口はVPS Codex CLI実行線を再実装せず、既存Dashboard app-server bridgeへ必要時だけ接続する。保存・検索・GO待ちはCloudflare側で軽量処理し、開発GOやコード修正だけ既存bridge/VPS Codex CLIへ渡す。",
+      explorationHypothesis: {
+        summary:
+          "MCP should be an entrypoint/adaptor to Memory Core and existing Dashboard runtime, not a duplicate VPS execution system.",
+        status: "confirmed"
+      },
+      stopReason: {
+        summary:
+          "Stop if implementation requires bridge restart, deploy, credential mutation, or making ordinary memory save start Codex app-server."
+      }
+    },
+    metadata: {
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 835
+    },
+    priority: 75,
+    tags: [
+      "working_memory",
+      "issue:835",
+      "issue:318",
+      "mcp-entrypoint",
+      "memory-core",
+      "dashboard-app-server-bridge",
+      "vps-codex-cli",
+      "cost-boundary",
+      "rag-checkpoint"
+    ],
+    createdAt: "2026-08-06T13:03:32.939Z"
+  });
+
+  const result = await retrieveOperationalMemory(provider, {
+    text: "MCP入口 既存Dashboard app-server bridge 保存 検索 GO待ち Cloudflare issue:835",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 835,
+    limit: 2,
+    now: "2026-08-06T13:10:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.compactContext[0].id, "mem-d7d425a0");
+  assert.equal(result.compactContext[0].retrievalMatch.relatedIssueMatched, true);
+  assert.equal(result.compactContext[0].retrievalMatch.matchedTags.includes("issue:835"), true);
+  assert.equal(result.compactContext[0].retrievalMatch.matchedTokens.includes("mcp"), true);
+  assert.equal(result.compactContext[0].scoreSignals.retrievalMatch > 0, true);
+  assert.equal(result.retrievalSignals.queryCandidateRetrieval.enabled, true);
+  assert.equal(result.retrievalSignals.queryCandidateRetrieval.tagHints.includes("issue:835"), true);
+  assert.equal(result.retrievalSignals.semanticRetrieval.enabled, false);
+  assert.equal(result.retrievalSignals.semanticRetrieval.impact.includes("not enabled"), true);
+});
+
 test("operational memory rejects missing providers with a retrieval-safe error", async () => {
   const result = await retrieveOperationalMemory(null, {
     text: "anything"
