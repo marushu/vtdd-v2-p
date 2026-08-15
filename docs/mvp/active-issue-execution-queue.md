@@ -197,6 +197,14 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   connect VPS local queue/state/log and runner pickup so Butler can hand off
   bridge restart / privileged maintenance without storing helper envelopes in
   GitHub comments or Worker persistence.
+- 2026-08-16 owner input classified Issue #843 as `ROOT` recovery boundary:
+  Mac Codex を常時起動している現状は実用上便利だが、Mac が落ちた時に
+  iPhone だけで VTDD を継続できない。AWS / SSM / EC2 Instance Connect は
+  採用せず、固定費 VPS 前提で emergency runner / recovery runner を設計する。
+  Issue #843 は Issue #637 privileged maintenance と Issue #741 local helper
+  queue の上位にある SSH / secret / break-glass authority boundary として扱う。
+  現在の Now である Issue #741 実装を下げず、まず repo-backed security doc と
+  RAG checkpoint で thread-local 決定を durable 化する。
 
 ## Now
 

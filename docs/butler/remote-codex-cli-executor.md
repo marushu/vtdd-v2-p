@@ -200,6 +200,13 @@ an allowlisted capability, PWA notification is used when owner action is
 required, and redacted runtime truth is returned. Mac SSH/root work remains
 break-glass bootstrap evidence, not Butler-complete recovery.
 
+If the owner's Mac is unavailable and the VPS runner needs emergency authority
+that is broader than an existing Issue #637 capability, the boundary is Issue
+#843 and the security contract is
+[VPS Emergency Access Boundary](../security/vps-emergency-access-boundary.md).
+That path is still not broad standing sudo: it requires a visible owner scope,
+short TTL, volatile secret exposure, cleanup, and audit.
+
 For privileged maintenance pickup, the same user-owned runner entrypoint also
 recognizes a distinct GitHub Issue comment marker:
 
