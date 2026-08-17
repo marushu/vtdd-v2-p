@@ -17,12 +17,13 @@ test("runtime setup manifest parity passes for canonical Action Schema", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.canonical.routes.includes("/v2/retrieve/operational-memory"), true);
-  assert.equal(result.canonical.routes.includes("/v2/codex-analytics/usage/snapshots"), true);
-  assert.equal(result.canonical.routes.includes("/v2/retrieve/codex-analytics-usage"), true);
-  assert.equal(result.canonical.operationIds.includes("vtddRetrieveOperationalMemory"), true);
-  assert.equal(result.canonical.operationIds.includes("vtddIngestCodexAnalyticsUsageSnapshot"), true);
-  assert.equal(result.canonical.operationIds.includes("vtddRetrieveCodexAnalyticsUsage"), true);
+  assert.equal(result.canonical.routes.includes("/v2/custom-gpt/memory"), true);
+  assert.equal(result.canonical.routes.includes("/v2/custom-gpt/github"), true);
+  assert.equal(result.canonical.routes.includes("/v2/custom-gpt/execution"), true);
+  assert.equal(result.canonical.operationIds.includes("vtddCustomGptMemory"), true);
+  assert.equal(result.canonical.operationIds.includes("vtddCustomGptGitHub"), true);
+  assert.equal(result.canonical.operationIds.includes("vtddCustomGptExecution"), true);
+  assert.equal(result.operationLimit.count <= result.operationLimit.limit, true);
   assert.deepEqual(result.runtimeMissing.routes, []);
   assert.deepEqual(result.runtimeMissing.operationIds, []);
 });
@@ -52,4 +53,32 @@ test("runtime setup manifest parity fails when operational memory route capabili
   assert.equal(result.ok, false);
   assert.deepEqual(result.runtimeMissing.routes, ["/v2/retrieve/operational-memory"]);
   assert.deepEqual(result.runtimeMissing.operationIds, ["vtddRetrieveOperationalMemory"]);
+});
+
+test("runtime setup manifest parity fails when Custom GPT operation limit is exceeded", () => {
+  const openApiContent = [
+    "paths:",
+    ...Array.from({ length: 31 }, (_, index) =>
+      [
+        `  /v2/custom-gpt/test-${index}:`,
+        "    post:",
+        `      operationId: vtddCustomGptTest${index}`
+      ].join("\n")
+    )
+  ].join("\n");
+  const runtimeManifest = {
+    ...RUNTIME_SETUP_MANIFEST,
+    routes: Array.from({ length: 31 }, (_, index) => `/v2/custom-gpt/test-${index}`),
+    operationIds: Array.from({ length: 31 }, (_, index) => `vtddCustomGptTest${index}`)
+  };
+
+  const result = evaluateRuntimeSetupManifestParity({
+    openApiContent,
+    runtimeManifest
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.operationLimit.count, 31);
+  assert.equal(result.operationLimit.limit, 30);
+  assert.equal(result.operationLimit.exceeded, true);
 });
