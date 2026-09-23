@@ -4919,6 +4919,90 @@ test("DashboardChatRoom preserves Business Mission through pending bridge replay
   assert.equal(turnRequest.businessMissionSummary.nextAutomaticWork[0].role, "customer_support");
 });
 
+test("DashboardChatRoom reconciles validated app-server workstream results into durable Mission state", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const storage = createMockDurableObjectStorage();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-mission-reconcile");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-mission-reconcile");
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-mission-reconcile",
+      clientMessageId: "dashboard_owner_message:mission-reconcile-1",
+      text: "TOMIO を売れる状態まで持っていって"
+    })
+  );
+
+  const turnRequest = bridgeSocket.sent
+    .map((message) => JSON.parse(message))
+    .find((message) => message.type === "app_server_turn_requested");
+  assert.ok(turnRequest);
+  const missionId = turnRequest.businessMission.missionId;
+  const research = turnRequest.businessMission.workstreams[0];
+  assert.equal(research.role, "research");
+  assert.equal(research.status, "ready");
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "business_mission_workstream_result",
+      threadId: "dashboard-main-mission-reconcile",
+      missionId,
+      workstreamId: research.workstreamId,
+      status: "completed",
+      outcome: "競合と技術制約を整理",
+      evidence: ["docs/research.md"],
+      createdAt: "2026-09-23T11:45:00Z"
+    })
+  );
+
+  const updated = storage.values.get("business_mission_active:dashboard-main-mission-reconcile");
+  assert.equal(updated.workstreams[0].status, "completed");
+  assert.deepEqual(updated.workstreams[0].evidence, ["docs/research.md"]);
+  assert.equal(updated.workstreams[0].resultSource, "dashboard_app_server_bridge");
+  assert.equal(updated.workstreams[1].role, "product");
+  assert.equal(updated.workstreams[1].status, "ready");
+
+  const accepted = bridgeSocket.sent
+    .map((message) => JSON.parse(message))
+    .find((message) => message.type === "business_mission_workstream_result_accepted");
+  assert.ok(accepted);
+  assert.equal(accepted.businessMissionSummary.progress.completed, 1);
+  assert.equal(accepted.businessMissionSummary.nextAutomaticWork[0].role, "product");
+
+  const snapshot = JSON.stringify(updated);
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "business_mission_workstream_result",
+      threadId: "dashboard-main-mission-reconcile",
+      missionId: "stale-mission",
+      workstreamId: research.workstreamId,
+      status: "completed",
+      evidence: ["stale"]
+    })
+  );
+  assert.equal(
+    JSON.stringify(storage.values.get("business_mission_active:dashboard-main-mission-reconcile")),
+    snapshot
+  );
+  const rejected = JSON.parse(bridgeSocket.sent.at(-1));
+  assert.equal(rejected.type, "business_mission_workstream_result_rejected");
+  assert.match(rejected.reason, /stale|does not match/);
+});
+
 test("DashboardChatRoom sends ordinary owner turns to connected app-server bridge without repository resolution", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
