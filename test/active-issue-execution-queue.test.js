@@ -85,9 +85,9 @@ test("active issue execution queue names current open PR hygiene", () => {
 });
 
 test("active issue execution queue names the next automatic implementation lane", () => {
-  assert.equal(sectionBody("Now").includes("Issue #741: GitHub Issue comment を VPS privileged maintenance helper"), true);
-  assert.equal(sectionBody("Now").includes("vps_local_helper_queue_unavailable"), true);
-  assert.equal(sectionBody("Now").includes("root/helper execution"), true);
+  assert.equal(sectionBody("Now").includes("Issue #845: Business Mission Orchestrator first core slice"), true);
+  assert.equal(sectionBody("Now").includes("Mission contract"), true);
+  assert.equal(sectionBody("Next").includes("Issue #741: resume the existing VPS local helper queue"), true);
   assert.equal(doc.includes("2026-06-06 owner input classified Issue #811 as `ROOT`"), true);
   assert.equal(doc.includes("2026-06-06 owner input classified Issue #814 as `ROOT` support for Issue"), true);
   assert.equal(doc.includes("2026-06-06 owner input classified Issue #816 as `NEXT`"), true);
