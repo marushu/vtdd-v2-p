@@ -211,8 +211,9 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
   採用せず、固定費 VPS 前提で emergency runner / recovery runner を設計する。
   Issue #843 は Issue #637 privileged maintenance と Issue #741 local helper
   queue の上位にある SSH / secret / break-glass authority boundary として扱う。
-  現在の Now である Issue #741 実装を下げず、まず repo-backed security doc と
-  RAG checkpoint で thread-local 決定を durable 化する。
+  この記録時点では Issue #741 が Now だった。2026-09-23 の owner instruction
+  により Issue #845 first core slice が ROOT preemption し、Issue #741 は active
+  のまま Next へ移動した。
 
 ## Now
 
@@ -257,6 +258,7 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
   execution capabilities work. It depends on rather than replaces Issue #613,
   Issue #716, Issue #495, Issue #417, Issue #448, Issue #450, Issue #834, and
   the existing approval/runtime-truth planes.
+
 Root blockers hold multiple active Issues open. They should shape `Now` and
 `Next` unless an `EMERGENCY` interrupts them.
 
