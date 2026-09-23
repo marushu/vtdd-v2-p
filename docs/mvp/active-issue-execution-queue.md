@@ -9,7 +9,7 @@ This file is not a scope reducer. Active Issues remain in scope unless the owner
 explicitly narrows the implementation window. This file records execution order,
 preemption decisions, blockers, and evidence gaps.
 
-Last rebuilt from GitHub runtime truth: 2026-06-05
+Last rebuilt from GitHub runtime truth: 2026-09-23
 
 ## Queue Policy
 
@@ -46,6 +46,14 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
   PR #787, PR #788, PR #789, PR #790, PR #791, PR #792.
 - Current queue rebuild scope: classify all open Issues without closing,
   downscoping, or treating any unverified Issue as done.
+- 2026-09-23 owner input classified Issue #845 as `ROOT`: the owner has repeated for
+  more than six months that the desired operating model is to provide ideas /
+  goals only while Butler organizes development, release preparation, customer
+  support, marketing, measurement, and continuous improvement. The absence of a
+  durable business-level Mission object means lower-level VTDD capability can
+  improve while the owner still performs traffic control. Issue #845 becomes
+  `Now` for the bounded Business Mission core slice. Issue #741 remains active
+  and resumes after this slice; it is not complete or downscoped.
 - 2026-05-29 owner input classified Issue #606 as `ROOT`: the 2-minute
   passkey grant coupling blocks the ordinary iPhone/PWA chat recovery path for
   Issue #579, Issue #590, Issue #604, and Issue #605. Issue #606 moves to
@@ -208,21 +216,23 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
 
 ## Now
 
-- Issue #741: GitHub Issue comment を VPS privileged maintenance helper
-  execution queue として使う旧経路を止めた後の継続 slice。Dashboard Butler /
-  passkey operator continuation は Issue comment を作らず、接続中
-  app-server bridge へ VPS local helper queue enqueue control を送り、bridge が
-  VPS local queue/state/log に一回保存し、VPS runner が local pending を GitHub
-  Issue comments より先に pickup する。runner pickup は timer poll を主経路に
-  せず、bridge から `systemctl --user start vtdd-vps-runner.service` を即時
-  wake する。`vtdd-vps-runner.timer` は wake 失敗または既存 pending の
-  recovery fallback として owner-facing runtime truth に明示する。
-  bridge 未接続時は store-and-forward せず
-  `vps_local_helper_queue_unavailable` blocked として扱い、Worker では
-  root/helper execution を開始しない。watchdog live install/enable、production
-  deploy、Issue #741 close はこの PR では行わない。
+- Issue #845: Business Mission Orchestrator first core slice. Add the durable
+  Mission contract, mission kind classifier, domain workstream role registry,
+  mission-scoped reversible action authority classification, deterministic
+  workstream planning, result reconciliation, owner-facing summary, and
+  continuous-improvement proposal shape. This slice does not claim Dashboard
+  Butler runtime integration, external connector integration, deploy, release
+  submission, marketing spend, or Issue #845 completion. It exists so future
+  Butler work can organize product development, support, marketing, analytics,
+  and improvement around one owner goal instead of requiring the owner to
+  manually coordinate Issue-sized tasks.
 
 ## Next
+
+- Issue #741: resume the existing VPS local helper queue / bridge continuation
+  slice immediately after Issue #845's bounded Mission core PR reaches its stop
+  condition. Issue #741 remains active and incomplete; this queue move is a
+  temporary ROOT preemption, not a downscope.
 
 - Issue #816: Dashboard Butler 差し込み queue が添付を落とさないようにする。
   Issue #741 の Issue comment helper queue safety slice 後に、実行中差し込み
@@ -240,6 +250,13 @@ Last rebuilt from GitHub runtime truth: 2026-06-05
 
 ## Root Blockers
 
+- Issue #845: owner-goal-to-business-execution orchestration is the product-level
+  root for the "ideas only" operating model. Without a durable Mission object,
+  domain workstreams, authority-aware dispatch, result reconciliation, and
+  improvement loop, the owner remains the manual coordinator even when lower
+  execution capabilities work. It depends on rather than replaces Issue #613,
+  Issue #716, Issue #495, Issue #417, Issue #448, Issue #450, Issue #834, and
+  the existing approval/runtime-truth planes.
 Root blockers hold multiple active Issues open. They should shape `Now` and
 `Next` unless an `EMERGENCY` interrupts them.
 
