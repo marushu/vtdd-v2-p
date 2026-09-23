@@ -35,18 +35,30 @@ Use these labels for discovery and repair tracking only:
 
 ## Required Startup
 
-Before non-trivial work, read or explicitly mark missing:
+Use minimal startup by default:
 
 - `AGENTS.md`
+- current Mission or exact target Issue
+- current PR / branch truth when one exists
+- directly relevant source / tests
+- directly relevant contract only when needed
+
+Do not load the whole active queue, all open Issues, all RAG, or all setup docs
+for ordinary scoped work.
+
+Escalate to the full startup contract when startup/handoff, recovery,
+RAG reconstruction, cross-surface consistency, ROOT/EMERGENCY preemption,
+high-risk execution, or an explicit status audit requires it. Then read:
+
 - `docs/butler/intent-mode-contract.md`
-- `docs/butler/thread-independent-startup-contract.md` when startup, handoff,
-  RAG recall, or cross-surface consistency matters
+- `docs/butler/thread-independent-startup-contract.md`
 - `docs/butler/execution-queue-contract.md`
 - `docs/mvp/active-issue-execution-queue.md`
 - exact Issue / PR / branch / review / check truth for the current request
 
-Report whether thread-local assumptions have been promoted into durable repo or
-RAG state: `threadLocalAssumptionsPromoted=true`, `false`, or `未確認`.
+When full startup runs, report whether thread-local assumptions have been
+promoted into durable repo or RAG state:
+`threadLocalAssumptionsPromoted=true`, `false`, or `未確認`.
 
 ## Traffic-Control Snapshot
 
@@ -60,18 +72,22 @@ For non-trivial work, produce a short Japanese-first snapshot before coding:
 
 ## Bounded Change Contract
 
-Before runtime code edits, state:
+Before runtime code edits, select the planning tier.
 
-- target Issue number(s)
-- exact Success Criteria being implemented
-- explicit Non-goals
-- files expected to change
-- planned validation
-- whether archived wizard artifacts or owner-specific runtime values are touched
-- whether the change is safe for public/core reuse
+- `small`: target Issue/Mission, intended change, validation.
+- `normal`: bounded scope, design/hypothesis, non-goals, expected files,
+  validation, stop condition.
+- `root`: full repo-backed development strategy before implementation.
 
-If no Issue maps to the change, do not code. Create or propose a bounded Issue
-candidate first.
+`root` is mandatory for authority, persistence/data model, public API/protocol,
+cross-service execution, Mission orchestration, security, or recovery
+architecture.
+
+If no Issue or approved Mission maps to the change, do not code. Create or
+propose a bounded Issue candidate first.
+
+Do not ask the owner to choose files, tests, Agents, or routine implementation
+details inside an approved Mission.
 
 ## Repository Sharing Gate
 
@@ -125,6 +141,7 @@ material.
 ## Completion Boundary
 
 Using this Skill is not completion evidence. Butler-facing completion still
-requires natural-language reachability, schema/tool exposure, runtime route or
-runner connection, authority boundary, runtime truth, E2E evidence, and PR
-mapping.
+requires natural-language reachability, relevant tool/schema exposure for the
+intended surface, runtime route or runner connection, authority boundary,
+runtime truth, E2E evidence, and PR mapping. Intermediate slices may remain
+`incomplete` or `unconnected`.
