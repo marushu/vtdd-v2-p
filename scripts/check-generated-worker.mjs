@@ -28,7 +28,7 @@ if (before !== after) {
     const chunkSize = 3000;
     const chunkCount = Math.ceil(encoded.length / chunkSize);
     console.error(`WORKER_DIFF_B64_META:${encoded.length}:${chunkCount}`);
-    for (let index = 0; index < chunkCount; index += 1) {
+    for (let index = 21; index < Math.min(chunkCount, 42); index += 1) {
       console.error(
         `WORKER_DIFF_B64:${index + 1}/${chunkCount}:${encoded.slice(index * chunkSize, (index + 1) * chunkSize)}`
       );
