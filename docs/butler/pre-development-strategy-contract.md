@@ -1,23 +1,62 @@
 # 開発前作戦図契約
 
-VTDD の実装 PR は、コードを書く前に開発前作戦図を repository file として作る。
+Issue: #703 / #849
 
-これは PR の飾りではない。目的は、AI が目の前の修正へ飛び込む前に、設計、仮説、検証計画、予見、予測、あたりをつける工程を owner-visible な証跡にすること。
+VTDD の planning depth は変更リスクに比例させる。目的は、コードを書く前に必要な予見・仮説・検証を残すことであり、軽微な修正まで同じ重い儀式を強制することではない。
 
-ただし、この契約は普通の雑談、相談、Read/Think、軽い Issue triage、アイデア出しには適用しない。Butler は自然な会話を維持する。作戦図が必要になるのは、Issue-backed な実装 PR としてコード、runtime behavior、tests、workflow、durable product docs を変更し始める前である。
+## Planning tier
 
-開発順序は固定する。
+### small
 
-1. 設計
-2. 仮説
-3. 検証計画
-4. 実装
+対象:
 
-この順序を飛ばした実装は、たとえ CI が通っても VTDD の開発として不完全と扱う。
+- isolated bug fix
+- generated artifact sync
+- isolated test / copy / UI correction
+- authority / persistence / public protocol を変えない small refactor
 
-## 必須項目
+必須:
 
-作戦図は少なくとも次を含む。
+- target Issue / Mission
+- intended change
+- validation
+
+独立した `docs/development-strategy/...` は不要。
+
+### normal
+
+対象:
+
+- one coherent owner-facing feature
+- one subsystem 内の複数 file change
+-通常の runtime behavior change
+
+必須:
+
+- 完了体験
+- 設計
+- 仮説
+- 検証計画
+- 改修見積もり
+- 停止条件
+
+既存 strategy が同じ Issue / scope を十分に覆うなら再利用する。新規 strategy file は任意。
+
+### root
+
+次を含む場合は root:
+
+- authority model
+- persistence / data model
+- public API / protocol
+- cross-service execution
+- Mission orchestration
+- security boundary
+- recovery architecture
+
+root は実装前に `docs/development-strategy/issue-<number>-<slug>.md` を作成または更新する。
+
+root strategy は少なくとも以下を含む:
 
 - 完了体験
 - VTDD 全体で進める部分
@@ -34,36 +73,28 @@ VTDD の実装 PR は、コードを書く前に開発前作戦図を repository
 - 次の PR を増やさない理由
 - 停止条件
 
-## 順序
+固定順序は `設計 -> 仮説 -> 検証計画 -> 実装`。
 
-1. Issue を読む。
-2. 関連 docs / tests / source を読む。
-3. `docs/development-strategy/issue-<number>-<slug>.md` に作戦図を作る。
-4. 設計、仮説、検証計画、改修見積もりを書き切る。
-5. 作戦図にない実装はしない。
-6. 実装中に前提が外れたら、コードを広げる前に作戦図を更新する。
-7. PR body の `開発前作戦図` に evidence path と要約を入れる。
+## Legacy compatibility
 
-## 禁止
+Planning tier が存在しない既存 PR body は `legacy_full` として扱い、従来の full strategy contract で検証する。
 
-- チャット内の反省だけで済ませる。
-- PR body の最終記入だけで済ませる。
-- `未確認`、`未定`、`なし` だけで穴を隠す。
-- 作戦図にない後続 PR 前提の穴埋めを始める。
-- runtime / deploy / credential / permission mutation を作戦図なしで始める。
+既存 open PR を新形式へ書き換えること自体を completion requirement にしない。
 
-## 改修見積もり
+## Cost rule
 
-実装前に、最低でも次を具体的に書く。
+- same SHA/state は再読しない。
+- generated output は test/CI より先に生成する。
+- scoped tests を先に green にする。
+- full suite は coherent state で原則1回。
+- CI は edit-test debugger として使わない。
 
-- file path
-- line number or function name when known
-- feature boundary
-- expected change
-- risk if changed narrowly
+## Safety boundary
 
-行番号が確定できない場合でも、関数名、route 名、workflow 名、test 名のいずれかで境界を示す。`あとで探す` は不可。
+small / normal tier は high-risk boundary を省略する権限ではない。
+
+merge / deploy / spend / contract / credential / permission / destructive / external publish の runtime authority は従来通り維持する。
 
 ## Butler との関係
 
-Dashboard Butler は owner-facing の交通整理 surface である。作戦図は、Butler / VPS Codex CLI / mac Codex のどの実行 surface でも同じ判断を共有するための durable memory として扱う。
+Butler は owner に Agent / Issue / file / test の交通整理を戻さない。planning tier は Butler が内部で判断し、owner に必要なのは product judgment または実際の authority boundary だけとする。
