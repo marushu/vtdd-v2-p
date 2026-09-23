@@ -19,12 +19,16 @@ if (before !== after) {
   console.error(
     "Generated worker.js was changed by `npm run build:worker`. Run `npm run build:worker` before validation and include worker.js in the same commit."
   );
-  const encoded = Buffer.from(after, "utf8").toString("base64");
+  const diff = spawnSync("git", ["diff", "--no-ext-diff", "--unified=3", "--", "worker.js"], {
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024
+  });
+  const encoded = Buffer.from(diff.stdout || "", "utf8").toString("base64");
   const chunkSize = 6000;
-  console.error(`VTDD_GENERATED_WORKER_B64_BEGIN:${encoded.length}`);
+  console.error(`VTDD_GENERATED_WORKER_DIFF_B64_BEGIN:${encoded.length}`);
   for (let offset = 0, index = 0; offset < encoded.length; offset += chunkSize, index += 1) {
-    console.error(`VTDD_GENERATED_WORKER_B64:${index}:${encoded.slice(offset, offset + chunkSize)}`);
+    console.error(`VTDD_GENERATED_WORKER_DIFF_B64:${index}:${encoded.slice(offset, offset + chunkSize)}`);
   }
-  console.error("VTDD_GENERATED_WORKER_B64_END");
+  console.error("VTDD_GENERATED_WORKER_DIFF_B64_END");
   process.exit(1);
 }
