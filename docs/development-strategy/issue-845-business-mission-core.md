@@ -79,7 +79,6 @@ Mission core を先に repo-backed にすれば、既存 #613 / #716 / #417 / #4
 | `docs/development-strategy/issue-845-business-mission-core.md` | strategy | この作戦図 | low |
 | `src/core/business-mission-orchestrator.js` | new pure core module | schema / registry / planning / authority / summary | medium: future runtime contract になる |
 | `test/business-mission-orchestrator.test.js` | unit tests | mission / planning / authority contract | low |
-| `src/core/index.js` | public core exports | 新 module export | low |
 
 ## 既に通っている経路
 
@@ -108,7 +107,7 @@ Mission core を先に repo-backed にすれば、既存 #613 / #716 / #417 / #4
 - Issue #845 の Intent / Success Criteria / Non-goal と一致していること。
 - AGENTS.md の authority / Butler-first / queue / strategy gate を弱めていないこと。
 - `npm test` で既存 tests を壊していないこと。
-- `src/core/index.js` export に cyclic dependency を作っていないこと。
+- core-only slice では `src/core/index.js` / generated `worker.js` を変更せず、runtime export は integration slice で追加すること。
 - Mission core が deploy / external send を直接実行しないこと。
 
 ## 実装候補と捨てた案
