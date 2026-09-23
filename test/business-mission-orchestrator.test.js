@@ -34,6 +34,8 @@ test("TOMIO owner goal becomes a product launch mission", () => {
 
   assert.equal(mission.status, BusinessMissionStatus.ACTIVE);
   assert.equal(mission.kind, BusinessMissionKind.PRODUCT_LAUNCH);
+  assert.equal(mission.ownerGoal, "TOMIO を売れる状態まで持っていって");
+  assert.equal(mission.target, "TOMIO");
   assert.deepEqual(
     mission.workstreams.map((item) => item.role),
     [
