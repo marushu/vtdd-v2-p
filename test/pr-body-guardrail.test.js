@@ -12,6 +12,7 @@ import { validatePrBody } from "../scripts/validate-pr-body.mjs";
 function withStrategy(options = {}) {
   const issue = options.issue || "703";
   return {
+    planningTier: "root",
     ...options,
     issue,
     strategyEvidence: `docs/development-strategy/issue-${issue}-predev-strategy-guard.md`,
@@ -61,7 +62,7 @@ test("renderPrBody default guidance is Japanese-first while headings remain stab
   assert.match(body, /#316 の部分進捗です。/);
   assert.match(body, /このPRスライス外に、未接続または未完了の owner-facing 作業が残っています。/);
   assert.match(body, /Primary owner surface: Dashboard Butler/);
-  assert.match(body, /作戦図 evidence: docs\/development-strategy\/issue-<number>-<slug>\.md を作ってから具体化してください。/);
+  assert.match(body, /Planning tier: normal/);
   assert.match(body, /設計: 完了体験、scope、authority boundary、触る surface/);
   assert.match(body, /仮説: 疑っている failure mode/);
   assert.match(body, /検証計画: 仮説を証明または否定する unit/);
@@ -78,7 +79,7 @@ test("renderPrBody default guidance is Japanese-first while headings remain stab
   assert.match(body, /Cloudflare deploy: 不要。/);
 });
 
-test("renderPrBody default partial template fails until development strategy is concrete", () => {
+test("renderPrBody default normal template fails until the bounded plan is concrete", () => {
   const body = renderPrBody({
     issue: "703",
     intent: "Prevent repeated PR body guard failures.",
@@ -87,11 +88,112 @@ test("renderPrBody default partial template fails until development strategy is 
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 作戦図 evidence/);
+  assert.doesNotMatch(result.errors.join("\n"), /開発前作戦図 field is not filled: 作戦図 evidence/);
   assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 設計/);
   assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 仮説/);
   assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 検証計画/);
   assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 改修見積もり/);
+});
+
+test("validatePrBody accepts small planning without a strategy file", () => {
+  const body = renderPrBody({
+    planningTier: "small",
+    issue: "849",
+    intent: "small planning contract を検証する。",
+    satisfied: "isolated fix を small tier で表現できる。",
+    unsatisfied: "Human review remains pending.",
+    strategyDesign: "isolated generated-artifact sync だけを行い authority/runtime contract は変えない。",
+    strategyVerificationPlan: "scoped unit test と generated parity で検証する。",
+    strategyChangeEstimate: "worker.js generated artifact と対応 source だけを確認する。",
+    dryRunSuccessCriteria: "small tier が独立 strategy file なしで validation できる。",
+    dryRunNonGoals: "authority / persistence / protocol を変更しない。",
+    dryRunExpectedTouched: "generated artifact と対応 source/test のみ。",
+    dryRunAffectedIssues: "Issue #849 only。その他 active Issues は変更しない。",
+    dryRunAffectedPrs: "この fixture のみ。",
+    dryRunAffectedWorkflows: "PR validator test のみ。",
+    dryRunAffectedRuntimeSurfaces: "runtime behavior は変更しない。",
+    dryRunNarrowPatchRisk: "generated source mismatch のみ確認する。",
+    dryRunUnknowns: "追加 unknown はない。",
+    dryRunValidationNeeded: "scoped test と parity check。",
+    dryRunStopCondition: "authority/runtime contract 変更が必要なら root/normal へ上げる。",
+    queuePositionBefore: "Issue #849 は current bounded governance work。",
+    preemptionDecision: "ROOT",
+    queueDelta: "Issue #849 の small fixture validation を進める。",
+    whyThisPrIsNext: "tiered validator の small path を証明するため。",
+    activeIssuesNotDownscoped: "Active Issues are not downscoped and remain incomplete.",
+    ownerGoal: "クレジット浪費を減らす。",
+    butlerEntrypoint: "Dashboard Butler の通常チャット入口は変更しない。",
+    dashboardNaturalLanguagePath: "Dashboard Butler の通常チャット entrypoint / 経路は変更しない。",
+    actionSchemaExposure: "Action Schema は primary path ではなく fallback のまま。",
+    runtimePath: "PR validator のみ。",
+    runtimeTruth: "validator pass/fail。",
+    authorityBoundary: "high-risk authority は変更しない。",
+    butlerE2E: "small process fixture のため owner-facing runtime E2E は未接続。",
+    completionStatus: "incomplete",
+    evidencePath: "test/pr-body-guardrail.test.js",
+    unit: "small planning fixture"
+  });
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, true, result.errors.join("\n"));
+  assert.match(body, /Planning tier: small/);
+  assert.doesNotMatch(body, /作戦図 evidence:/);
+});
+
+test("validatePrBody accepts normal inline planning without a strategy file", () => {
+  const body = renderPrBody({
+    planningTier: "normal",
+    ...withStrategy({
+      planningTier: "normal",
+      issue: "849",
+      intent: "normal inline planning を検証する。",
+      satisfied: "bounded inline plan を使える。",
+      unsatisfied: "Human review remains pending.",
+      strategyCompletionExperience: "オーナーが通常変更を full strategy file なしで安全に進められる。",
+      strategyDesign: "一つの subsystem 内に変更を閉じる。",
+      strategyHypothesis: "full strategy 強制が通常変更の credit 浪費を増やしている。",
+      strategyVerificationPlan: "validator unit test で inline normal plan を検証する。",
+      strategyChangeEstimate: "scripts/validate-pr-body.mjs と tests の normal tier path。",
+      strategyStopCondition: "cross-service/authority 変更が必要なら root に上げる。",
+      evidencePath: "test/pr-body-guardrail.test.js",
+      ownerGoal: "通常変更を軽量に進める。",
+      butlerEntrypoint: "Dashboard Butler の通常チャット入口は変更しない。",
+      dashboardNaturalLanguagePath: "Dashboard Butler の通常チャット entrypoint / 経路は変更しない。",
+      actionSchemaExposure: "Action Schema は primary path ではない。",
+      runtimePath: "validator path。",
+      runtimeTruth: "validator pass/fail。",
+      authorityBoundary: "high-risk authority は変更しない。",
+      butlerE2E: "normal process fixture。",
+      completionStatus: "incomplete"
+    })
+  });
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, true, result.errors.join("\n"));
+  assert.match(body, /Planning tier: normal/);
+  assert.doesNotMatch(body, /作戦図 evidence:/);
+});
+
+test("validatePrBody keeps legacy full strategy bodies backward compatible", () => {
+  const legacy = renderPrBody(withStrategy({
+    issue: "703",
+    intent: "legacy full strategy body を維持する。",
+    satisfied: "Planning tier 導入前の body も通る。",
+    unsatisfied: "Human review remains pending.",
+    evidencePath: "docs/pr-template-model.md",
+    ownerGoal: "既存 open PR を壊さない。",
+    butlerEntrypoint: "PR body review gate.",
+    dashboardNaturalLanguagePath: "Dashboard Butler natural-language chat entrypoint は既存のまま。",
+    actionSchemaExposure: "Action Schema is not the primary owner path.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "legacy compatibility fixture.",
+    completionStatus: "incomplete"
+  })).replace(/^- Planning tier: root\n/m, "");
+
+  const result = validatePrBody(legacy);
+  assert.equal(result.ok, true, result.errors.join("\n"));
 });
 
 test("validatePrBody fails when required markers are missing", () => {
