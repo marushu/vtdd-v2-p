@@ -1651,7 +1651,7 @@ test("dashboard app-server bridge carries Business Mission through handleDashboa
             params: {
               threadId: "codex-thread-mission-845",
               turnId: "turn-mission-845",
-              delta: "調査を完了しました。\n<!-- VTDD_BUSINESS_WORKSTREAM_RESULT {\\\"missionId\\\":\\\"mission-dashboard-main-issue845-tomio\\\",\\\"workstreamId\\\":\\\"mission-dashboard-main-issue845-tomio:ws:01:research\\\",\\\"status\\\":\\\"completed\\\",\\\"outcome\\\":\\\"市場と技術制約を整理\\\",\\\"evidence\\\":[\\\"docs/research.md\\\"]} -->"
+              delta: '調査を完了しました。\n<!-- VTDD_BUSINESS_WORKSTREAM_RESULT {"missionId":"mission-dashboard-main-issue845-tomio","workstreamId":"mission-dashboard-main-issue845-tomio:ws:01:research","status":"completed","outcome":"市場と技術制約を整理","evidence":["docs/research.md"]} -->'
             }
           });
           handler({
