@@ -12,8 +12,8 @@ Owner が Dashboard Butler に上位目的を渡した後、VPS Codex app-server
 
 - Business Mission prompt に current workstream と result contract を追加する。
 - app-server final reply から machine result marker を parse / strip する。
-- bridge -> Dashboard に `business_mission_workstream_result` event を追加する。
-- DashboardChatRoom が active Mission と result scope を照合し、`applyBusinessWorkstreamResult()` で durable state を更新する。
+- bridge の final `app_server_reply` に `businessMissionResult` metadata を付ける。
+- DashboardChatRoom が final reply を通常保存する前に `businessMissionResult` と active Mission scope を照合し、`applyBusinessWorkstreamResult()` で durable state を更新する。
 - owner-visible final reply には machine marker を出さない。
 - malformed / wrong-scope / missing result では Mission を勝手に進めない。
 
@@ -36,14 +36,14 @@ Mission が存在し current workstream がある時だけ、final answer の末
 `scripts/run-dashboard-app-server-bridge.mjs` に result parser / visible text stripper を追加する。
 
 turn completion 時:
-- result marker が validなら `business_mission_workstream_result` を Dashboard へ送る。
+- result marker が validなら final `app_server_reply.businessMissionResult` に normalized result を付ける。
 - owner-visible `app_server_reply.text` から marker は削除する。
-- marker が malformed / scope mismatchなら `status=unverified` の result event を送り、Mission mutation を禁止する。
-- Mission context無しturnでは従来通り。
+- marker が missing / malformed / scope mismatchなら `businessMissionResult.status=unverified` を付け、Mission mutation を禁止する。
+- Mission context無しturnでは従来通り metadata を付けない。
 
 ### 3. Dashboard reconciliation
 
-`DashboardChatRoom.acceptAppServerBridgeMessage()` は generic app-server event normalization より前に `business_mission_workstream_result` を処理する。
+`DashboardChatRoom.acceptAppServerBridgeMessage()` は generic app-server reply normalization より前に raw `app_server_reply.businessMissionResult` を処理する。
 
 - active Mission read
 - `missionId` exact match
@@ -130,7 +130,7 @@ result markerを final reply末尾の machine contractに限定し、bridgeでst
 - wrong workstream resultで dependency chainを飛ばす。
 - blocked resultが next workstreamをreadyにしてしまう。
 - in_progressが ready listから消え、Missionが止まる。
-- result event orderingが final replyより前後しても durable stateが壊れないこと。
+- result metadata と final reply が同一 envelope なので reconciliation が owner-visible reply 保存より先に走ること。
 
 ## PR 前に確認すること
 
@@ -143,7 +143,7 @@ result markerを final reply末尾の machine contractに限定し、bridgeでst
 ## 実装候補と捨てた案
 
 採用:
-- explicit final marker + bridge parse/strip + dedicated result event。
+- explicit final marker + bridge parse/strip + final reply structured metadata。
 - scope mismatchは fail-closed。
 - core state transitionを再利用。
 
