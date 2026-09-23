@@ -339,6 +339,92 @@ export function shouldStartBusinessMissionFromOwnerGoal(ownerGoal) {
   return matchesAny(goal, executionSignals) && matchesAny(goal, businessSignals);
 }
 
+export function shouldSupersedeBusinessMission({ mission, ownerGoal } = {}) {
+  const goal = normalizeText(ownerGoal);
+  if (!goal || !shouldStartBusinessMissionFromOwnerGoal(goal)) {
+    return false;
+  }
+
+  const existingGoal = normalizeText(mission?.ownerGoal);
+  if (!existingGoal) {
+    return true;
+  }
+
+  const normalizedGoal = goal.toLowerCase();
+  const explicitSwitchSignals = [
+    "別件",
+    "別の仕事",
+    "別のミッション",
+    "新しいミッション",
+    "新規ミッション",
+    "次のミッション",
+    "今度は",
+    "切り替えて",
+    "switch mission",
+    "new mission"
+  ];
+  if (matchesAny(normalizedGoal, explicitSwitchSignals)) {
+    return true;
+  }
+
+  const existingKind = normalizeString(mission?.kind);
+  const nextKind = inferBusinessMissionKind(goal);
+  if (existingKind && nextKind !== existingKind) {
+    return true;
+  }
+
+  const existingAnchors = extractBusinessGoalAnchors(existingGoal);
+  const nextAnchors = extractBusinessGoalAnchors(goal);
+  if (
+    existingAnchors.length > 0 &&
+    nextAnchors.length > 0 &&
+    !nextAnchors.some((anchor) => existingAnchors.includes(anchor))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function shouldAttachBusinessMissionToOwnerGoal({ mission, ownerGoal } = {}) {
+  const goal = normalizeText(ownerGoal);
+  const existingGoal = normalizeText(mission?.ownerGoal);
+  if (!goal || !existingGoal) {
+    return false;
+  }
+
+  if (shouldStartBusinessMissionFromOwnerGoal(goal)) {
+    return !shouldSupersedeBusinessMission({ mission, ownerGoal: goal });
+  }
+
+  const normalizedGoal = goal.toLowerCase();
+  const followUpSignals = [
+    "続き",
+    "続け",
+    "進捗",
+    "どこまで",
+    "その件",
+    "この件",
+    "ミッション",
+    "mission",
+    "さっきの",
+    "前の件",
+    "もっと",
+    "止めて",
+    "止めよう",
+    "中止",
+    "キャンセル",
+    "やめて",
+    "再開"
+  ];
+  if (matchesAny(normalizedGoal, followUpSignals)) {
+    return true;
+  }
+
+  const existingAnchors = extractBusinessGoalAnchors(existingGoal);
+  return existingAnchors.some((anchor) => normalizedGoal.includes(anchor));
+}
+
 export function createBusinessMission(input = {}) {
   const missionId = normalizeString(input.missionId);
   const ownerGoal = normalizeText(input.ownerGoal);
@@ -648,6 +734,31 @@ function normalizeString(value) {
 
 function matchesAny(value, needles) {
   return needles.some((needle) => value.includes(needle));
+}
+
+function extractBusinessGoalAnchors(value) {
+  const generic = new Set([
+    "app",
+    "store",
+    "release",
+    "marketing",
+    "business",
+    "customer",
+    "support",
+    "wordpress",
+    "web",
+    "ads",
+    "build",
+    "ship",
+    "launch",
+    "handle",
+    "run",
+    "grow"
+  ]);
+  const tokens = normalizeText(value)
+    .toLowerCase()
+    .match(/[a-z][a-z0-9._-]{2,}/g) || [];
+  return [...new Set(tokens.filter((token) => !generic.has(token)))];
 }
 
 function slugify(value) {
