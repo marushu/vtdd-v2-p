@@ -43152,6 +43152,78 @@ function shouldStartBusinessMissionFromOwnerGoal(ownerGoal) {
   }
   return matchesAny2(goal, executionSignals) && matchesAny2(goal, businessSignals);
 }
+function shouldSupersedeBusinessMission({ mission, ownerGoal } = {}) {
+  const goal = normalizeText33(ownerGoal);
+  if (!goal || !shouldStartBusinessMissionFromOwnerGoal(goal)) {
+    return false;
+  }
+  const existingGoal = normalizeText33(mission?.ownerGoal);
+  if (!existingGoal) {
+    return true;
+  }
+  const normalizedGoal = goal.toLowerCase();
+  const explicitSwitchSignals = [
+    "\u5225\u4EF6",
+    "\u5225\u306E\u4ED5\u4E8B",
+    "\u5225\u306E\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "\u65B0\u3057\u3044\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "\u65B0\u898F\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "\u6B21\u306E\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "\u4ECA\u5EA6\u306F",
+    "\u5207\u308A\u66FF\u3048\u3066",
+    "switch mission",
+    "new mission"
+  ];
+  if (matchesAny2(normalizedGoal, explicitSwitchSignals)) {
+    return true;
+  }
+  const existingKind = normalizeString(mission?.kind);
+  const nextKind = inferBusinessMissionKind(goal);
+  if (existingKind && nextKind !== existingKind) {
+    return true;
+  }
+  const existingAnchors = extractBusinessGoalAnchors(existingGoal);
+  const nextAnchors = extractBusinessGoalAnchors(goal);
+  if (existingAnchors.length > 0 && nextAnchors.length > 0 && !nextAnchors.some((anchor) => existingAnchors.includes(anchor))) {
+    return true;
+  }
+  return false;
+}
+function shouldAttachBusinessMissionToOwnerGoal({ mission, ownerGoal } = {}) {
+  const goal = normalizeText33(ownerGoal);
+  const existingGoal = normalizeText33(mission?.ownerGoal);
+  if (!goal || !existingGoal) {
+    return false;
+  }
+  if (shouldStartBusinessMissionFromOwnerGoal(goal)) {
+    return !shouldSupersedeBusinessMission({ mission, ownerGoal: goal });
+  }
+  const normalizedGoal = goal.toLowerCase();
+  const followUpSignals = [
+    "\u7D9A\u304D",
+    "\u7D9A\u3051",
+    "\u9032\u6357",
+    "\u3069\u3053\u307E\u3067",
+    "\u305D\u306E\u4EF6",
+    "\u3053\u306E\u4EF6",
+    "\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "mission",
+    "\u3055\u3063\u304D\u306E",
+    "\u524D\u306E\u4EF6",
+    "\u3082\u3063\u3068",
+    "\u6B62\u3081\u3066",
+    "\u6B62\u3081\u3088\u3046",
+    "\u4E2D\u6B62",
+    "\u30AD\u30E3\u30F3\u30BB\u30EB",
+    "\u3084\u3081\u3066",
+    "\u518D\u958B"
+  ];
+  if (matchesAny2(normalizedGoal, followUpSignals)) {
+    return true;
+  }
+  const existingAnchors = extractBusinessGoalAnchors(existingGoal);
+  return existingAnchors.some((anchor) => normalizedGoal.includes(anchor));
+}
 function createBusinessMission(input = {}) {
   const missionId = normalizeString(input.missionId);
   const ownerGoal = normalizeText33(input.ownerGoal);
@@ -43308,6 +43380,28 @@ function normalizeString(value) {
 }
 function matchesAny2(value, needles) {
   return needles.some((needle) => value.includes(needle));
+}
+function extractBusinessGoalAnchors(value) {
+  const generic = /* @__PURE__ */ new Set([
+    "app",
+    "store",
+    "release",
+    "marketing",
+    "business",
+    "customer",
+    "support",
+    "wordpress",
+    "web",
+    "ads",
+    "build",
+    "ship",
+    "launch",
+    "handle",
+    "run",
+    "grow"
+  ]);
+  const tokens = normalizeText33(value).toLowerCase().match(/[a-z][a-z0-9._-]{2,}/g) || [];
+  return [...new Set(tokens.filter((token) => !generic.has(token)))];
 }
 
 // node_modules/zod/v3/helpers/util.js
@@ -59245,14 +59339,14 @@ var DashboardChatRoom = class {
       businessMission
     });
   }
-  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage, businessMission = null }) {
+  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage, businessMission = void 0 }) {
     const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
     const text = sanitizeDashboardChatText(message.text || "");
     if (!threadId || !text || !bridgeSocket) {
       return false;
     }
-    const storedBusinessMission = businessMission || await this.readBusinessMission(threadId);
-    const activeBusinessMission = isDashboardBusinessMissionOpen(storedBusinessMission) ? storedBusinessMission : null;
+    const resolvedBusinessMission = businessMission === void 0 ? await this.resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage: message }) : businessMission;
+    const activeBusinessMission = isDashboardBusinessMissionOpen(resolvedBusinessMission) ? resolvedBusinessMission : null;
     const businessMissionSummary = activeBusinessMission ? buildBusinessMissionOwnerSummary(activeBusinessMission) : null;
     const repository = normalizeCanonicalRepositoryInput(message.repository);
     const relatedIssue = normalizePositiveInteger11(message.relatedIssue || message.issueNumber);
@@ -59605,12 +59699,40 @@ var DashboardChatRoom = class {
   }
   async resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage } = {}) {
     const existing = await this.readBusinessMission(threadId);
-    if (isDashboardBusinessMissionOpen(existing)) {
-      return existing;
-    }
     const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
     const ownerGoal = sanitizeDashboardChatText(message.text || "");
-    if (!ownerGoal || !shouldStartBusinessMissionFromOwnerGoal(ownerGoal)) {
+    if (!ownerGoal) {
+      return null;
+    }
+    const startsMission = shouldStartBusinessMissionFromOwnerGoal(ownerGoal);
+    if (isDashboardBusinessMissionOpen(existing)) {
+      if (startsMission && shouldSupersedeBusinessMission({
+        mission: existing,
+        ownerGoal
+      })) {
+        return this.createBusinessMissionFromOwnerMessage({
+          threadId,
+          ownerMessage: message,
+          supersedes: existing
+        });
+      }
+      return shouldAttachBusinessMissionToOwnerGoal({
+        mission: existing,
+        ownerGoal
+      }) ? existing : null;
+    }
+    if (!startsMission) {
+      return null;
+    }
+    return this.createBusinessMissionFromOwnerMessage({
+      threadId,
+      ownerMessage: message
+    });
+  }
+  async createBusinessMissionFromOwnerMessage({ threadId, ownerMessage, supersedes = null } = {}) {
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
+    const ownerGoal = sanitizeDashboardChatText(message.text || "");
+    if (!ownerGoal) {
       return null;
     }
     const createdAt = normalizeIsoTimestamp(message.createdAt || message.created_at) || (/* @__PURE__ */ new Date()).toISOString();
@@ -59628,6 +59750,17 @@ var DashboardChatRoom = class {
       createdAt,
       acceptedAt: createdAt
     });
+    if (supersedes && normalizeDashboardEventText(supersedes.missionId) && typeof this.ctx?.storage?.put === "function") {
+      await this.ctx.storage.put(
+        `business_mission:${normalizeDashboardEventText(supersedes.missionId)}`,
+        {
+          ...normalizeObject12(supersedes),
+          status: BusinessMissionStatus.CANCELLED,
+          supersededByMissionId: mission.missionId,
+          supersededAt: createdAt
+        }
+      );
+    }
     await this.writeBusinessMission(threadId, mission);
     return mission;
   }
