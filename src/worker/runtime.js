@@ -58,7 +58,9 @@ import {
   buildVtddCloudflarePageDirectory,
   renderVtddHelpGuidePage,
   sanitizeCodexAnalyticsUsageSnapshot,
+  shouldAttachBusinessMissionToOwnerGoal,
   shouldStartBusinessMissionFromOwnerGoal,
+  shouldSupersedeBusinessMission,
   sanitizeGitHubActionsVariableSyncErrorMessage,
   sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
@@ -571,15 +573,17 @@ export class DashboardChatRoom {
     });
   }
 
-  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage, businessMission = null }) {
+  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage, businessMission = undefined }) {
     const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
     const text = sanitizeDashboardChatText(message.text || "");
     if (!threadId || !text || !bridgeSocket) {
       return false;
     }
-    const storedBusinessMission = businessMission || await this.readBusinessMission(threadId);
-    const activeBusinessMission = isDashboardBusinessMissionOpen(storedBusinessMission)
-      ? storedBusinessMission
+    const resolvedBusinessMission = businessMission === undefined
+      ? await this.resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage: message })
+      : businessMission;
+    const activeBusinessMission = isDashboardBusinessMissionOpen(resolvedBusinessMission)
+      ? resolvedBusinessMission
       : null;
     const businessMissionSummary = activeBusinessMission
       ? buildBusinessMissionOwnerSummary(activeBusinessMission)
@@ -972,16 +976,52 @@ export class DashboardChatRoom {
 
   async resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage } = {}) {
     const existing = await this.readBusinessMission(threadId);
-    if (isDashboardBusinessMissionOpen(existing)) {
-      return existing;
-    }
-
     const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
     const ownerGoal = sanitizeDashboardChatText(message.text || "");
-    if (!ownerGoal || !shouldStartBusinessMissionFromOwnerGoal(ownerGoal)) {
+    if (!ownerGoal) {
       return null;
     }
 
+    const startsMission = shouldStartBusinessMissionFromOwnerGoal(ownerGoal);
+    if (isDashboardBusinessMissionOpen(existing)) {
+      if (
+        startsMission &&
+        shouldSupersedeBusinessMission({
+          mission: existing,
+          ownerGoal
+        })
+      ) {
+        return this.createBusinessMissionFromOwnerMessage({
+          threadId,
+          ownerMessage: message,
+          supersedes: existing
+        });
+      }
+
+      return shouldAttachBusinessMissionToOwnerGoal({
+        mission: existing,
+        ownerGoal
+      })
+        ? existing
+        : null;
+    }
+
+    if (!startsMission) {
+      return null;
+    }
+
+    return this.createBusinessMissionFromOwnerMessage({
+      threadId,
+      ownerMessage: message
+    });
+  }
+
+  async createBusinessMissionFromOwnerMessage({ threadId, ownerMessage, supersedes = null } = {}) {
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
+    const ownerGoal = sanitizeDashboardChatText(message.text || "");
+    if (!ownerGoal) {
+      return null;
+    }
     const createdAt = normalizeIsoTimestamp(message.createdAt || message.created_at) || new Date().toISOString();
     const missionId = buildDashboardBusinessMissionId({
       threadId,
@@ -997,6 +1037,23 @@ export class DashboardChatRoom {
       createdAt,
       acceptedAt: createdAt
     });
+
+    if (
+      supersedes &&
+      normalizeDashboardEventText(supersedes.missionId) &&
+      typeof this.ctx?.storage?.put === "function"
+    ) {
+      await this.ctx.storage.put(
+        `business_mission:${normalizeDashboardEventText(supersedes.missionId)}`,
+        {
+          ...normalizeObject(supersedes),
+          status: BusinessMissionStatus.CANCELLED,
+          supersededByMissionId: mission.missionId,
+          supersededAt: createdAt
+        }
+      );
+    }
+
     await this.writeBusinessMission(threadId, mission);
     return mission;
   }
