@@ -2,29 +2,50 @@
 
 ## Purpose
 
-This repository is building VTDD V2 against active Issues.
-The assistant must prevent drift, preserve issue traceability, and avoid speculative implementation.
+VTDD exists so the owner can state a goal and Butler can carry the work forward
+without making the owner act as project manager.
 
-This file exists to stop the exact failure mode where implementation appears to progress while required behavior remains unimplemented.
+Optimize for:
+
+1. owner effort reduction
+2. correct execution
+3. low token / model / runner / CI cost
+4. durable runtime truth
+5. safe authority boundaries
+
+The owner should primarily provide ideas, goals, product judgment, and high-risk
+approval. Butler owns decomposition, implementation traffic control,
+verification, and next-step selection.
+
+Do not turn the owner into the coordinator of Agents, Issues, PRs, files, tests,
+or implementation details.
 
 ## Butler Completion Gate
 
-In this repository, a feature is incomplete unless Butler can complete the
-owner-facing workflow without the owner opening Mac desktop Codex.
+The full Butler Completion Gate applies when claiming that an owner-facing
+capability is complete, when a PR is intended to complete that capability, when
+closing its Issue, or when deploying that completed capability.
+
+Completion requires the relevant evidence for:
+
+- Dashboard Butler natural-language reachability
+- runtime route / runner connection
+- authority boundary
+- runtime truth
+- mapped E2E
+- Issue / PR traceability
+
+Intermediate implementation slices may explicitly remain `partial`,
+`incomplete`, or `unconnected`. Do not force irrelevant completion artifacts
+onto an intermediate slice.
+
+Custom GPT Action Schema is required only when the capability is intended to be
+available through the Custom GPT fallback surface. Dashboard Butler is the
+intended primary operator surface.
 
 A change is not complete merely because code, docs, routes, schemas, or tests
-exist. Completion requires all of:
-
-- Butler natural-language intent can reach the capability.
-- Custom GPT Action Schema exposes the required operationId/tool.
-- Runtime route and runner path are connected.
-- Required authority boundary is explicit: GO, passkey, approval grant, or forbidden.
-- Runtime truth reports success/failure and relevant before/after state.
-- E2E evidence proves the Butler-facing workflow.
-- PR body maps Issue criteria to implementation and E2E evidence.
-
-If any item is missing, report the work as incomplete/unconnected. Do not claim
-implementation complete.
+exist. Equally, a bounded intermediate change does not need to pretend it is a
+full capability completion.
 
 ## Butler-First Operating Principle
 
@@ -189,62 +210,92 @@ That delegation does not allow:
 
 When deciding what to implement, use this order:
 
-1. Explicit user instruction in this thread
-2. Active Issue text (Intent / Success Criteria / Non-goal)
-3. Canonical docs referenced by the parent Issue (not ad hoc memory)
-4. Existing code behavior
+1. Explicit owner instruction in the current conversation
+2. Current active Mission / explicitly scoped Issue
+3. Relevant canonical repository docs
+4. Current GitHub / runtime / code truth
+5. Historical RAG / prior Issues / prior discussions
 
-If these sources conflict, stop implementation and ask for a decision.
-Never resolve source conflicts by assumption.
+Do not override a newer explicit owner instruction with an older Issue or doc.
 
-If current code only partially satisfies an Issue or contract, do not
-"complete it on the fly" without first surfacing the mismatch explicitly.
-When in doubt, stop and reconcile with the owner instead of pushing through.
+If a conflict affects safety, money, external publication, credentials,
+permissions, destructive operations, or production, stop only that affected
+action and surface the conflict.
 
-Before proposing a new spec, runtime path, or missing-capability explanation,
-re-read the relevant existing docs, tests, and source files in this repository.
-Do not talk about executor / handoff / reviewer / claim behavior as if it were
-missing from scratch until you have explicitly checked for an existing contract,
-draft, test, or implementation anchor in-repo.
+For ordinary implementation ambiguity, make the smallest reasonable decision,
+record it when durable, and continue. Do not make the owner resolve routine
+engineering choices.
+
+Before proposing a new runtime path or claiming a capability is missing, inspect
+the directly relevant docs/tests/source first. Do not broaden that read into an
+all-repository or all-Issue scan without a concrete dependency.
 
 ## Thread-Independent Startup Contract
 
-Thread-local behavior is not a stable VTDD rule. If a behavior must survive a
-new chat thread, context compression, Butler handoff, mac Codex handoff, or VPS
-Codex CLI handoff, promote it into repository docs, Issue comments, or RAG.
+Thread-local behavior is not a stable VTDD rule. If behavior must survive a new
+chat thread, context compression, Butler handoff, mac Codex handoff, or VPS
+Codex CLI handoff, promote it into repository docs, Issue comments, Mission
+truth, or RAG.
 
-Before starting or resuming Issue-backed work, read
-`docs/butler/thread-independent-startup-contract.md` when startup behavior,
-handoff behavior, RAG recall, or cross-surface consistency is relevant.
+### Minimal startup — default for scoped implementation
 
-Before treating new owner input as implementation work, read
-`docs/butler/execution-queue-contract.md` and
-`docs/mvp/active-issue-execution-queue.md`. Classify the input as
-`EMERGENCY`, `ROOT`, `NEXT`, `QUEUE`, `EVIDENCE`, or `QUESTION`; update or
-preserve the queue; and continue the current `Now` item unless the contract's
-preemption rules require a stop.
+Normally read only:
 
-Startup/preflight must report whether thread-local assumptions have been
-promoted into durable repo/RAG state. If not, say
-`threadLocalAssumptionsPromoted=false` or `未確認`; do not proceed as if the
-current thread's implicit habits are canonical.
+1. current branch / git status
+2. current Mission or target Issue
+3. current PR, if one exists
+4. directly relevant source / tests
+5. directly relevant canonical contract, only when needed
+
+Do not automatically read every open Issue, the full active queue, all RAG
+records, all setup docs, or all historical PRs.
+
+If a source was already read in the current run and its SHA/state has not
+changed, reuse that truth instead of rereading it.
+
+### Full startup / preflight escalation
+
+Read `docs/butler/thread-independent-startup-contract.md`,
+`docs/butler/execution-queue-contract.md`, the active queue, runtime truth,
+and relevant RAG when one of these is true:
+
+- thread/surface handoff
+- recovery after unknown or stale state
+- conflicting runtime truth
+- ROOT / EMERGENCY queue preemption
+- high-risk execution
+- explicit status / readiness audit
+- resuming abandoned or ambiguous work
+
+For status/progress questions, prefer the lightweight status path first. Do not
+make broad `vtddStartupPreflight` the default first step.
+
+When full startup runs, report whether thread-local assumptions were promoted to
+durable state. If not, use `threadLocalAssumptionsPromoted=false` or `未確認`.
 
 ## Active-Issue Coverage Policy
 
-Default assumption: implementation scope covers all active Issues unless the user explicitly narrows scope.
+Default implementation scope is:
 
-Current repository execution note:
+> current Mission / current Issue + direct dependencies required to complete it
 
-- when the user explicitly fixes the active implementation window to specific
-  Issues, treat only those Issues as in-scope for implementation until the user
-  re-opens the broader active-Issue set
-- the historical setup-wizard line is archived; do not treat it as active
-  implementation scope on this branch unless the user explicitly re-activates it
-- this public/core branch does not use the setup wizard by default; do not
-  inherit old wizard assumptions into current runtime or docs work
+Other open/active Issues remain active and incomplete, but they do not need to
+be read, summarized, or reasoned about unless they:
 
-If any active Issue is intentionally deferred, record it explicitly as deferred with reason.
-Never treat "not implemented yet" as "done".
+- directly block the current work
+- are directly modified by the current change
+- contain a contract required by the current work
+
+Changing the default context scope does not close, defer, or mark any open Issue
+done.
+
+A discovered unrelated problem must not automatically interrupt current work.
+Classify it briefly as blocker, follow-up, evidence gap, or unrelated discovery.
+Create a new Issue only when the finding is durable, independently actionable,
+or blocks completion.
+
+The historical setup-wizard line remains archived unless the owner explicitly
+reactivates it.
 
 ## MVP Definition (Repository Rule)
 
@@ -265,93 +316,117 @@ Required:
 - map each active Issue to implementation evidence and E2E evidence
 - report status as "partial/in-progress" until all required Issues are complete
 
-## Drift Stop Protocol (Required Before Editing Code)
+## Drift Stop Protocol (Risk-Proportional)
 
-Before any runtime code edit, produce a bounded change contract:
+Before editing, use the smallest planning contract that matches the risk.
 
-- target Issue number(s)
-- exact Success Criteria being implemented
-- explicit Non-goals for this change
-- files expected to change
-- planned validation (unit/integration/E2E)
+### small
 
-If a planned change cannot be mapped to an Issue section, do not implement it.
-Either:
-- propose a new Issue, or
-- move the idea to proposal-only notes.
+Examples: isolated bug fix, generated-artifact sync, isolated test/copy/UI
+correction, small refactor with no authority/runtime contract change.
 
-If implementation reveals a contract mismatch, missing requirement, ambiguous
-boundary, or partial compliance state:
-- stop the rollout
-- summarize the exact mismatch
-- state why continuing could create drift
-- get explicit human direction before proceeding
+Required:
 
-Do not treat "this probably should be fixed now" as sufficient justification to
-continue implementation.
+- target Issue / Mission
+- intended change
+- validation
 
-For this public/core branch, the bounded change contract must also state when relevant:
+No separate development-strategy file is required.
 
-- whether any archived wizard artifact is being changed, removed, or referenced
-- whether any personal/operator-specific runtime URL, account identifier, or
-  bootstrap value is touched, removed, or still referenced
-- whether the change is safe for a repo intended to be usable by people other
-  than the owner
+### normal
 
-## 開発前作戦図 Gate (Required Before Implementation PRs)
+Examples: one coherent owner-facing feature or several files in one subsystem.
 
-Before implementation work, create or update a repository-backed development
-strategy file under `docs/development-strategy/issue-<number>-<slug>.md`.
+Required:
 
-This is the required place for 設計, 仮説, 検証計画, prediction, risk scan,
-and first-principles traffic control. Chat-only reflection does not satisfy
-this gate.
+- bounded scope
+- main design / hypothesis
+- explicit non-goals
+- expected files/functions
+- validation plan
+- stop condition
 
-This gate applies to implementation work that edits code, runtime behavior,
-tests, workflows, or durable product docs for an Issue-backed PR.
+Use an existing matching strategy when available. A new strategy file is
+optional.
 
-This gate does not apply to ordinary conversation, brainstorming, status
-questions, Read/Think mode, lightweight Issue triage, or owner-facing chat that
-does not start implementation. Butler must remain able to talk naturally.
+### root
 
-The required order is:
+Required for changes to authority, persistence/data model, public API/protocol,
+cross-service execution, Mission orchestration, security boundary, or recovery
+architecture.
 
-1. 設計: define the owner-facing completion experience, root blocker, scope,
-   non-goals, authority boundary, and expected touched surfaces.
-2. 仮説: name the likely files/routes/workflows, the suspected failure mode,
-   why that suspicion fits the Issue, and what would break if patched narrowly.
-3. 検証計画: define the unit/integration/E2E/runtime-truth checks that will
-   prove or disprove the hypothesis before the PR claims progress.
-4. 実装: edit code only after the first three are written in the strategy file.
+A repo-backed development strategy is required before implementation.
 
-The strategy file must be written before code edits for the Issue slice and
-must cover:
+If implementation reveals a contract mismatch or ambiguity, stop only the
+affected unsafe/ambiguous branch. Preserve unrelated ready work. Ask the owner
+only when owner judgment materially changes product direction, scope, money, or
+authority.
 
-- 完了体験
-- VTDD 全体で進める部分
-- 設計
-- 仮説
-- 検証計画
-- 改修見積もり: file path, line/function/feature boundary, expected change,
-  and risk for each touched area
-- 既に通っている経路
-- 未確認の境界
-- 穴が出そうな箇所
-- PR 前に確認すること
-- 実装候補と捨てた案
-- merge 後に通す E2E
-- 次の PR を増やさない理由
-- 停止条件
+## 開発前作戦図 Gate
 
-If the strategy file cannot be written from current Issue/docs/source truth,
-stop and read more before coding. If the hypothesis is weak, do not compensate
-by writing code first. If implementation invalidates the strategy, update the
-strategy before widening the patch. Do not hide unknowns behind `未確認`,
-`未定`, `なし`, `TODO`, or equivalent placeholder text.
+Planning depth is tiered: `small`, `normal`, `root`.
 
-Every implementation PR must reference the strategy file in its PR body. A PR
-that changes code or durable product behavior without a concrete strategy
-evidence path is incomplete.
+- `small`: no separate strategy file. Keep target / intended change /
+  validation in the PR body.
+- `normal`: inline bounded plan or reuse an existing strategy. A new strategy
+  file is optional.
+- `root`: create or update
+  `docs/development-strategy/issue-<number>-<slug>.md` before implementation.
+
+Root strategy must cover completion experience, design, hypothesis, verification
+plan, change estimate, known path, unknown boundary, likely gaps, pre-PR checks,
+rejected options, post-merge E2E, no-follow-up-PR rationale, and stop condition.
+
+The fixed order for root work is:
+
+1. 設計
+2. 仮説
+3. 検証計画
+4. 実装
+
+Do not use a small/normal tier to bypass an authority, security, persistence,
+cross-service, Mission, or recovery boundary.
+
+Legacy full-strategy PR bodies remain valid. Existing open PRs are not required
+to migrate to the new tiered format.
+
+## Mission Autonomy and Cost Discipline
+
+A Mission is a standing owner goal, not a single command.
+
+Within an active Mission, Butler should choose the next ready workstream,
+dispatch specialists, collect results, update Mission state, retry reversible
+work, detect blockers, propose improvements, and continue until completion or a
+genuine owner boundary.
+
+Do not ask the owner which Agent should handle the work, which file to edit,
+which test to run, which implementation approach to choose, or whether to
+continue an already-approved reversible step.
+
+Token, model, runner, and CI cost are product constraints.
+
+Prefer:
+
+- targeted search over broad scans
+- exact relevant file reads over whole-repository reading
+- reuse of unchanged SHA/state truth
+- scoped tests before full tests
+- one coherent CI run over repeated trial pushes
+- compact handoff payloads
+- concise owner-facing status
+
+For generated output such as `worker.js`, the normal order is:
+
+1. edit canonical source
+2. run required generation, e.g. `npm run build:worker`
+3. run scoped tests until green
+4. run the full repository test suite once
+5. open/update the PR
+6. let CI verify the coherent state
+
+Do not use GitHub Actions as the normal edit-test-debug loop. On CI failure,
+read the failed job/step, form one concrete hypothesis, fix locally/scoped when
+possible, and push one coherent correction.
 
 ## Docs-First Gate
 

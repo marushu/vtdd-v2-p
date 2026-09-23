@@ -144,10 +144,12 @@ boundary is satisfied.
 
 Execute mode should:
 
-- state the bounded change contract before edits
-- preserve the execution queue
-- keep one bounded slice per PR where possible
-- validate with tests and mapped evidence
+- state the risk-proportional bounded change contract before edits
+- use current Mission / current Issue + direct dependencies as the default scope
+- preserve execution queue truth without forcing a full queue read for unrelated scoped work
+- keep one coherent bounded slice per PR where possible
+- generate derived artifacts before final tests/CI when required
+- validate scoped tests first, then run the full suite once on the coherent state
 - report incomplete or Butler-unconnected surfaces honestly
 
 Execute mode must not:

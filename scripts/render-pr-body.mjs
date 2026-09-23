@@ -38,6 +38,13 @@ function bulletize(value, fallback = "None.") {
   return lines.map((line) => `- ${line.replace(/^- /, "")}`).join("\n");
 }
 
+function normalizePlanningTier(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return ["small", "normal", "root"].includes(normalized) ? normalized : "normal";
+}
+
 function normalizeCompletionStatus(value) {
   const normalized = String(value || "")
     .trim()
@@ -142,6 +149,7 @@ function defaultFileLineHypotheses() {
 }
 
 function renderPrBody(options = {}) {
+  const planningTier = normalizePlanningTier(options.planningTier);
   const issue = options.issue ? `#${options.issue}` : null;
   const issueLink = issue ? ` Issue ${issue}` : "";
   const executionId = options.executionId || "Not provided.";
@@ -174,6 +182,49 @@ function renderPrBody(options = {}) {
     ...(options.fileLine || {})
   };
 
+  const strategyLines = planningTier === "small"
+    ? [
+        `- Planning tier: small`,
+        `- 設計: ${options.strategyDesign || strategy.design}`,
+        `- 検証計画: ${options.strategyVerificationPlan || strategy.verificationPlan}`,
+        `- 改修見積もり: ${options.strategyChangeEstimate || strategy.changeEstimate}`
+      ]
+    : planningTier === "normal"
+      ? [
+          `- Planning tier: normal`,
+          `- 完了体験: ${options.strategyCompletionExperience || strategy.completionExperience}`,
+          `- 設計: ${options.strategyDesign || strategy.design}`,
+          `- 仮説: ${options.strategyHypothesis || strategy.hypothesis}`,
+          `- 検証計画: ${options.strategyVerificationPlan || strategy.verificationPlan}`,
+          `- 改修見積もり: ${options.strategyChangeEstimate || strategy.changeEstimate}`,
+          `- 停止条件: ${options.strategyStopCondition || strategy.stopCondition}`
+        ]
+      : [
+          `- Planning tier: root`,
+          `- 作戦図 evidence: ${options.strategyEvidence || strategy.evidence}`,
+          `- 完了体験: ${options.strategyCompletionExperience || strategy.completionExperience}`,
+          `- VTDD 全体で進める部分: ${options.strategyVtddArea || strategy.vtddArea}`,
+          `- 設計: ${options.strategyDesign || strategy.design}`,
+          `- 仮説: ${options.strategyHypothesis || strategy.hypothesis}`,
+          `- 検証計画: ${options.strategyVerificationPlan || strategy.verificationPlan}`,
+          `- 改修見積もり: ${options.strategyChangeEstimate || strategy.changeEstimate}`,
+          `- 既に通っている経路: ${options.strategyKnownPath || strategy.knownPath}`,
+          `- 未確認の境界: ${options.strategyUnknownBoundary || strategy.unknownBoundary}`,
+          `- 穴が出そうな箇所: ${options.strategyLikelyGaps || strategy.likelyGaps}`,
+          `- PR 前に確認すること: ${options.strategyPrePrChecks || strategy.prePrChecks}`,
+          `- 実装候補と捨てた案: ${options.strategyOptionsRejected || strategy.optionsRejected}`,
+          `- merge 後に通す E2E: ${options.strategyPostMergeE2E || strategy.postMergeE2E}`,
+          `- 次の PR を増やさない理由: ${options.strategyNoNextPrReason || strategy.noNextPrReason}`,
+          `- 停止条件: ${options.strategyStopCondition || strategy.stopCondition}`
+        ];
+  const strategySection = strategyLines.join("\n");
+  const fileLineHypotheses = planningTier === "small"
+    ? "- small tier: Dry-run Impact Report の変更境界を正本とし、別の file/line 仮説は要求しません。"
+    : (options.fileLineHypotheses || fileLine.hypotheses);
+  const hypothesisRetrospective = planningTier === "small"
+    ? "- small tier: scoped validation の結果を Verification Evidence に記録します。"
+    : (options.hypothesisRetrospective || fileLine.retrospective);
+
   return `## This PR satisfies Intent
 
 ${bulletize(
@@ -197,21 +248,7 @@ ${options.nonGoals || "None."}
 
 ## 開発前作戦図
 
-- 作戦図 evidence: ${options.strategyEvidence || strategy.evidence}
-- 完了体験: ${options.strategyCompletionExperience || strategy.completionExperience}
-- VTDD 全体で進める部分: ${options.strategyVtddArea || strategy.vtddArea}
-- 設計: ${options.strategyDesign || strategy.design}
-- 仮説: ${options.strategyHypothesis || strategy.hypothesis}
-- 検証計画: ${options.strategyVerificationPlan || strategy.verificationPlan}
-- 改修見積もり: ${options.strategyChangeEstimate || strategy.changeEstimate}
-- 既に通っている経路: ${options.strategyKnownPath || strategy.knownPath}
-- 未確認の境界: ${options.strategyUnknownBoundary || strategy.unknownBoundary}
-- 穴が出そうな箇所: ${options.strategyLikelyGaps || strategy.likelyGaps}
-- PR 前に確認すること: ${options.strategyPrePrChecks || strategy.prePrChecks}
-- 実装候補と捨てた案: ${options.strategyOptionsRejected || strategy.optionsRejected}
-- merge 後に通す E2E: ${options.strategyPostMergeE2E || strategy.postMergeE2E}
-- 次の PR を増やさない理由: ${options.strategyNoNextPrReason || strategy.noNextPrReason}
-- 停止条件: ${options.strategyStopCondition || strategy.stopCondition}
+${strategySection}
 
 ## Dry-run Impact Report
 
@@ -238,11 +275,11 @@ ${options.nonGoals || "None."}
 
 ## File / Line Hypotheses
 
-${options.fileLineHypotheses || fileLine.hypotheses}
+${fileLineHypotheses}
 
 ## Hypothesis Retrospective
 
-${options.hypothesisRetrospective || fileLine.retrospective}
+${hypothesisRetrospective}
 
 ## Verification Evidence
 

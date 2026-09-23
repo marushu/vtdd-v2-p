@@ -75,6 +75,30 @@ const REQUIRED_PRE_DEVELOPMENT_STRATEGY_FIELDS = [
   "停止条件",
 ];
 
+const PLANNING_TIERS = new Set(["small", "normal", "root"]);
+
+const SMALL_PLANNING_FIELDS = [
+  "Planning tier",
+  "設計",
+  "検証計画",
+  "改修見積もり",
+];
+
+const NORMAL_PLANNING_FIELDS = [
+  "Planning tier",
+  "完了体験",
+  "設計",
+  "仮説",
+  "検証計画",
+  "改修見積もり",
+  "停止条件",
+];
+
+const ROOT_PLANNING_FIELDS = [
+  "Planning tier",
+  ...REQUIRED_PRE_DEVELOPMENT_STRATEGY_FIELDS,
+];
+
 const PLACEHOLDER_VALUES = new Set([
   "",
   "none",
@@ -120,7 +144,18 @@ function validatePrBody(body, options = {}) {
   }
 
   const strategyFields = extractSectionFields(body, PRE_DEVELOPMENT_STRATEGY_HEADING);
-  for (const field of REQUIRED_PRE_DEVELOPMENT_STRATEGY_FIELDS) {
+  const planningTier = resolvePlanningTier(strategyFields);
+
+  if (
+    !templateMode &&
+    Object.hasOwn(strategyFields, "Planning tier") &&
+    !PLANNING_TIERS.has(planningTier)
+  ) {
+    errors.push("開発前作戦図 Planning tier must be small, normal, or root.");
+  }
+
+  const requiredStrategyFields = requiredPreDevelopmentStrategyFields(planningTier);
+  for (const field of requiredStrategyFields) {
     if (!Object.hasOwn(strategyFields, field)) {
       errors.push(`Missing 開発前作戦図 field: ${field}`);
       continue;
@@ -130,7 +165,7 @@ function validatePrBody(body, options = {}) {
     }
   }
   if (!templateMode) {
-    validatePreDevelopmentStrategySemantics(strategyFields, body, errors);
+    validatePreDevelopmentStrategySemantics(strategyFields, body, errors, { planningTier });
   }
 
   const queueFields = extractSectionFields(body, "## Execution Queue Delta");
@@ -147,11 +182,11 @@ function validatePrBody(body, options = {}) {
     validateQueueFieldSemantics(queueFields, errors);
   }
 
-  if (!templateMode && sectionLooksEmpty(body, "## File / Line Hypotheses")) {
+  if (!templateMode && planningTier !== "small" && sectionLooksEmpty(body, "## File / Line Hypotheses")) {
     errors.push("File / Line Hypotheses section is empty.");
   }
 
-  if (!templateMode && sectionLooksEmpty(body, "## Hypothesis Retrospective")) {
+  if (!templateMode && planningTier !== "small" && sectionLooksEmpty(body, "## Hypothesis Retrospective")) {
     errors.push("Hypothesis Retrospective section is empty.");
   }
 
@@ -289,12 +324,15 @@ function validateQueueFieldSemantics(fields, errors) {
   }
 }
 
-function validatePreDevelopmentStrategySemantics(fields, body, errors) {
+function validatePreDevelopmentStrategySemantics(fields, body, errors, options = {}) {
+  const planningTier = options.planningTier || resolvePlanningTier(fields);
   const evidence = fields["作戦図 evidence"] || "";
-  if (evidence && !/docs\/development-strategy\/issue-[0-9]+-[^)\s]+\.md/.test(evidence)) {
+  const requiresRepoStrategy = planningTier === "root" || planningTier === "legacy_full";
+
+  if (requiresRepoStrategy && evidence && !/docs\/development-strategy\/issue-[0-9]+-[^)\s]+\.md/.test(evidence)) {
     errors.push("開発前作戦図 作戦図 evidence must point to docs/development-strategy/issue-<number>-<slug>.md.");
   }
-  if (evidence) {
+  if (requiresRepoStrategy && evidence) {
     const evidencePath = extractStrategyEvidencePath(evidence);
     if (!evidencePath || !fs.existsSync(evidencePath)) {
       errors.push("開発前作戦図 作戦図 evidence path must exist in this repository checkout.");
@@ -306,6 +344,10 @@ function validatePreDevelopmentStrategySemantics(fields, body, errors) {
         `開発前作戦図 作戦図 evidence Issue #${evidenceIssue} must match Target Issue #${targetIssue}.`,
       );
     }
+  }
+
+  if (!requiresRepoStrategy) {
+    return;
   }
 
   const completionExperience = fields["完了体験"] || "";
@@ -347,6 +389,26 @@ function validatePreDevelopmentStrategySemantics(fields, body, errors) {
   if (estimate && !/(file|\.js|\.mjs|\.md|\.yml|\.yaml|\.ts|\.tsx|関数|function|route|workflow|line|行|機能|feature|scripts\/|src\/|docs\/|test\/|\.github\/)/i.test(estimate)) {
     errors.push("開発前作戦図 改修見積もり must name concrete files, lines, functions, routes, workflows, or feature boundaries.");
   }
+}
+
+function resolvePlanningTier(fields = {}) {
+  if (!Object.hasOwn(fields, "Planning tier")) {
+    return "legacy_full";
+  }
+  return normalizeValue(fields["Planning tier"]);
+}
+
+function requiredPreDevelopmentStrategyFields(planningTier) {
+  if (planningTier === "small") {
+    return SMALL_PLANNING_FIELDS;
+  }
+  if (planningTier === "normal") {
+    return NORMAL_PLANNING_FIELDS;
+  }
+  if (planningTier === "root") {
+    return ROOT_PLANNING_FIELDS;
+  }
+  return REQUIRED_PRE_DEVELOPMENT_STRATEGY_FIELDS;
 }
 
 function extractStrategyEvidencePath(value) {
