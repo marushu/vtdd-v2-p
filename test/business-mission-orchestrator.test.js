@@ -15,8 +15,36 @@ import {
   createBusinessMission,
   getBusinessWorkerRegistry,
   getReadyBusinessWorkstreams,
-  inferBusinessMissionKind
+  inferBusinessMissionKind,
+  shouldStartBusinessMissionFromOwnerGoal
 } from "../src/core/business-mission-orchestrator.js";
+
+test("strong business goal starts a Mission but ordinary questions do not", () => {
+  assert.equal(
+    shouldStartBusinessMissionFromOwnerGoal("TOMIO を売れる状態まで持っていって"),
+    true
+  );
+  assert.equal(
+    shouldStartBusinessMissionFromOwnerGoal("hibou の問い合わせを一つも漏らさず全部処理して"),
+    true
+  );
+  assert.equal(
+    shouldStartBusinessMissionFromOwnerGoal("Web広告を回してユーザーを増やして"),
+    true
+  );
+  assert.equal(
+    shouldStartBusinessMissionFromOwnerGoal("今日は何月何日？"),
+    false
+  );
+  assert.equal(
+    shouldStartBusinessMissionFromOwnerGoal("PR #756 の状況を確認して"),
+    false
+  );
+  assert.equal(
+    shouldStartBusinessMissionFromOwnerGoal("TOMIO の設計どう思う？"),
+    false
+  );
+});
 
 test("TOMIO owner goal becomes a product launch mission", () => {
   assert.equal(
