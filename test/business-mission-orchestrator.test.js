@@ -16,7 +16,9 @@ import {
   getBusinessWorkerRegistry,
   getReadyBusinessWorkstreams,
   inferBusinessMissionKind,
-  shouldStartBusinessMissionFromOwnerGoal
+  shouldAttachBusinessMissionToOwnerGoal,
+  shouldStartBusinessMissionFromOwnerGoal,
+  shouldSupersedeBusinessMission
 } from "../src/core/business-mission-orchestrator.js";
 
 test("strong business goal starts a Mission but ordinary questions do not", () => {
@@ -42,6 +44,43 @@ test("strong business goal starts a Mission but ordinary questions do not", () =
   );
   assert.equal(
     shouldStartBusinessMissionFromOwnerGoal("TOMIO の設計どう思う？"),
+    false
+  );
+});
+
+test("active Mission only attaches to related follow-up and supersedes on a distinct strong goal", () => {
+  const mission = createBusinessMission({
+    missionId: "mission-tomio-attach-001",
+    ownerGoal: "TOMIO を売れる状態まで持っていって",
+    accepted: true
+  });
+
+  assert.equal(
+    shouldAttachBusinessMissionToOwnerGoal({
+      mission,
+      ownerGoal: "今どこまで進んだ？"
+    }),
+    true
+  );
+  assert.equal(
+    shouldAttachBusinessMissionToOwnerGoal({
+      mission,
+      ownerGoal: "今日は何月何日？"
+    }),
+    false
+  );
+  assert.equal(
+    shouldSupersedeBusinessMission({
+      mission,
+      ownerGoal: "hibou の問い合わせを一つも漏らさず全部処理して"
+    }),
+    true
+  );
+  assert.equal(
+    shouldSupersedeBusinessMission({
+      mission,
+      ownerGoal: "TOMIO のアプリを改善して"
+    }),
     false
   );
 });
