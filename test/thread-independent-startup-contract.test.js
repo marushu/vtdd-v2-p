@@ -19,6 +19,10 @@ test("thread-independent startup contract captures cross-surface drift guardrail
   assert.equal(doc.includes("do not silently"), true);
   assert.equal(doc.includes("Close comments are optional"), true);
   assert.equal(doc.includes("does not complete Issue #344 by itself"), true);
+  assert.equal(doc.includes("### Minimal startup — default"), true);
+  assert.equal(doc.includes("Do not automatically read the whole active queue"), true);
+  assert.equal(doc.includes("### Full startup / preflight"), true);
+  assert.equal(doc.includes("ROOT / EMERGENCY preemption"), true);
 });
 
 test("AGENTS and Butler setup docs reference the thread-independent startup contract", () => {
@@ -29,6 +33,8 @@ test("AGENTS and Butler setup docs reference the thread-independent startup cont
 
   assert.equal(agents.includes(CONTRACT_PATH), true);
   assert.equal(agents.includes("threadLocalAssumptionsPromoted=false"), true);
+  assert.equal(agents.includes("current Mission / current Issue + direct dependencies required to complete it"), true);
+  assert.equal(agents.includes("Do not automatically read every open Issue"), true);
   assert.equal(instructions.includes(CONTRACT_PATH), true);
   assert.equal(instructions.includes("threadLocalAssumptionsPromoted=false"), true);
   assert.equal(instructions.includes("Butler -> VPS Codex CLI"), true);
