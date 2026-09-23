@@ -694,6 +694,59 @@ test("dashboard app-server bridge wraps repository traffic-control context into 
   assert.match(text, /Owner message:\nDashboard Butler が交通整理できるようにして/);
 });
 
+test("dashboard app-server bridge includes Business Mission coordination context in turn input", () => {
+  const text = buildDashboardTurnInputText({
+    text: "TOMIO を売れる状態まで持っていって",
+    businessMission: {
+      missionId: "mission:dashboard-main-unresolved:mission-tomio-1",
+      ownerGoal: "TOMIO を売れる状態まで持っていって",
+      target: null,
+      kind: "product_launch",
+      status: "active",
+      workstreams: [
+        {
+          workstreamId: "mission:dashboard-main-unresolved:mission-tomio-1:ws:01:research",
+          role: "research",
+          status: "ready",
+          purpose: "市場・競合・技術・既存資産・制約を読み、Mission の判断材料を作る"
+        },
+        {
+          workstreamId: "mission:dashboard-main-unresolved:mission-tomio-1:ws:02:product",
+          role: "product",
+          status: "pending",
+          purpose: "owner goal を product requirement / acceptance criteria / release intent に変換する"
+        }
+      ]
+    },
+    businessMissionSummary: {
+      progress: { completed: 0, total: 9 },
+      nextAutomaticWork: [
+        {
+          workstreamId: "mission:dashboard-main-unresolved:mission-tomio-1:ws:01:research",
+          role: "research",
+          purpose: "市場・競合・技術・既存資産・制約を読み、Mission の判断材料を作る",
+          blocker: null
+        }
+      ],
+      ownerActions: [],
+      blockers: []
+    }
+  });
+
+  assert.match(text, /Dashboard Butler turn context/);
+  assert.match(text, /businessMission/);
+  assert.match(text, /"ownerGoal":"TOMIO を売れる状態まで持っていって"/);
+  assert.match(text, /"kind":"product_launch"/);
+  assert.match(text, /"role":"research"/);
+  assert.match(text, /businessMissionRule/);
+  assert.match(text, /reversible/);
+  assert.match(text, /subagent/);
+  assert.match(text, /Agent \/ subagent の内部交通整理を owner に戻さず/);
+  assert.match(text, /Issue traceability/);
+  assert.match(text, /merge \/ deploy \/ spend \/ external publish/);
+  assert.match(text, /Owner message:\nTOMIO を売れる状態まで持っていって/);
+});
+
 test("dashboard app-server bridge keeps ordinary usage metadata out of turn prompt", () => {
   const text = buildDashboardTurnInputText({
     text: "もしもし",

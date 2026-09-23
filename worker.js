@@ -7956,7 +7956,7 @@ var require_fast_uri = __commonJS({
     function normalize8(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
-        normalizeString(uri, options);
+        normalizeString2(uri, options);
       } else if (typeof uri === "object") {
         uri = /** @type {T} */
         parse3(serialize(uri, options), options);
@@ -8199,7 +8199,7 @@ var require_fast_uri = __commonJS({
     function parse3(uri, opts) {
       return parseWithStatus(uri, opts).parsed;
     }
-    function normalizeString(uri, opts) {
+    function normalizeString2(uri, opts) {
       return normalizeStringWithStatus(uri, opts).normalized;
     }
     function normalizeStringWithStatus(uri, opts) {
@@ -42846,6 +42846,564 @@ function errorMessage(error2) {
   return normalizeText32(error2) || "unknown error";
 }
 
+// src/core/business-mission-orchestrator.js
+var BusinessMissionKind = Object.freeze({
+  PRODUCT_LAUNCH: "product_launch",
+  CUSTOMER_INQUIRY: "customer_inquiry",
+  GROWTH: "growth",
+  OPERATIONS: "operations"
+});
+var BusinessMissionStatus = Object.freeze({
+  PROPOSED: "proposed",
+  ACTIVE: "active",
+  BLOCKED: "blocked",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled"
+});
+var BusinessWorkstreamStatus = Object.freeze({
+  PENDING: "pending",
+  READY: "ready",
+  RUNNING: "running",
+  BLOCKED: "blocked",
+  COMPLETED: "completed",
+  SKIPPED: "skipped"
+});
+var BusinessWorkstreamRole = Object.freeze({
+  PRODUCT: "product",
+  RESEARCH: "research",
+  DEVELOPMENT: "development",
+  QA: "qa",
+  PERFORMANCE: "performance",
+  RELEASE: "release",
+  CUSTOMER_SUPPORT: "customer_support",
+  MARKETING: "marketing",
+  ANALYTICS: "analytics",
+  IMPROVEMENT: "improvement"
+});
+var BusinessAuthorityClass = Object.freeze({
+  MISSION_SCOPED_AUTO: "mission_scoped_auto",
+  OWNER_GO: "owner_go",
+  OWNER_PASSKEY: "owner_passkey",
+  FORBIDDEN: "forbidden"
+});
+var BusinessActionType = Object.freeze({
+  READ: "read",
+  ANALYZE: "analyze",
+  PLAN: "plan",
+  DRAFT: "draft",
+  CODE: "code",
+  TEST: "test",
+  BENCHMARK: "benchmark",
+  PR_CREATE: "pr_create",
+  MERGE: "merge",
+  EXTERNAL_SEND: "external_send",
+  EXTERNAL_PUBLISH: "external_publish",
+  RELEASE_SUBMIT: "release_submit",
+  DEPLOY: "deploy",
+  SPEND: "spend",
+  CONTRACT: "contract",
+  CREDENTIAL_MUTATION: "credential_mutation",
+  PERMISSION_MUTATION: "permission_mutation",
+  DESTRUCTIVE: "destructive"
+});
+var WORKER_REGISTRY = Object.freeze({
+  [BusinessWorkstreamRole.PRODUCT]: Object.freeze({
+    role: BusinessWorkstreamRole.PRODUCT,
+    purpose: "owner goal \u3092 product requirement / acceptance criteria / release intent \u306B\u5909\u63DB\u3059\u308B",
+    inputs: Object.freeze(["owner_goal", "research", "runtime_truth"]),
+    outputs: Object.freeze(["product_brief", "acceptance_criteria", "priority"])
+  }),
+  [BusinessWorkstreamRole.RESEARCH]: Object.freeze({
+    role: BusinessWorkstreamRole.RESEARCH,
+    purpose: "\u5E02\u5834\u30FB\u7AF6\u5408\u30FB\u6280\u8853\u30FB\u65E2\u5B58\u8CC7\u7523\u30FB\u5236\u7D04\u3092\u8AAD\u307F\u3001Mission \u306E\u5224\u65AD\u6750\u6599\u3092\u4F5C\u308B",
+    inputs: Object.freeze(["owner_goal", "target", "known_context"]),
+    outputs: Object.freeze(["findings", "risks", "options"])
+  }),
+  [BusinessWorkstreamRole.DEVELOPMENT]: Object.freeze({
+    role: BusinessWorkstreamRole.DEVELOPMENT,
+    purpose: "\u627F\u8A8D\u6E08\u307F Mission scope \u3092\u5B9F\u88C5\u3057\u3001test / PR evidence \u307E\u3067\u9032\u3081\u308B",
+    inputs: Object.freeze(["product_brief", "acceptance_criteria", "repository_truth"]),
+    outputs: Object.freeze(["branch", "implementation", "tests", "pull_request"])
+  }),
+  [BusinessWorkstreamRole.QA]: Object.freeze({
+    role: BusinessWorkstreamRole.QA,
+    purpose: "acceptance criteria \u3068 runtime behavior \u3092\u691C\u8A3C\u3057\u3001regression / blocker \u3092\u8FD4\u3059",
+    inputs: Object.freeze(["implementation", "acceptance_criteria"]),
+    outputs: Object.freeze(["verification", "defects", "release_readiness"])
+  }),
+  [BusinessWorkstreamRole.PERFORMANCE]: Object.freeze({
+    role: BusinessWorkstreamRole.PERFORMANCE,
+    purpose: "\u8D77\u52D5\u6642\u9593\u30FBCPU\u30FBmemory\u30FBlatency\u30FB\u63CF\u753B\u30FB\u901A\u4FE1\u7B49\u3092\u8A08\u6E2C\u3057\u3001\u6539\u5584\u3092\u53CD\u5FA9\u3059\u308B",
+    inputs: Object.freeze(["implementation", "benchmarks", "telemetry"]),
+    outputs: Object.freeze(["baseline", "bottlenecks", "optimization_result"])
+  }),
+  [BusinessWorkstreamRole.RELEASE]: Object.freeze({
+    role: BusinessWorkstreamRole.RELEASE,
+    purpose: "release artifact / store metadata / submission checklist \u3092\u6E96\u5099\u3057 authority boundary \u3067\u505C\u6B62\u3059\u308B",
+    inputs: Object.freeze(["release_readiness", "product_brief", "store_requirements"]),
+    outputs: Object.freeze(["release_candidate", "submission_draft", "owner_action"])
+  }),
+  [BusinessWorkstreamRole.CUSTOMER_SUPPORT]: Object.freeze({
+    role: BusinessWorkstreamRole.CUSTOMER_SUPPORT,
+    purpose: "\u554F\u3044\u5408\u308F\u305B\u3092 dedupe / classify / context resolve \u3057\u3001\u8FD4\u4FE1\u30FBfollow-up\u30FB\u8A18\u9332\u3092\u9032\u3081\u308B",
+    inputs: Object.freeze(["inquiry_event", "customer_context", "communication_history"]),
+    outputs: Object.freeze(["classification", "reply_draft", "follow_up", "support_log"])
+  }),
+  [BusinessWorkstreamRole.MARKETING]: Object.freeze({
+    role: BusinessWorkstreamRole.MARKETING,
+    purpose: "positioning / LP / SEO / ad creative / campaign plan \u3092\u4F5C\u308A\u3001\u652F\u51FA\u30FB\u516C\u958B\u5883\u754C\u3067\u505C\u6B62\u3059\u308B",
+    inputs: Object.freeze(["product_brief", "research", "analytics"]),
+    outputs: Object.freeze(["campaign_plan", "creative_draft", "landing_page_plan"])
+  }),
+  [BusinessWorkstreamRole.ANALYTICS]: Object.freeze({
+    role: BusinessWorkstreamRole.ANALYTICS,
+    purpose: "Mission KPI / funnel / support / runtime truth \u3092\u89B3\u6E2C\u3057\u3066\u6B21\u306E\u5224\u65AD\u6750\u6599\u3092\u4F5C\u308B",
+    inputs: Object.freeze(["success_metrics", "runtime_truth", "business_metrics"]),
+    outputs: Object.freeze(["metric_snapshot", "gap_analysis", "signals"])
+  }),
+  [BusinessWorkstreamRole.IMPROVEMENT]: Object.freeze({
+    role: BusinessWorkstreamRole.IMPROVEMENT,
+    purpose: "\u89B3\u6E2C\u7D50\u679C\u304B\u3089 product \u3068 VTDD \u81EA\u8EAB\u306E\u6539\u5584 Proposal \u3092\u4F5C\u308B",
+    inputs: Object.freeze(["metric_snapshot", "defects", "latency", "manual_work"]),
+    outputs: Object.freeze(["improvement_proposals", "automation_candidates"])
+  })
+});
+var ACTION_AUTHORITY = Object.freeze({
+  [BusinessActionType.READ]: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+  [BusinessActionType.ANALYZE]: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+  [BusinessActionType.PLAN]: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+  [BusinessActionType.DRAFT]: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+  [BusinessActionType.CODE]: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+  [BusinessActionType.TEST]: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+  [BusinessActionType.BENCHMARK]: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+  [BusinessActionType.PR_CREATE]: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+  [BusinessActionType.MERGE]: BusinessAuthorityClass.OWNER_GO,
+  [BusinessActionType.EXTERNAL_SEND]: BusinessAuthorityClass.OWNER_GO,
+  [BusinessActionType.EXTERNAL_PUBLISH]: BusinessAuthorityClass.OWNER_GO,
+  [BusinessActionType.RELEASE_SUBMIT]: BusinessAuthorityClass.OWNER_GO,
+  [BusinessActionType.DEPLOY]: BusinessAuthorityClass.OWNER_PASSKEY,
+  [BusinessActionType.SPEND]: BusinessAuthorityClass.OWNER_PASSKEY,
+  [BusinessActionType.CONTRACT]: BusinessAuthorityClass.OWNER_PASSKEY,
+  [BusinessActionType.CREDENTIAL_MUTATION]: BusinessAuthorityClass.OWNER_PASSKEY,
+  [BusinessActionType.PERMISSION_MUTATION]: BusinessAuthorityClass.OWNER_PASSKEY,
+  [BusinessActionType.DESTRUCTIVE]: BusinessAuthorityClass.OWNER_PASSKEY
+});
+var PLAN_TEMPLATES = Object.freeze({
+  [BusinessMissionKind.PRODUCT_LAUNCH]: Object.freeze([
+    BusinessWorkstreamRole.RESEARCH,
+    BusinessWorkstreamRole.PRODUCT,
+    BusinessWorkstreamRole.DEVELOPMENT,
+    BusinessWorkstreamRole.QA,
+    BusinessWorkstreamRole.PERFORMANCE,
+    BusinessWorkstreamRole.RELEASE,
+    BusinessWorkstreamRole.MARKETING,
+    BusinessWorkstreamRole.ANALYTICS,
+    BusinessWorkstreamRole.IMPROVEMENT
+  ]),
+  [BusinessMissionKind.CUSTOMER_INQUIRY]: Object.freeze([
+    BusinessWorkstreamRole.CUSTOMER_SUPPORT,
+    BusinessWorkstreamRole.ANALYTICS,
+    BusinessWorkstreamRole.IMPROVEMENT
+  ]),
+  [BusinessMissionKind.GROWTH]: Object.freeze([
+    BusinessWorkstreamRole.RESEARCH,
+    BusinessWorkstreamRole.MARKETING,
+    BusinessWorkstreamRole.ANALYTICS,
+    BusinessWorkstreamRole.IMPROVEMENT
+  ]),
+  [BusinessMissionKind.OPERATIONS]: Object.freeze([
+    BusinessWorkstreamRole.RESEARCH,
+    BusinessWorkstreamRole.DEVELOPMENT,
+    BusinessWorkstreamRole.QA,
+    BusinessWorkstreamRole.PERFORMANCE,
+    BusinessWorkstreamRole.ANALYTICS,
+    BusinessWorkstreamRole.IMPROVEMENT
+  ])
+});
+function inferBusinessMissionKind(ownerGoal) {
+  const goal = normalizeText33(ownerGoal).toLowerCase();
+  if (!goal) {
+    throw new TypeError("ownerGoal is required");
+  }
+  if (matchesAny2(goal, [
+    "\u554F\u3044\u5408\u308F\u305B",
+    "\u554F\u5408\u305B",
+    "customer inquiry",
+    "customer support",
+    "support request",
+    "\u8FD4\u4FE1"
+  ])) {
+    return BusinessMissionKind.CUSTOMER_INQUIRY;
+  }
+  if (matchesAny2(goal, [
+    "\u5E83\u544A",
+    "\u30DE\u30FC\u30B1",
+    "marketing",
+    "growth",
+    "\u96C6\u5BA2",
+    "\u58F2\u4E0A\u3092\u4F38",
+    "\u30E6\u30FC\u30B6\u30FC\u3092\u5897",
+    "cv",
+    "conversion"
+  ])) {
+    return BusinessMissionKind.GROWTH;
+  }
+  if (matchesAny2(goal, [
+    "\u30A2\u30D7\u30EA",
+    "app",
+    "app store",
+    "\u30EA\u30EA\u30FC\u30B9",
+    "release",
+    "\u58F2\u308C\u308B\u72B6\u614B",
+    "\u4F5C\u308A\u4E0A\u3052",
+    "\u5F62\u306B\u3057\u3066",
+    "tomio"
+  ])) {
+    return BusinessMissionKind.PRODUCT_LAUNCH;
+  }
+  return BusinessMissionKind.OPERATIONS;
+}
+function shouldStartBusinessMissionFromOwnerGoal(ownerGoal) {
+  const goal = normalizeText33(ownerGoal).toLowerCase();
+  if (!goal) {
+    return false;
+  }
+  const standingScopeSignals = [
+    "\u58F2\u308C\u308B\u72B6\u614B\u307E\u3067",
+    "\u5F62\u306B\u3057\u3066",
+    "\u4F5C\u308A\u4E0A\u3052",
+    "\u4E00\u3064\u3082\u6F0F\u3089\u3055\u305A",
+    "\u5168\u90E8\u51E6\u7406",
+    "\u5168\u90E8\u3084\u3063\u3066",
+    "\u5168\u90E8\u3084\u308C",
+    "\u305C\u3093\u3076\u3084\u3063\u3066",
+    "\u305C\u30FC\u30FC\u3093\u3076",
+    "\u53CE\u76CA\u3092\u4E0A\u3052",
+    "\u4ED5\u4E8B\u81EA\u4F53\u3092",
+    "\u4FFA\u306E\u4EE3\u308F\u308A\u306B",
+    "\u79C1\u306E\u4EE3\u308F\u308A\u306B",
+    "take it from here",
+    "end to end",
+    "end-to-end"
+  ];
+  if (matchesAny2(goal, standingScopeSignals)) {
+    return true;
+  }
+  const executionSignals = [
+    "\u4F5C\u3063\u3066",
+    "\u4F5C\u308A\u4E0A\u3052\u3066",
+    "\u5B9F\u88C5\u3057\u3066",
+    "\u958B\u767A\u3057\u3066",
+    "\u30EA\u30EA\u30FC\u30B9\u3057\u3066",
+    "\u7533\u8ACB\u3057\u3066",
+    "\u51FA\u3057\u3066",
+    "\u58F2\u3063\u3066",
+    "\u9032\u3081\u3066",
+    "\u56DE\u3057\u3066",
+    "\u7247\u4ED8\u3051\u3066",
+    "\u51E6\u7406\u3057\u3066",
+    "\u5BFE\u5FDC\u3057\u3066",
+    "\u904B\u7528\u3057\u3066",
+    "\u81EA\u52D5\u5316\u3057\u3066",
+    "\u6539\u5584\u3057\u3066",
+    "\u7372\u5F97\u3057\u3066",
+    "\u5897\u3084\u3057\u3066",
+    "\u3084\u3063\u3066",
+    "\u3084\u308C",
+    "\u4EFB\u305B\u308B",
+    "\u4EFB\u305B\u305F",
+    "build it",
+    "ship it",
+    "launch it",
+    "handle it",
+    "run it",
+    "grow it"
+  ];
+  const businessSignals = [
+    "tomio",
+    "\u30A2\u30D7\u30EA",
+    "app",
+    "app store",
+    "\u30EA\u30EA\u30FC\u30B9",
+    "release",
+    "\u554F\u3044\u5408\u308F\u305B",
+    "\u554F\u5408\u305B",
+    "\u9867\u5BA2",
+    "customer",
+    "\u30DE\u30FC\u30B1",
+    "marketing",
+    "\u5E83\u544A",
+    "ad ",
+    "ads",
+    "\u58F2\u4E0A",
+    "\u53CE\u76CA",
+    "\u30E6\u30FC\u30B6\u30FC",
+    "\u96C6\u5BA2",
+    "hibou",
+    "wordpress",
+    "web\u30B5\u30A4\u30C8",
+    "\u30B5\u30A4\u30C8",
+    "\u4E8B\u696D",
+    "business"
+  ];
+  const obviousQuestion = /[?？]$/.test(goal) || /(教えて|どう思う|どうする|可能[？?]?|できる[？?]?|確認して|見て|調べて)$/.test(goal);
+  if (obviousQuestion && !matchesAny2(goal, standingScopeSignals)) {
+    return false;
+  }
+  return matchesAny2(goal, executionSignals) && matchesAny2(goal, businessSignals);
+}
+function shouldSupersedeBusinessMission({ mission, ownerGoal } = {}) {
+  const goal = normalizeText33(ownerGoal);
+  if (!goal || !shouldStartBusinessMissionFromOwnerGoal(goal)) {
+    return false;
+  }
+  const existingGoal = normalizeText33(mission?.ownerGoal);
+  if (!existingGoal) {
+    return true;
+  }
+  const normalizedGoal = goal.toLowerCase();
+  const explicitSwitchSignals = [
+    "\u5225\u4EF6",
+    "\u5225\u306E\u4ED5\u4E8B",
+    "\u5225\u306E\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "\u65B0\u3057\u3044\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "\u65B0\u898F\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "\u6B21\u306E\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "\u4ECA\u5EA6\u306F",
+    "\u5207\u308A\u66FF\u3048\u3066",
+    "switch mission",
+    "new mission"
+  ];
+  if (matchesAny2(normalizedGoal, explicitSwitchSignals)) {
+    return true;
+  }
+  const existingKind = normalizeString(mission?.kind);
+  const nextKind = inferBusinessMissionKind(goal);
+  if (existingKind && nextKind !== existingKind) {
+    return true;
+  }
+  const existingAnchors = extractBusinessGoalAnchors(existingGoal);
+  const nextAnchors = extractBusinessGoalAnchors(goal);
+  if (existingAnchors.length > 0 && nextAnchors.length > 0 && !nextAnchors.some((anchor) => existingAnchors.includes(anchor))) {
+    return true;
+  }
+  return false;
+}
+function shouldAttachBusinessMissionToOwnerGoal({ mission, ownerGoal } = {}) {
+  const goal = normalizeText33(ownerGoal);
+  const existingGoal = normalizeText33(mission?.ownerGoal);
+  if (!goal || !existingGoal) {
+    return false;
+  }
+  if (shouldStartBusinessMissionFromOwnerGoal(goal)) {
+    return !shouldSupersedeBusinessMission({ mission, ownerGoal: goal });
+  }
+  const normalizedGoal = goal.toLowerCase();
+  const followUpSignals = [
+    "\u7D9A\u304D",
+    "\u7D9A\u3051",
+    "\u9032\u6357",
+    "\u3069\u3053\u307E\u3067",
+    "\u305D\u306E\u4EF6",
+    "\u3053\u306E\u4EF6",
+    "\u30DF\u30C3\u30B7\u30E7\u30F3",
+    "mission",
+    "\u3055\u3063\u304D\u306E",
+    "\u524D\u306E\u4EF6",
+    "\u3082\u3063\u3068",
+    "\u6B62\u3081\u3066",
+    "\u6B62\u3081\u3088\u3046",
+    "\u4E2D\u6B62",
+    "\u30AD\u30E3\u30F3\u30BB\u30EB",
+    "\u3084\u3081\u3066",
+    "\u518D\u958B"
+  ];
+  if (matchesAny2(normalizedGoal, followUpSignals)) {
+    return true;
+  }
+  const existingAnchors = extractBusinessGoalAnchors(existingGoal);
+  return existingAnchors.some((anchor) => normalizedGoal.includes(anchor));
+}
+function createBusinessMission(input = {}) {
+  const missionId = normalizeString(input.missionId);
+  const ownerGoal = normalizeText33(input.ownerGoal);
+  if (!missionId) {
+    throw new TypeError("missionId is required");
+  }
+  if (!ownerGoal) {
+    throw new TypeError("ownerGoal is required");
+  }
+  const explicitKind = normalizeString(input.kind);
+  const kind = explicitKind || inferBusinessMissionKind(ownerGoal);
+  assertMissionKind(kind);
+  const status = input.accepted === true ? BusinessMissionStatus.ACTIVE : BusinessMissionStatus.PROPOSED;
+  const mission = {
+    missionId,
+    ownerGoal,
+    target: normalizeNullableText(input.target),
+    kind,
+    status,
+    successMetrics: normalizeTextArray2(input.successMetrics),
+    constraints: normalizeTextArray2(input.constraints),
+    budgetBoundary: normalizeBudgetBoundary(input.budgetBoundary),
+    source: normalizeNullableString(input.source) ?? "butler",
+    createdAt: normalizeNullableText(input.createdAt),
+    acceptedAt: input.accepted === true ? normalizeNullableText(input.acceptedAt) : null,
+    workstreams: []
+  };
+  return {
+    ...mission,
+    workstreams: planBusinessMissionWorkstreams(mission)
+  };
+}
+function planBusinessMissionWorkstreams(mission) {
+  const missionId = normalizeString(mission?.missionId);
+  const kind = normalizeString(mission?.kind);
+  if (!missionId) {
+    throw new TypeError("mission.missionId is required");
+  }
+  assertMissionKind(kind);
+  const roles = PLAN_TEMPLATES[kind];
+  return roles.map((role, index) => {
+    const worker = WORKER_REGISTRY[role];
+    const workstreamId = `${missionId}:ws:${String(index + 1).padStart(2, "0")}:${role}`;
+    const priorRole = index > 0 ? roles[index - 1] : null;
+    const priorId = priorRole ? `${missionId}:ws:${String(index).padStart(2, "0")}:${priorRole}` : null;
+    return {
+      workstreamId,
+      role,
+      purpose: worker.purpose,
+      dependsOn: priorId ? [priorId] : [],
+      defaultActionClass: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
+      status: index === 0 ? BusinessWorkstreamStatus.READY : BusinessWorkstreamStatus.PENDING
+    };
+  });
+}
+function getReadyBusinessWorkstreams(mission) {
+  const workstreams = Array.isArray(mission?.workstreams) ? mission.workstreams : [];
+  const completed = new Set(
+    workstreams.filter((item) => item?.status === BusinessWorkstreamStatus.COMPLETED || item?.status === BusinessWorkstreamStatus.SKIPPED).map((item) => item.workstreamId)
+  );
+  return workstreams.filter((item) => {
+    if (![BusinessWorkstreamStatus.READY, BusinessWorkstreamStatus.PENDING].includes(item?.status)) {
+      return false;
+    }
+    const dependencies = Array.isArray(item.dependsOn) ? item.dependsOn : [];
+    return dependencies.every((dependency) => completed.has(dependency));
+  });
+}
+function buildBusinessMissionOwnerSummary(mission) {
+  const workstreams = Array.isArray(mission?.workstreams) ? mission.workstreams : [];
+  const ready = getReadyBusinessWorkstreams(mission);
+  const blocked2 = workstreams.filter((item) => item?.status === BusinessWorkstreamStatus.BLOCKED);
+  const running = workstreams.filter((item) => item?.status === BusinessWorkstreamStatus.RUNNING);
+  const completed = workstreams.filter((item) => item?.status === BusinessWorkstreamStatus.COMPLETED);
+  const ownerActions = blocked2.filter((item) => normalizeNullableText(item.requiredAction)).map((item) => ({
+    workstreamId: item.workstreamId,
+    role: item.role,
+    requiredAction: item.requiredAction,
+    blocker: item.blocker ?? null
+  }));
+  return {
+    missionId: mission?.missionId ?? null,
+    ownerGoal: mission?.ownerGoal ?? null,
+    kind: mission?.kind ?? null,
+    status: mission?.status ?? null,
+    progress: {
+      completed: completed.length,
+      total: workstreams.length
+    },
+    running: running.map(pickOwnerFacingWorkstream),
+    nextAutomaticWork: mission?.status === BusinessMissionStatus.ACTIVE ? ready.map(pickOwnerFacingWorkstream) : [],
+    ownerActions,
+    blockers: blocked2.filter((item) => !normalizeNullableText(item.requiredAction)).map(pickOwnerFacingWorkstream)
+  };
+}
+function pickOwnerFacingWorkstream(item) {
+  return {
+    workstreamId: item.workstreamId,
+    role: item.role,
+    purpose: item.purpose,
+    blocker: item.blocker ?? null
+  };
+}
+function assertMissionKind(kind) {
+  if (!Object.values(BusinessMissionKind).includes(kind)) {
+    throw new TypeError(`unsupported mission kind: ${kind || "<empty>"}`);
+  }
+}
+function normalizeBudgetBoundary(value) {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("budgetBoundary must be an object or null");
+  }
+  const currency = normalizeNullableString(value.currency);
+  const perDay = normalizeFiniteNumber(value.perDay);
+  const perMonth = normalizeFiniteNumber(value.perMonth);
+  return {
+    currency,
+    perDay,
+    perMonth
+  };
+}
+function normalizeFiniteNumber(value) {
+  if (value == null || value === "") {
+    return null;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    throw new TypeError("budget values must be finite non-negative numbers");
+  }
+  return numeric;
+}
+function normalizeTextArray2(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => normalizeText33(item)).filter(Boolean);
+}
+function normalizeNullableText(value) {
+  const normalized = normalizeText33(value);
+  return normalized || null;
+}
+function normalizeNullableString(value) {
+  const normalized = normalizeString(value);
+  return normalized || null;
+}
+function normalizeText33(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function normalizeString(value) {
+  return normalizeText33(value).toLowerCase();
+}
+function matchesAny2(value, needles) {
+  return needles.some((needle) => value.includes(needle));
+}
+function extractBusinessGoalAnchors(value) {
+  const generic = /* @__PURE__ */ new Set([
+    "app",
+    "store",
+    "release",
+    "marketing",
+    "business",
+    "customer",
+    "support",
+    "wordpress",
+    "web",
+    "ads",
+    "build",
+    "ship",
+    "launch",
+    "handle",
+    "run",
+    "grow"
+  ]);
+  const tokens = normalizeText33(value).toLowerCase().match(/[a-z][a-z0-9._-]{2,}/g) || [];
+  return [...new Set(tokens.filter((token) => !generic.has(token)))];
+}
+
 // node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
@@ -58361,6 +58919,19 @@ var DASHBOARD_DEPLOY_BRIDGE_CONTROL_TYPE = "deploy_bridge_sync_restart_requested
 var DASHBOARD_DEPLOY_BRIDGE_COMMAND_CLASS = "dashboard_bridge_unresolved_deploy_sync_restart";
 var DASHBOARD_DEPLOY_BRIDGE_SERVICE = "vtdd-dashboard-app-server-bridge-unresolved.service";
 var DASHBOARD_DEPLOY_BRIDGE_REF = "origin/main";
+function isDashboardBusinessMissionOpen(mission) {
+  const status = normalizeDashboardEventText(mission?.status).toLowerCase();
+  return [
+    BusinessMissionStatus.PROPOSED,
+    BusinessMissionStatus.ACTIVE,
+    BusinessMissionStatus.BLOCKED
+  ].includes(status);
+}
+function buildDashboardBusinessMissionId({ threadId, messageId, createdAt } = {}) {
+  const normalizedThreadId = normalizeDashboardThreadId(threadId) || "dashboard-main";
+  const normalizedMessageId = normalizeDashboardEventText(messageId) || normalizeDashboardEventText(createdAt) || createDashboardRequestId("business-mission");
+  return `mission:${normalizedThreadId}:${normalizedMessageId}`;
+}
 var DashboardChatRoom = class {
   constructor(state, env) {
     this.ctx = state;
@@ -58397,7 +58968,8 @@ var DashboardChatRoom = class {
       return json(200, {
         ok: true,
         threadId: threadId2,
-        transientProgressSnapshot: await this.readTransientProgressSnapshot(threadId2)
+        transientProgressSnapshot: await this.readTransientProgressSnapshot(threadId2),
+        businessMission: await this.readBusinessMission(threadId2)
       });
     }
     if (request.method === "POST" && url.pathname === "/runner-wakeup") {
@@ -58557,7 +59129,7 @@ var DashboardChatRoom = class {
   async acceptSocket({ request, role, threadId, origin }) {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const attachment = { role, threadId, origin: normalizeText33(origin) || new URL(request.url).origin };
+    const attachment = { role, threadId, origin: normalizeText34(origin) || new URL(request.url).origin };
     if (typeof this.ctx?.acceptWebSocket === "function") {
       server.serializeAttachment(attachment);
       this.ctx.acceptWebSocket(server);
@@ -58685,6 +59257,10 @@ var DashboardChatRoom = class {
       },
       { threadId }
     );
+    const businessMission = await this.resolveBusinessMissionForOwnerMessage({
+      threadId,
+      ownerMessage
+    });
     const vpsMaintenanceMessages = await this.buildVpsMaintenanceIntentMessages({
       payload,
       threadId,
@@ -58759,15 +59335,19 @@ var DashboardChatRoom = class {
     await this.dispatchOwnerMessageToAppServerBridge({
       threadId,
       bridgeSocket: bridgeSockets[0],
-      ownerMessage
+      ownerMessage,
+      businessMission
     });
   }
-  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage }) {
+  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage, businessMission = void 0 }) {
     const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
     const text = sanitizeDashboardChatText(message.text || "");
     if (!threadId || !text || !bridgeSocket) {
       return false;
     }
+    const resolvedBusinessMission = businessMission === void 0 ? await this.resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage: message }) : businessMission;
+    const activeBusinessMission = isDashboardBusinessMissionOpen(resolvedBusinessMission) ? resolvedBusinessMission : null;
+    const businessMissionSummary = activeBusinessMission ? buildBusinessMissionOwnerSummary(activeBusinessMission) : null;
     const repository = normalizeCanonicalRepositoryInput(message.repository);
     const relatedIssue = normalizePositiveInteger11(message.relatedIssue || message.issueNumber);
     const mediaReferences = normalizeMediaReferences(message.mediaReferences || message.media_references || []);
@@ -58812,7 +59392,9 @@ var DashboardChatRoom = class {
       usageProfile,
       costBoundary,
       trafficControl,
-      vpsMaintenancePassThrough
+      vpsMaintenancePassThrough,
+      businessMission: activeBusinessMission,
+      businessMissionSummary
     };
     return this.sendSocket(bridgeSocket, turnRequest);
   }
@@ -58831,7 +59413,7 @@ var DashboardChatRoom = class {
       },
       repository,
       relatedIssue,
-      origin: normalizeText33(origin) || normalizeText33(this.env?.VTDD_RUNTIME_URL || this.env?.VTDD_PASSKEY_ORIGIN) || "https://dashboard-butler.local",
+      origin: normalizeText34(origin) || normalizeText34(this.env?.VTDD_RUNTIME_URL || this.env?.VTDD_PASSKEY_ORIGIN) || "https://dashboard-butler.local",
       env: this.env
     });
     if (!shouldDashboardVpsMaintenanceFlowStayInWorker(flow)) {
@@ -59010,12 +59592,14 @@ var DashboardChatRoom = class {
   async broadcastThread({ threadId, messages = null }) {
     const resolvedMessages = Array.isArray(messages) ? messages : await this.listThreadMessages(threadId);
     const transientProgressSnapshot = await this.readTransientProgressSnapshot(threadId);
+    const businessMission = await this.readBusinessMission(threadId);
     const payload = JSON.stringify({
       type: "thread",
       ok: true,
       threadId,
       messages: resolvedMessages,
-      transientProgressSnapshot
+      transientProgressSnapshot,
+      businessMission
     });
     for (const socket of this.connectedSockets()) {
       const attachment = this.getSocketAttachment(socket);
@@ -59053,13 +59637,15 @@ var DashboardChatRoom = class {
     if (!isSocketOpen(socket)) return;
     try {
       const transientProgressSnapshot = await this.readTransientProgressSnapshot(threadId);
+      const businessMission = await this.readBusinessMission(threadId);
       socket.send(
         JSON.stringify({
           type: "thread",
           ok: true,
           threadId,
           messages: await this.listThreadMessages(threadId),
-          transientProgressSnapshot
+          transientProgressSnapshot,
+          businessMission
         })
       );
     } catch (error2) {
@@ -59080,6 +59666,103 @@ var DashboardChatRoom = class {
       return [];
     }
     return store.listThread(threadId, { limit: 80 });
+  }
+  businessMissionStateKey(threadId) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    return normalizedThreadId ? `business_mission_active:${normalizedThreadId}` : "";
+  }
+  async readBusinessMission(threadId) {
+    const key = this.businessMissionStateKey(threadId);
+    if (!key || typeof this.ctx?.storage?.get !== "function") {
+      return null;
+    }
+    try {
+      const record2 = normalizeObject12(await this.ctx.storage.get(key));
+      if (!normalizeDashboardEventText(record2.missionId) || !sanitizeDashboardChatText(record2.ownerGoal)) {
+        return null;
+      }
+      return record2;
+    } catch {
+      return null;
+    }
+  }
+  async writeBusinessMission(threadId, mission) {
+    const key = this.businessMissionStateKey(threadId);
+    const normalizedMission = normalizeObject12(mission);
+    const missionId = normalizeDashboardEventText(normalizedMission.missionId);
+    if (!key || !missionId || typeof this.ctx?.storage?.put !== "function") {
+      return false;
+    }
+    await this.ctx.storage.put(key, normalizedMission);
+    await this.ctx.storage.put(`business_mission:${missionId}`, normalizedMission);
+    return true;
+  }
+  async resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage } = {}) {
+    const existing = await this.readBusinessMission(threadId);
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
+    const ownerGoal = sanitizeDashboardChatText(message.text || "");
+    if (!ownerGoal) {
+      return null;
+    }
+    const startsMission = shouldStartBusinessMissionFromOwnerGoal(ownerGoal);
+    if (isDashboardBusinessMissionOpen(existing)) {
+      if (startsMission && shouldSupersedeBusinessMission({
+        mission: existing,
+        ownerGoal
+      })) {
+        return this.createBusinessMissionFromOwnerMessage({
+          threadId,
+          ownerMessage: message,
+          supersedes: existing
+        });
+      }
+      return shouldAttachBusinessMissionToOwnerGoal({
+        mission: existing,
+        ownerGoal
+      }) ? existing : null;
+    }
+    if (!startsMission) {
+      return null;
+    }
+    return this.createBusinessMissionFromOwnerMessage({
+      threadId,
+      ownerMessage: message
+    });
+  }
+  async createBusinessMissionFromOwnerMessage({ threadId, ownerMessage, supersedes = null } = {}) {
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
+    const ownerGoal = sanitizeDashboardChatText(message.text || "");
+    if (!ownerGoal) {
+      return null;
+    }
+    const createdAt = normalizeIsoTimestamp(message.createdAt || message.created_at) || (/* @__PURE__ */ new Date()).toISOString();
+    const missionId = buildDashboardBusinessMissionId({
+      threadId,
+      messageId: message.messageId,
+      createdAt
+    });
+    const mission = createBusinessMission({
+      missionId,
+      ownerGoal,
+      target: normalizeCanonicalRepositoryInput(message.repository) || null,
+      accepted: true,
+      source: "dashboard_butler",
+      createdAt,
+      acceptedAt: createdAt
+    });
+    if (supersedes && normalizeDashboardEventText(supersedes.missionId) && typeof this.ctx?.storage?.put === "function") {
+      await this.ctx.storage.put(
+        `business_mission:${normalizeDashboardEventText(supersedes.missionId)}`,
+        {
+          ...normalizeObject12(supersedes),
+          status: BusinessMissionStatus.CANCELLED,
+          supersededByMissionId: mission.missionId,
+          supersededAt: createdAt
+        }
+      );
+    }
+    await this.writeBusinessMission(threadId, mission);
+    return mission;
   }
   transientProgressSnapshotKey(threadId) {
     const normalizedThreadId = normalizeDashboardThreadId(threadId);
@@ -60418,9 +61101,9 @@ async function handleRetrieveCrossIssueRequest(url, env) {
   const limit = normalizeLimit8(url.searchParams.get("limit"), 5);
   const relatedIssue = normalizeIssue6(url.searchParams.get("relatedIssue"));
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
-  const issueTitle = normalizeText33(url.searchParams.get("issueTitle"));
-  const issueUrl = normalizeText33(url.searchParams.get("issueUrl"));
-  const queryText = normalizeText33(url.searchParams.get("text")) || normalizeText33(url.searchParams.get("q"));
+  const issueTitle = normalizeText34(url.searchParams.get("issueTitle"));
+  const issueUrl = normalizeText34(url.searchParams.get("issueUrl"));
+  const queryText = normalizeText34(url.searchParams.get("text")) || normalizeText34(url.searchParams.get("q"));
   const semanticEnabled = parseBooleanQueryParam(url.searchParams.get("semantic"));
   const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
     phase,
@@ -60458,9 +61141,9 @@ async function handleRetrieveCrossIssueRequest(url, env) {
 async function handleRetrieveOperationalMemoryRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const limit = normalizeLimit8(url.searchParams.get("limit"), 8);
-  const queryText = normalizeText33(url.searchParams.get("text")) || normalizeText33(url.searchParams.get("q"));
-  const recordId = normalizeText33(url.searchParams.get("recordId"));
-  const repository = normalizeText33(url.searchParams.get("repository"));
+  const queryText = normalizeText34(url.searchParams.get("text")) || normalizeText34(url.searchParams.get("q"));
+  const recordId = normalizeText34(url.searchParams.get("recordId"));
+  const repository = normalizeText34(url.searchParams.get("repository"));
   const relatedIssue = normalizeIssue6(url.searchParams.get("relatedIssue"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
   const retrieved = await retrieveOperationalMemory(provider, {
@@ -60522,8 +61205,8 @@ async function handleCodexAnalyticsUsageSnapshotIngestRequest(request, env) {
       reason: "valid memory provider is required for Codex analytics usage snapshots"
     });
   }
-  const repository = normalizeText33(payload.repository);
-  const threadId = normalizeText33(payload.threadId);
+  const repository = normalizeText34(payload.repository);
+  const threadId = normalizeText34(payload.threadId);
   const relatedIssue = normalizeIssue6(payload.relatedIssue || payload.issueNumber) || 455;
   const snapshot = buildCodexAnalyticsUsageSnapshotFromPayload(payload, config2, now);
   const previous = await retrieveLatestCodexAnalyticsUsageSnapshot(provider, { repository, threadId });
@@ -60627,8 +61310,8 @@ async function handleCodexAnalyticsUsageSnapshotIngestRequest(request, env) {
 }
 async function handleRetrieveCodexAnalyticsUsageRequest(url, env) {
   const provider = resolveMemoryProvider(env);
-  const repository = normalizeText33(url.searchParams.get("repository"));
-  const threadId = normalizeText33(url.searchParams.get("threadId"));
+  const repository = normalizeText34(url.searchParams.get("repository"));
+  const threadId = normalizeText34(url.searchParams.get("threadId"));
   const limit = normalizeLimit8(url.searchParams.get("limit"), 10);
   const providerValidation = validateMemoryProvider(provider);
   if (!providerValidation.ok) {
@@ -60697,7 +61380,7 @@ async function handleRetrieveCodexAnalyticsUsageRequest(url, env) {
   });
 }
 function buildCodexAnalyticsUsageSnapshotFromPayload(payload, config2, now) {
-  if (normalizeText33(payload.text || payload.pageText || payload.ocrText)) {
+  if (normalizeText34(payload.text || payload.pageText || payload.ocrText)) {
     return parseCodexAnalyticsUsageText(payload.text || payload.pageText || payload.ocrText, {
       captureMode: config2.mode,
       now
@@ -60743,8 +61426,8 @@ function mapCodexAnalyticsUsageMemoryRecord(record2, kind) {
   return {
     recordId: record2.id,
     createdAt: record2.createdAt,
-    repository: normalizeText33(record2.metadata?.repository),
-    threadId: normalizeText33(record2.metadata?.threadId),
+    repository: normalizeText34(record2.metadata?.repository),
+    threadId: normalizeText34(record2.metadata?.threadId),
     relatedIssue: normalizeIssue6(record2.metadata?.relatedIssue),
     ...snapshot ? { snapshot } : {},
     ...delta ? { delta } : {}
@@ -60831,10 +61514,10 @@ function formatCodexAnalyticsUsageDashboardMessage(snapshot, delta) {
   return lines.join("\n");
 }
 function normalizeCodexAnalyticsCaptureId(value) {
-  return normalizeText33(value).replace(/[^A-Za-z0-9:._-]+/g, "_").slice(0, 96);
+  return normalizeText34(value).replace(/[^A-Za-z0-9:._-]+/g, "_").slice(0, 96);
 }
 async function handleRetrieveStartupPreflightRequest(url, env) {
-  const repository = normalizeText33(url.searchParams.get("repository"));
+  const repository = normalizeText34(url.searchParams.get("repository"));
   if (!repository) {
     return retrieveErrorJson(url, 422, {
       ok: false,
@@ -60843,11 +61526,11 @@ async function handleRetrieveStartupPreflightRequest(url, env) {
       issues: ["repository is required"]
     });
   }
-  const ref = normalizeText33(url.searchParams.get("ref")) || "main";
+  const ref = normalizeText34(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
-  const phase = normalizeText33(url.searchParams.get("phase")) || "execution";
-  const currentSurface = normalizeText33(url.searchParams.get("currentSurface")) || "butler";
-  const queryText = normalizeText33(url.searchParams.get("text")) || [
+  const phase = normalizeText34(url.searchParams.get("phase")) || "execution";
+  const currentSurface = normalizeText34(url.searchParams.get("currentSurface")) || "butler";
+  const queryText = normalizeText34(url.searchParams.get("text")) || [
     "VTDD startup preflight",
     "Butler-first",
     "iPhone iPad first",
@@ -61176,7 +61859,7 @@ function buildStartupExecutionQueue({ sourceResults }) {
     sectionSummaries[sectionName] = summarizeQueueSection(queueSections[sectionName]);
   }
   const missingSections = requiredSections.filter(
-    (sectionName) => !normalizeText33(queueSections[sectionName])
+    (sectionName) => !normalizeText34(queueSections[sectionName])
   );
   const classificationNames = ["EMERGENCY", "ROOT", "NEXT", "QUEUE", "EVIDENCE", "QUESTION"];
   const contractHasClassifications = classificationNames.every(
@@ -61220,7 +61903,7 @@ function parseMarkdownH2Sections(markdown) {
   for (let index = 0; index < matches.length; index += 1) {
     const match = matches[index];
     const next = matches[index + 1];
-    const sectionName = normalizeText33(match[1]);
+    const sectionName = normalizeText34(match[1]);
     sections[sectionName] = value.slice(match.index + match[0].length, next?.index).trim();
   }
   return sections;
@@ -61234,7 +61917,7 @@ function firstMarkdownBullet(sectionText) {
 function summarizeQueueSection(sectionText) {
   const bullets = markdownBullets(sectionText);
   return {
-    status: normalizeText33(sectionText) ? "present" : "missing",
+    status: normalizeText34(sectionText) ? "present" : "missing",
     bulletCount: bullets.length,
     firstBullet: bullets[0] || null,
     excerpt: compactExcerpt(sectionText, 360)
@@ -61279,7 +61962,7 @@ async function readStartupPreflightGitHub(input) {
     return {
       ok: false,
       status: "\u672A\u78BA\u8A8D",
-      reason: normalizeText33(error2?.message) || "github read threw"
+      reason: normalizeText34(error2?.message) || "github read threw"
     };
   }
 }
@@ -61349,7 +62032,7 @@ async function evaluateStartupPreflightSelfParity({
   };
 }
 function buildStartupSurfaceCapability(currentSurface) {
-  const surface = normalizeText33(currentSurface) || "butler";
+  const surface = normalizeText34(currentSurface) || "butler";
   if (surface === "mac_codex") {
     return {
       surface,
@@ -61381,7 +62064,7 @@ function buildStartupGapClassification({
   toolParityInventory
 }) {
   const gaps = [];
-  if (normalizeText33(currentSurface) === "mac_codex") {
+  if (normalizeText34(currentSurface) === "mac_codex") {
     gaps.push("mac_codex_only_probe");
   }
   if (missingSources.length > 0) {
@@ -61406,7 +62089,7 @@ function buildStartupNextSafeAction({ issueNumber, currentSurface, missingSource
   if (memoryResult.status !== "read") {
     return "RAG/operational memory \u306F\u672A\u78BA\u8A8D\u3068\u3057\u3066\u6271\u3044\u3001GitHub runtime truth \u3092\u512A\u5148\u3057\u3066\u77ED\u3044\u78BA\u8A8D\u3092 owner \u306B\u8FD4\u3059\u3002";
   }
-  if (normalizeText33(currentSurface) === "mac_codex") {
+  if (normalizeText34(currentSurface) === "mac_codex") {
     return "mac Codex \u3067\u9032\u3081\u308B\u524D\u306B\u3001\u540C\u3058\u4F5C\u696D\u3092 Butler/VPS Codex CLI \u306B\u6E21\u305B\u308B\u304B\u3092\u660E\u793A\u3059\u308B\u3002";
   }
   return issueNumber ? `Issue #${issueNumber} \u306E Intent / Success Criteria / Non-goals \u306B\u6CBF\u3063\u3066 dry-run impact gate \u3078\u9032\u3080\u3002` : "\u5BFE\u8C61 Issue \u3092\u78BA\u8A8D\u3057\u3066\u304B\u3089 dry-run impact gate \u3078\u9032\u3080\u3002";
@@ -61417,7 +62100,7 @@ function startupSourceContentIncludes({ sourceResults, path, text }) {
   );
 }
 function compactExcerpt(value, maxLength = 400) {
-  const text = normalizeText33(value).replace(/\s+/g, " ");
+  const text = normalizeText34(value).replace(/\s+/g, " ");
   if (text.length <= maxLength) {
     return text;
   }
@@ -61433,7 +62116,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       reason: "valid memory provider is required for approval grant retrieval"
     });
   }
-  const approvalId = normalizeText33(url.searchParams.get("approvalId"));
+  const approvalId = normalizeText34(url.searchParams.get("approvalId"));
   if (!approvalId) {
     return retrieveErrorJson(url, 422, {
       ok: false,
@@ -61442,7 +62125,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
     });
   }
   const record2 = await findApprovalRecordById(provider, approvalId);
-  if (!record2 || normalizeText33(record2?.content?.kind) !== "passkey_grant") {
+  if (!record2 || normalizeText34(record2?.content?.kind) !== "passkey_grant") {
     return retrieveErrorJson(url, 404, {
       ok: false,
       error: "approval_grant_not_found",
@@ -61459,10 +62142,10 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
   return json(200, {
     ok: true,
     approvalGrant: {
-      approvalId: normalizeText33(record2.content.approvalId) || record2.id,
+      approvalId: normalizeText34(record2.content.approvalId) || record2.id,
       verified: record2.content.status === "verified",
-      verifiedAt: normalizeText33(record2.content.verifiedAt) || null,
-      expiresAt: normalizeText33(record2.content.expiresAt) || null,
+      verifiedAt: normalizeText34(record2.content.verifiedAt) || null,
+      expiresAt: normalizeText34(record2.content.expiresAt) || null,
       scope: normalizeScopeSnapshot(record2.content.scope)
     }
   });
@@ -61513,8 +62196,8 @@ async function handleMemoryWriteRequest(request, env) {
     });
   }
   const gatewayInput = {
-    phase: normalizeText33(payload.phase) || "execution",
-    actorRole: normalizeText33(payload.actorRole) || "butler",
+    phase: normalizeText34(payload.phase) || "execution",
+    actorRole: normalizeText34(payload.actorRole) || "butler",
     memoryRecord: {
       recordType: memoryRecord.record.recordType,
       content: memoryRecord.record.content,
@@ -61522,7 +62205,7 @@ async function handleMemoryWriteRequest(request, env) {
     }
   };
   const gatewayResult = {
-    repository: normalizeText33(payload.repository) || null
+    repository: normalizeText34(payload.repository) || null
   };
   if (memoryRecord.record.recordType === MemoryRecordType.DECISION_LOG) {
     const persisted = await appendDecisionLogFromGateway(provider, gatewayInput, gatewayResult);
@@ -61617,8 +62300,8 @@ function buildMemoryWriteRecord(payload = {}) {
     };
   }
   const relatedIssue = normalizeIssue6(payload.relatedIssue);
-  const repository = normalizeText33(payload.repository) || null;
-  const timestamp = normalizeText33(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
+  const repository = normalizeText34(payload.repository) || null;
+  const timestamp = normalizeText34(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
   const metadata = {
     ...normalizeObject12(payload.metadata),
     relatedIssue,
@@ -61633,12 +62316,12 @@ function buildMemoryWriteRecord(payload = {}) {
       record: {
         recordType: recordType2,
         content: {
-          decision: normalizeText33(payload.decision ?? payload.summary),
-          rationale: normalizeText33(payload.rationale),
+          decision: normalizeText34(payload.decision ?? payload.summary),
+          rationale: normalizeText34(payload.rationale),
           relatedIssue,
-          decidedBy: normalizeText33(payload.decidedBy) || "butler_with_owner_go",
+          decidedBy: normalizeText34(payload.decidedBy) || "butler_with_owner_go",
           timestamp,
-          supersededBy: normalizeText33(payload.supersededBy) || null
+          supersededBy: normalizeText34(payload.supersededBy) || null
         },
         metadata,
         timestamp,
@@ -61654,13 +62337,13 @@ function buildMemoryWriteRecord(payload = {}) {
       record: {
         recordType: recordType2,
         content: {
-          hypothesis: normalizeText33(payload.hypothesis ?? payload.summary),
+          hypothesis: normalizeText34(payload.hypothesis ?? payload.summary),
           options: normalizeStringArray4(payload.options),
           rejectedReasons: normalizeRejectedReasons2(payload.rejectedReasons),
           concerns: normalizeStringArray4(payload.concerns),
           unresolvedQuestions: normalizeStringArray4(payload.unresolvedQuestions),
           relatedIssue,
-          proposedBy: normalizeText33(payload.proposedBy) || "butler_with_owner_go",
+          proposedBy: normalizeText34(payload.proposedBy) || "butler_with_owner_go",
           timestamp
         },
         metadata,
@@ -61670,7 +62353,7 @@ function buildMemoryWriteRecord(payload = {}) {
       }
     };
   }
-  const summary = normalizeText33(payload.summary);
+  const summary = normalizeText34(payload.summary);
   if (!summary) {
     return {
       ok: false,
@@ -61685,18 +62368,18 @@ function buildMemoryWriteRecord(payload = {}) {
       recordType: recordType2,
       content: {
         summary,
-        details: normalizeText33(payload.details) || null,
-        checkpointReason: normalizeText33(payload.checkpointReason) || null,
-        thoughtLocation: normalizeText33(payload.thoughtLocation) || null,
-        userTension: normalizeText33(payload.userTension) || null,
+        details: normalizeText34(payload.details) || null,
+        checkpointReason: normalizeText34(payload.checkpointReason) || null,
+        thoughtLocation: normalizeText34(payload.thoughtLocation) || null,
+        userTension: normalizeText34(payload.userTension) || null,
         origin: normalizeMemoryOrigin(payload.origin),
         user_words: normalizeBoundedMemoryStringArray(
           payload.user_words ?? payload.userWords ?? payload.userWord,
           { maxItems: 3, maxLength: 160 }
         ),
         tension_note: normalizeTensionNote(payload.tension_note ?? payload.tensionNote),
-        contextSourceQuality: normalizeText33(payload.contextSourceQuality) || null,
-        hypothesis: normalizeText33(payload.hypothesis) || null,
+        contextSourceQuality: normalizeText34(payload.contextSourceQuality) || null,
+        hypothesis: normalizeText34(payload.hypothesis) || null,
         explorationHypothesis: normalizeExplorationHypothesis(payload.explorationHypothesis),
         suspectedFiles: normalizeStringArray4(payload.suspectedFiles),
         suspectedLines: normalizeSuspectedLines2(payload.suspectedLines),
@@ -61709,7 +62392,7 @@ function buildMemoryWriteRecord(payload = {}) {
         expectedFiles: normalizeStringArray4(payload.expectedFiles),
         evidenceLinks: normalizeStringArray4(payload.evidenceLinks),
         previousRecordIds: normalizeStringArray4(payload.previousRecordIds),
-        captureBoundary: normalizeText33(payload.captureBoundary) || (normalizeText33(payload.checkpointReason) ? "judgment_log_not_chain_of_thought" : null),
+        captureBoundary: normalizeText34(payload.captureBoundary) || (normalizeText34(payload.checkpointReason) ? "judgment_log_not_chain_of_thought" : null),
         relatedIssue,
         repository,
         timestamp
@@ -61751,7 +62434,7 @@ function buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repositor
 }
 function normalizeStringArray4(value) {
   const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
-  return values.map(normalizeText33).filter(Boolean);
+  return values.map(normalizeText34).filter(Boolean);
 }
 function normalizeBoundedMemoryStringArray(value, { maxItems, maxLength }) {
   const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
@@ -61841,8 +62524,8 @@ function normalizeMemoryRecallText(value, maxLength) {
 function normalizeRejectedReasons2(value) {
   const values = Array.isArray(value) ? value : [];
   return values.map((item) => ({
-    option: normalizeText33(item?.option),
-    reason: normalizeText33(item?.reason)
+    option: normalizeText34(item?.option),
+    reason: normalizeText34(item?.reason)
   })).filter((item) => item.option && item.reason);
 }
 function makeOperationalMemoryRecordId(record2) {
@@ -61877,9 +62560,9 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
 }
 async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
   const retrieved = await retrieveCustomGptSetupArtifact({
-    artifact: normalizeText33(url.searchParams.get("artifact")),
-    repository: normalizeText33(url.searchParams.get("repository")),
-    ref: normalizeText33(url.searchParams.get("ref")),
+    artifact: normalizeText34(url.searchParams.get("artifact")),
+    repository: normalizeText34(url.searchParams.get("repository")),
+    ref: normalizeText34(url.searchParams.get("ref")),
     env
   });
   if (!retrieved.ok) {
@@ -61900,8 +62583,8 @@ function handleRetrieveCloudflarePagesRequest(url) {
 }
 async function handleRetrieveButlerSelfParityRequest(url, env) {
   const parity = await evaluateButlerSelfParity({
-    repository: normalizeText33(url.searchParams.get("repository")),
-    ref: normalizeText33(url.searchParams.get("ref")),
+    repository: normalizeText34(url.searchParams.get("repository")),
+    ref: normalizeText34(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
     pullNumber: normalizeIssue6(url.searchParams.get("pullNumber")),
     runtimeOrigin: url.origin,
@@ -61921,8 +62604,8 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
 }
 async function handleRetrieveCustomGptSetupDiagnosticsRequest(url, env) {
   const result = await evaluateCustomGptSetupDiagnostics({
-    repository: normalizeText33(url.searchParams.get("repository")),
-    ref: normalizeText33(url.searchParams.get("ref")),
+    repository: normalizeText34(url.searchParams.get("repository")),
+    ref: normalizeText34(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
     runtimeOrigin: url.origin,
     observedFailure: readObservedSetupFailureFromUrl(url),
@@ -61941,8 +62624,8 @@ async function handleRetrieveCustomGptSetupDiagnosticsRequest(url, env) {
   });
 }
 async function handleCustomGptSetupDiagnosticsPageRequest(url, env) {
-  const repository = normalizeText33(url.searchParams.get("repository")) || "marushu/vtdd-v2-p";
-  const ref = normalizeText33(url.searchParams.get("ref")) || "main";
+  const repository = normalizeText34(url.searchParams.get("repository")) || "marushu/vtdd-v2-p";
+  const ref = normalizeText34(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
   const result = await evaluateCustomGptSetupDiagnostics({
     repository,
@@ -62018,10 +62701,10 @@ async function handleMcpRequest({ request, env, url }) {
 }
 function normalizeMcpTransportRequest(request) {
   const headers = new Headers(request.headers);
-  if (!normalizeText33(headers.get("accept"))) {
+  if (!normalizeText34(headers.get("accept"))) {
     headers.set("accept", "application/json, text/event-stream");
   }
-  if (!normalizeText33(headers.get("mcp-protocol-version"))) {
+  if (!normalizeText34(headers.get("mcp-protocol-version"))) {
     headers.set("mcp-protocol-version", MCP_PROTOCOL_VERSION);
   }
   return new Request(request, { headers });
@@ -62144,7 +62827,7 @@ function buildMcpToolResult(result) {
   };
 }
 function withMcpProtocolVersionHeader(response) {
-  if (normalizeText33(response.headers.get("mcp-protocol-version"))) {
+  if (normalizeText34(response.headers.get("mcp-protocol-version"))) {
     return response;
   }
   const headers = new Headers(response.headers);
@@ -62156,7 +62839,7 @@ function withMcpProtocolVersionHeader(response) {
   });
 }
 async function executeMcpRuntimeTruth(argumentsInput, env) {
-  const repository = normalizeText33(argumentsInput.repository);
+  const repository = normalizeText34(argumentsInput.repository);
   if (!repository) {
     return {
       ok: false,
@@ -62166,7 +62849,7 @@ async function executeMcpRuntimeTruth(argumentsInput, env) {
   }
   const issueNumber = normalizeIssue6(argumentsInput.issueNumber);
   const pullNumber = normalizeIssue6(argumentsInput.pullNumber);
-  const branch = normalizeText33(argumentsInput.branch);
+  const branch = normalizeText34(argumentsInput.branch);
   const limit = normalizeLimit8(argumentsInput.limit, 10);
   const includeChecks = argumentsInput.includeChecks !== false;
   const includeWorkflowRuns = argumentsInput.includeWorkflowRuns === true;
@@ -62234,7 +62917,7 @@ async function executeMcpRuntimeTruth(argumentsInput, env) {
   };
 }
 async function executeMcpReviewTruth(argumentsInput, env) {
-  const repository = normalizeText33(argumentsInput.repository);
+  const repository = normalizeText34(argumentsInput.repository);
   const pullNumber = normalizeIssue6(argumentsInput.pullNumber);
   if (!repository || !pullNumber) {
     return {
@@ -62319,7 +63002,7 @@ async function executeMcpReviewTruth(argumentsInput, env) {
   };
 }
 async function executeMcpOperationalMemorySearch(argumentsInput, env) {
-  const text = normalizeText33(argumentsInput.text);
+  const text = normalizeText34(argumentsInput.text);
   if (!text) {
     return {
       ok: false,
@@ -62329,17 +63012,17 @@ async function executeMcpOperationalMemorySearch(argumentsInput, env) {
   }
   const query = new URLSearchParams();
   query.set("text", text);
-  if (normalizeText33(argumentsInput.repository)) {
-    query.set("repository", normalizeText33(argumentsInput.repository));
+  if (normalizeText34(argumentsInput.repository)) {
+    query.set("repository", normalizeText34(argumentsInput.repository));
   }
-  if (normalizeText33(argumentsInput.currentState)) {
-    query.set("currentState", normalizeText33(argumentsInput.currentState));
+  if (normalizeText34(argumentsInput.currentState)) {
+    query.set("currentState", normalizeText34(argumentsInput.currentState));
   }
-  if (normalizeText33(argumentsInput.runtimeTruthSource)) {
-    query.set("runtimeTruthSource", normalizeText33(argumentsInput.runtimeTruthSource));
+  if (normalizeText34(argumentsInput.runtimeTruthSource)) {
+    query.set("runtimeTruthSource", normalizeText34(argumentsInput.runtimeTruthSource));
   }
-  if (normalizeText33(argumentsInput.checkedAt)) {
-    query.set("checkedAt", normalizeText33(argumentsInput.checkedAt));
+  if (normalizeText34(argumentsInput.checkedAt)) {
+    query.set("checkedAt", normalizeText34(argumentsInput.checkedAt));
   }
   if (normalizePositiveInteger11(argumentsInput.limit)) {
     query.set("limit", String(normalizePositiveInteger11(argumentsInput.limit)));
@@ -62351,7 +63034,7 @@ async function executeMcpOperationalMemorySearch(argumentsInput, env) {
   return responseToMcpToolResult(response);
 }
 async function executeMcpImplementationRecall(argumentsInput, env) {
-  const repository = normalizeText33(argumentsInput.repository);
+  const repository = normalizeText34(argumentsInput.repository);
   if (!repository) {
     return {
       ok: false,
@@ -62361,7 +63044,7 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   }
   const issueNumber = normalizeIssue6(argumentsInput.issueNumber);
   const pullNumber = normalizeIssue6(argumentsInput.pullNumber);
-  const text = normalizeText33(argumentsInput.text);
+  const text = normalizeText34(argumentsInput.text);
   const limit = normalizeLimit8(argumentsInput.limit, 8);
   const decisionLogs = issueNumber ? await readDecisionLogReferences({ env, relatedIssue: issueNumber, limit: 5 }) : { ok: true, references: [] };
   if (!decisionLogs.ok) {
@@ -62392,7 +63075,7 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   const pullRecord = pull.records?.[0] ?? null;
   const runtimeStatus = pullRecord ? pullRecord.merged ? "merged" : pullRecord.state === "open" ? "open_pr" : "unknown" : "unknown";
   const memoryReferences = cross.body?.orderedReferences ?? [];
-  const prContextReferences = memoryReferences.filter((item) => normalizeText33(item?.source) === "pr_context").map((item) => normalizeObject12(item?.reference));
+  const prContextReferences = memoryReferences.filter((item) => normalizeText34(item?.source) === "pr_context").map((item) => normalizeObject12(item?.reference));
   const memoryCommits = prContextReferences.flatMap((item) => normalizeTextList2(item.commits));
   const files = uniqueTextList2(prContextReferences.flatMap((item) => normalizeTextList2(item.files)));
   const tests = uniqueTextList2(prContextReferences.flatMap((item) => normalizeTextList2(item.tests)));
@@ -62421,7 +63104,7 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   };
 }
 async function executeMcpPrStatus(argumentsInput, env) {
-  const repository = normalizeText33(argumentsInput.repository);
+  const repository = normalizeText34(argumentsInput.repository);
   const pullNumber = normalizeIssue6(argumentsInput.pullNumber);
   if (!repository || !pullNumber) {
     return {
@@ -62460,7 +63143,7 @@ async function executeMcpPrStatus(argumentsInput, env) {
   };
 }
 async function executeMcpIssueStatus(argumentsInput, env, runtimeOrigin) {
-  const repository = normalizeText33(argumentsInput.repository);
+  const repository = normalizeText34(argumentsInput.repository);
   const issueNumber = normalizeIssue6(argumentsInput.issueNumber);
   if (!repository || !issueNumber) {
     return {
@@ -62565,10 +63248,10 @@ async function readCrossIssueMemory({ env, relatedIssue, issueNumber, text, limi
     phase: "execution",
     relatedIssue,
     limit,
-    text: normalizeText33(text) || null,
+    text: normalizeText34(text) || null,
     semanticRetrieval: {
-      enabled: Boolean(normalizeText33(text)),
-      mode: normalizeText33(text) ? "assistive" : "disabled"
+      enabled: Boolean(normalizeText34(text)),
+      mode: normalizeText34(text) ? "assistive" : "disabled"
     },
     issueContext: issueNumber ? {
       issueNumber,
@@ -62703,7 +63386,7 @@ async function handleGitHubWritePlaneRequest(request, env) {
   });
 }
 function wantsActionVisibleGitHubWriteErrors(payload) {
-  const responseMode = normalizeText33(payload?.responseMode);
+  const responseMode = normalizeText34(payload?.responseMode);
   return responseMode === "action_visible";
 }
 function retrieveErrorJson(url, status, body = {}) {
@@ -62713,18 +63396,18 @@ function retrieveErrorJson(url, status, body = {}) {
   return json(200, {
     ok: false,
     httpStatus: status,
-    error: normalizeText33(body.error) || "retrieve_failed",
-    reason: normalizeText33(body.reason) || null,
+    error: normalizeText34(body.error) || "retrieve_failed",
+    reason: normalizeText34(body.reason) || null,
     issues: Array.isArray(body.issues) ? body.issues : [],
     diagnostics: {
-      route: normalizeText33(url?.pathname) || null,
+      route: normalizeText34(url?.pathname) || null,
       responseMode: "action_visible",
       rootCause: "Custom GPT Action test screen can surface non-2xx retrieve responses as ClientResponseError; this envelope preserves error/reason/issues for debugging."
     }
   });
 }
 function wantsActionVisibleRetrieveErrors(url) {
-  const responseMode = normalizeText33(url?.searchParams?.get("responseMode"));
+  const responseMode = normalizeText34(url?.searchParams?.get("responseMode"));
   return responseMode === "action_visible";
 }
 function validateConsistentIssueScope({ payload, issueContext }) {
@@ -62758,10 +63441,10 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
       issues: issueScopeValidation.issues
     });
   }
-  const operation = normalizeText33(payload.operation);
-  const repository = normalizeText33(payload.repository);
+  const operation = normalizeText34(payload.operation);
+  const repository = normalizeText34(payload.repository);
   const scopedIssueNumber = issueContext.issueNumber ?? payload.issueNumber ?? null;
-  const phase = normalizeText33(payload.phase) || "execution";
+  const phase = normalizeText34(payload.phase) || "execution";
   const highRiskKind = operation;
   const actionType = mapGitHubHighRiskOperationToActionType(operation);
   const approvalScope = buildApprovalScopeSnapshot({
@@ -62843,7 +63526,7 @@ async function handleDeployProductionRequest(request, env) {
   const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText33(payload.phase) || "execution",
+      phase: normalizeText34(payload.phase) || "execution",
       highRiskKind: "deploy_production",
       repositoryInput: payload.repository
     },
@@ -62923,7 +63606,7 @@ async function handleGitHubActionsEventRequest(request, env) {
     threadId,
     env,
     origin: new URL(request.url).origin,
-    approvalGrantId: normalizeText33(payload?.approvalGrantId || payload?.approval_grant_id)
+    approvalGrantId: normalizeText34(payload?.approvalGrantId || payload?.approval_grant_id)
   });
   const chatMessages = [chatMessage, deployBridgeFollowup.message].filter(Boolean);
   const chatStore = resolveDashboardChatStore(env);
@@ -63821,7 +64504,7 @@ async function createVpsPrivilegedMaintenanceProposal({ payload, provider, origi
     };
   }
   const proposal = proposalResult.proposal;
-  const operation = normalizeText33(payload?.operation) || "add";
+  const operation = normalizeText34(payload?.operation) || "add";
   const relatedIssue = normalizePositiveInteger11(payload?.relatedIssue || payload?.related_issue || payload?.issueNumber);
   const expiresAtResult = normalizeVpsMaintenanceProposalExpiresAt(payload?.expiresAt || payload?.expires_at);
   const proposalIssues = [];
@@ -63848,7 +64531,7 @@ async function createVpsPrivilegedMaintenanceProposal({ payload, provider, origi
     };
   }
   const expiresAt = expiresAtResult.expiresAt;
-  const impactScope = normalizeText33(payload?.impactScope || payload?.impact_scope) || proposal.capability.affectedPaths.join(", ") || proposal.capability.commandClass;
+  const impactScope = normalizeText34(payload?.impactScope || payload?.impact_scope) || proposal.capability.affectedPaths.join(", ") || proposal.capability.commandClass;
   let approvalScope = buildVpsMaintenanceApprovalScope({
     repository: proposal.repository,
     host: proposal.host,
@@ -63972,7 +64655,7 @@ function createVpsMaintenanceApprovalProposalRecord({
       approvalScope,
       relatedIssue,
       dashboardThreadId: normalizeDashboardSingleMainChatThreadId(dashboardThreadId),
-      executionId: normalizeText33(executionId),
+      executionId: normalizeText34(executionId),
       expiresAt
     },
     metadata: {
@@ -63997,14 +64680,14 @@ function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProp
   if (normalizedThreadId) {
     url.searchParams.set("dashboardThreadId", normalizedThreadId);
   }
-  const normalizedExecutionId = normalizeText33(executionId);
+  const normalizedExecutionId = normalizeText34(executionId);
   if (normalizedExecutionId) {
     url.searchParams.set("executionId", normalizedExecutionId);
   }
   return url.href;
 }
 function normalizeVpsMaintenanceProposalExpiresAt(value, now = /* @__PURE__ */ new Date()) {
-  const normalized = normalizeText33(value);
+  const normalized = normalizeText34(value);
   if (!normalized) {
     return {
       ok: true,
@@ -64050,8 +64733,8 @@ async function handleVpsPrivilegedMaintenanceHelperRequest(request, env) {
   return json(result.status, result.body);
 }
 async function createVpsPrivilegedMaintenanceHelperRequest({ payload, provider }) {
-  const vpsProposalId = normalizeText33(payload?.vpsProposalId || payload?.vps_proposal_id);
-  const approvalGrantId = normalizeText33(payload?.approvalGrantId || payload?.approval_grant_id);
+  const vpsProposalId = normalizeText34(payload?.vpsProposalId || payload?.vps_proposal_id);
+  const approvalGrantId = normalizeText34(payload?.approvalGrantId || payload?.approval_grant_id);
   const issues = [];
   if (!vpsProposalId) issues.push("vpsProposalId is required");
   if (!approvalGrantId) issues.push("approvalGrantId is required");
@@ -64069,7 +64752,7 @@ async function createVpsPrivilegedMaintenanceHelperRequest({ payload, provider }
     };
   }
   const proposalRecord = await findApprovalRecordById(provider, vpsProposalId);
-  if (!proposalRecord || normalizeText33(proposalRecord?.content?.kind) !== "vps_privileged_maintenance_approval_proposal") {
+  if (!proposalRecord || normalizeText34(proposalRecord?.content?.kind) !== "vps_privileged_maintenance_approval_proposal") {
     return {
       ok: false,
       status: 404,
@@ -64082,7 +64765,7 @@ async function createVpsPrivilegedMaintenanceHelperRequest({ payload, provider }
       }
     };
   }
-  if (Date.parse(normalizeText33(proposalRecord.content.expiresAt)) <= Date.now()) {
+  if (Date.parse(normalizeText34(proposalRecord.content.expiresAt)) <= Date.now()) {
     return {
       ok: false,
       status: 422,
@@ -64127,7 +64810,7 @@ async function createVpsPrivilegedMaintenanceHelperRequest({ payload, provider }
     };
   }
   const grantRecord = await findApprovalRecordById(provider, approvalGrantId);
-  if (!grantRecord || normalizeText33(grantRecord?.content?.kind) !== "passkey_grant") {
+  if (!grantRecord || normalizeText34(grantRecord?.content?.kind) !== "passkey_grant") {
     return {
       ok: false,
       status: 404,
@@ -64141,9 +64824,9 @@ async function createVpsPrivilegedMaintenanceHelperRequest({ payload, provider }
     };
   }
   const approvalGrant = {
-    approvalId: normalizeText33(grantRecord.content.approvalId || grantRecord.id),
-    verified: normalizeText33(grantRecord.content.status) === "verified",
-    expiresAt: normalizeText33(grantRecord.content.expiresAt),
+    approvalId: normalizeText34(grantRecord.content.approvalId || grantRecord.id),
+    verified: normalizeText34(grantRecord.content.status) === "verified",
+    expiresAt: normalizeText34(grantRecord.content.expiresAt),
     scope: grantRecord.content.scope
   };
   const expectedScope = normalizeScopeSnapshot(proposalRecord.content.approvalScope);
@@ -64381,8 +65064,8 @@ async function createVpsPrivilegedMaintenanceHelperExecutionQueue({ payload, env
       body: body2
     };
   }
-  const executionId = normalizeText33(payload?.executionId) || `vps-maint-${issueNumber}-${safeIdentifier(result.helperPlan.requestId || Date.now())}`;
-  const dashboardThreadId = normalizeText33(
+  const executionId = normalizeText34(payload?.executionId) || `vps-maint-${issueNumber}-${safeIdentifier(result.helperPlan.requestId || Date.now())}`;
+  const dashboardThreadId = normalizeText34(
     payload?.handoff?.dashboardThreadId || payload?.dashboardThreadId || payload?.dashboard_thread_id || payload?.threadId || payload?.thread_id
   );
   if (!dashboardThreadId) {
@@ -64527,18 +65210,18 @@ function validateVpsPrivilegedMaintenanceExecutionEnvelopeForQueue(envelope) {
   if (!envelope || typeof envelope !== "object") {
     return ["executionEnvelope is required"];
   }
-  if (normalizeText33(envelope.kind) !== "vps_privileged_maintenance_helper_execution_envelope") {
+  if (normalizeText34(envelope.kind) !== "vps_privileged_maintenance_helper_execution_envelope") {
     issues.push("executionEnvelope.kind must be vps_privileged_maintenance_helper_execution_envelope");
   }
-  if (normalizeText33(envelope.status) !== "ready_for_vps_helper_execution") {
+  if (normalizeText34(envelope.status) !== "ready_for_vps_helper_execution") {
     issues.push("executionEnvelope.status must be ready_for_vps_helper_execution");
   }
-  if (normalizeText33(envelope.mode) !== "execute") {
+  if (normalizeText34(envelope.mode) !== "execute") {
     issues.push("executionEnvelope.mode must be execute");
   }
   const invocation = envelope.helperInvocation && typeof envelope.helperInvocation === "object" ? envelope.helperInvocation : {};
-  const args = Array.isArray(invocation.args) ? invocation.args.map(normalizeText33) : [];
-  if (normalizeText33(invocation.executable) !== "sudo") {
+  const args = Array.isArray(invocation.args) ? invocation.args.map(normalizeText34) : [];
+  if (normalizeText34(invocation.executable) !== "sudo") {
     issues.push("executionEnvelope.helperInvocation.executable must be sudo");
   }
   if (args.length !== 5 || args[0] !== "-n" || args[1] !== "/usr/local/sbin/vtdd-vps-maintenance-helper" || args[2] !== "--execute" || args[3] !== "--input" || args[4] !== "<helper-execution-input-json>") {
@@ -64547,7 +65230,7 @@ function validateVpsPrivilegedMaintenanceExecutionEnvelopeForQueue(envelope) {
   if (invocation.shell !== false) {
     issues.push("executionEnvelope.helperInvocation.shell must be false");
   }
-  if (normalizeText33(invocation.inputFile) !== "helperExecutionInput") {
+  if (normalizeText34(invocation.inputFile) !== "helperExecutionInput") {
     issues.push("executionEnvelope.helperInvocation.inputFile must be helperExecutionInput");
   }
   if (!envelope.helperExecutionInput || typeof envelope.helperExecutionInput !== "object") {
@@ -64562,7 +65245,7 @@ function safeIdentifier(value) {
   return String(value || "").replace(/[^A-Za-z0-9_.-]+/g, "_").slice(0, 80) || "execution";
 }
 function normalizeGitHubLogin(value) {
-  const login = normalizeText33(value);
+  const login = normalizeText34(value);
   return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login) ? login : "";
 }
 async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
@@ -64768,8 +65451,8 @@ function sanitizeDashboardHandoffText(value, maxLength = 1200) {
 }
 async function authorizeDashboardVpsApprovalContinuation({ payload, env } = {}) {
   const input = normalizeObject12(payload);
-  const vpsProposalId = normalizeText33(input.vpsProposalId || input.vps_proposal_id);
-  const approvalGrantId = normalizeText33(input.approvalGrantId || input.approval_grant_id);
+  const vpsProposalId = normalizeText34(input.vpsProposalId || input.vps_proposal_id);
+  const approvalGrantId = normalizeText34(input.approvalGrantId || input.approval_grant_id);
   const threadId = normalizeDashboardSingleMainChatThreadId(input.threadId || input.thread_id);
   if (!vpsProposalId || !approvalGrantId || !threadId) {
     return {
@@ -64869,7 +65552,7 @@ async function handleMediaUploadRequest(request, env) {
       limitBytes: MEDIA_UPLOAD_HARD_LIMIT_BYTES
     });
   }
-  const allowLarge = normalizeText33(form.get("allowLarge") || form.get("allow_large")).toLowerCase() === "true";
+  const allowLarge = normalizeText34(form.get("allowLarge") || form.get("allow_large")).toLowerCase() === "true";
   if (byteSize > MEDIA_UPLOAD_SOFT_LIMIT_BYTES && !allowLarge) {
     return json(413, {
       ok: false,
@@ -65338,7 +66021,7 @@ async function resolveDashboardPushTargetEndpointHash(payload, env) {
   };
 }
 async function handleDashboardPushAckRequest(request, env) {
-  if (normalizeText33(request.headers.get("content-type")).split(";")[0].toLowerCase() !== "application/json") {
+  if (normalizeText34(request.headers.get("content-type")).split(";")[0].toLowerCase() !== "application/json") {
     return json(415, {
       ok: false,
       error: "dashboard_push_ack_content_type_required",
@@ -65411,7 +66094,7 @@ async function handleDashboardPushAckRequest(request, env) {
   });
 }
 function isSupportedDashboardPushAckSourceEventId(value) {
-  const text = normalizeText33(value);
+  const text = normalizeText34(value);
   return text.startsWith("github-actions:") || text.startsWith("vps-runner:") || text.startsWith("ai-news:") || text.startsWith("owner-action-required:") || text.startsWith("dashboard-push-test:");
 }
 async function handleDashboardChatSocketRequest(request, url, env) {
@@ -65485,10 +66168,10 @@ async function handleDashboardAppServerBridgeSocketRequest(request, url, env) {
 }
 function authorizeDashboardAppServerBridgeRequest({ request, env, apiSuffix }) {
   const direct = authorizeGatewayRequest({ request, env, apiSuffix });
-  if (direct.ok || normalizeText33(request.headers.get("authorization"))) {
+  if (direct.ok || normalizeText34(request.headers.get("authorization"))) {
     return direct;
   }
-  const bearerToken = normalizeText33(env?.VTDD_GATEWAY_BEARER_TOKEN ?? env?.MVP_GATEWAY_BEARER_TOKEN);
+  const bearerToken = normalizeText34(env?.VTDD_GATEWAY_BEARER_TOKEN ?? env?.MVP_GATEWAY_BEARER_TOKEN);
   const protocolToken = extractDashboardBridgeBearerProtocol(request.headers.get("sec-websocket-protocol"));
   if (bearerToken && protocolToken) {
     return protocolToken === bearerToken ? { ok: true } : {
@@ -65555,7 +66238,7 @@ async function readDashboardChatRoomTransientProgressSnapshot({ env, threadId, o
     return null;
   }
   try {
-    const baseOrigin = normalizeText33(origin) || normalizeText33(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local";
+    const baseOrigin = normalizeText34(origin) || normalizeText34(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local";
     const url = new URL("/thread-state", baseOrigin);
     url.searchParams.set("threadId", normalizedThreadId);
     const response = await room.fetch(new Request(url.toString(), { method: "GET" }));
@@ -65668,7 +66351,7 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
   const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText33(payload.phase) || "execution",
+      phase: normalizeText34(payload.phase) || "execution",
       highRiskKind: "github_actions_secret_sync",
       repositoryInput: payload.repository
     },
@@ -65734,7 +66417,7 @@ async function handleGitHubActionsVariableSyncRequest(request, env) {
   const variableValue = variableProposal?.variableValue || payload.variableValue;
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText33(payload.phase) || "execution",
+      phase: normalizeText34(payload.phase) || "execution",
       highRiskKind: "github_actions_variable_sync",
       repositoryInput: repository,
       variableName
@@ -65847,8 +66530,8 @@ async function handleGitHubActionsVariableSyncProposalRequest(request, url, env)
 function buildGitHubActionsVariableSyncProposal({ payload, origin }) {
   const input = normalizeObject12(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository || input.repositoryInput);
-  const variableName = normalizeText33(input.variableName || input.variable_name);
-  const variableValue = normalizeText33(input.variableValue || input.variable_value);
+  const variableName = normalizeText34(input.variableName || input.variable_name);
+  const variableValue = normalizeText34(input.variableValue || input.variable_value);
   const issueNumber = normalizeIssue6(input.issueNumber || input.issue_number || input.relatedIssue);
   const issues = [];
   if (!repository) issues.push("repository is required");
@@ -65859,7 +66542,7 @@ function buildGitHubActionsVariableSyncProposal({ payload, origin }) {
   if (issues.length > 0) {
     return { ok: false, issues };
   }
-  const proposalId = normalizeText33(input.variableProposalId || input.proposalId) || `github-actions-variable-sync-${safeIdentifier(repository)}-${safeIdentifier(variableName)}-${Date.now()}`;
+  const proposalId = normalizeText34(input.variableProposalId || input.proposalId) || `github-actions-variable-sync-${safeIdentifier(repository)}-${safeIdentifier(variableName)}-${Date.now()}`;
   const expiresAt = new Date(Date.now() + 15 * 60 * 1e3).toISOString();
   const approvalScope = normalizeScopeSnapshot({
     actionType: "destructive",
@@ -65928,7 +66611,7 @@ function buildGitHubActionsVariableSyncApprovalOperatorUrl({ origin, approvalSco
   return url.href;
 }
 async function resolveGitHubActionsVariableSyncProposal({ provider, proposalId }) {
-  const id = normalizeText33(proposalId);
+  const id = normalizeText34(proposalId);
   if (!id) {
     return { ok: true, proposal: null };
   }
@@ -65941,7 +66624,7 @@ async function resolveGitHubActionsVariableSyncProposal({ provider, proposalId }
     };
   }
   const record2 = await findApprovalRecordById(provider, id);
-  if (!record2 || normalizeText33(record2?.content?.kind) !== "github_actions_variable_sync_approval_proposal") {
+  if (!record2 || normalizeText34(record2?.content?.kind) !== "github_actions_variable_sync_approval_proposal") {
     return {
       ok: false,
       status: 404,
@@ -65949,7 +66632,7 @@ async function resolveGitHubActionsVariableSyncProposal({ provider, proposalId }
       reason: "matching GitHub Actions variable sync proposal was not found"
     };
   }
-  if (Date.parse(normalizeText33(record2.content.expiresAt)) <= Date.now()) {
+  if (Date.parse(normalizeText34(record2.content.expiresAt)) <= Date.now()) {
     return {
       ok: false,
       status: 422,
@@ -65960,13 +66643,13 @@ async function resolveGitHubActionsVariableSyncProposal({ provider, proposalId }
   return {
     ok: true,
     proposal: {
-      proposalId: normalizeText33(record2.content.proposalId || record2.id),
+      proposalId: normalizeText34(record2.content.proposalId || record2.id),
       repository: normalizeCanonicalRepositoryInput(record2.content.repository),
       issueNumber: normalizeIssue6(record2.content.issueNumber),
-      variableName: normalizeText33(record2.content.variableName),
-      variableValue: normalizeText33(record2.content.variableValue),
+      variableName: normalizeText34(record2.content.variableName),
+      variableValue: normalizeText34(record2.content.variableValue),
       approvalScope: normalizeScopeSnapshot(record2.content.approvalScope),
-      expiresAt: normalizeText33(record2.content.expiresAt)
+      expiresAt: normalizeText34(record2.content.expiresAt)
     }
   };
 }
@@ -66019,7 +66702,7 @@ async function recordGitHubActionsVariableSyncNotification({ ownerAction, env } 
 }
 async function handleCustomGptRecoveryPageRequest(url, env) {
   const channel = url.pathname === "/setup/known-good" ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
-  const ref = normalizeText33(url.searchParams.get("ref")) || "main";
+  const ref = normalizeText34(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
   const bundle = await buildCustomGptRecoveryBundle({
     channel,
@@ -66090,7 +66773,7 @@ async function handlePasskeyOperatorPageRequest(request, env) {
   const requestedActionType = url.searchParams.get("actionType");
   const requestedHighRiskKind = url.searchParams.get("highRiskKind");
   const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
-  const dashboardSessionMode = normalizeText33(requestedOperatorMode) === "dashboard";
+  const dashboardSessionMode = normalizeText34(requestedOperatorMode) === "dashboard";
   const vpsProposal = await retrieveVpsMaintenanceApprovalProposalForOperator({
     provider: resolveMemoryProvider(env),
     proposalId: url.searchParams.get("vpsProposalId")
@@ -66143,18 +66826,18 @@ async function retrieveVpsMaintenanceApprovalProposalForOperator({ provider, pro
   if (!proposalId || !provider || typeof provider.query !== "function") {
     return null;
   }
-  const record2 = await findApprovalRecordById(provider, normalizeText33(proposalId));
-  return normalizeText33(record2?.content?.kind) === "vps_privileged_maintenance_approval_proposal" ? record2 : null;
+  const record2 = await findApprovalRecordById(provider, normalizeText34(proposalId));
+  return normalizeText34(record2?.content?.kind) === "vps_privileged_maintenance_approval_proposal" ? record2 : null;
 }
 async function retrieveGitHubActionsVariableSyncProposalForOperator({ provider, proposalId }) {
   if (!proposalId || !provider || typeof provider.query !== "function") {
     return null;
   }
-  const record2 = await findApprovalRecordById(provider, normalizeText33(proposalId));
-  return normalizeText33(record2?.content?.kind) === "github_actions_variable_sync_approval_proposal" ? record2 : null;
+  const record2 = await findApprovalRecordById(provider, normalizeText34(proposalId));
+  return normalizeText34(record2?.content?.kind) === "github_actions_variable_sync_approval_proposal" ? record2 : null;
 }
 function normalizeOptionalHttpUrl(value) {
-  const text = normalizeText33(value);
+  const text = normalizeText34(value);
   if (!text) {
     return "";
   }
@@ -66169,7 +66852,7 @@ function normalizeOptionalHttpUrl(value) {
   }
 }
 function normalizeOperatorReturnUrl(value) {
-  const text = normalizeText33(value);
+  const text = normalizeText34(value);
   if (!text) {
     return "";
   }
@@ -66277,7 +66960,7 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
   const continuationContext = payload?.continuationContext && typeof payload.continuationContext === "object" ? payload.continuationContext : {};
   const handoff = continuationContext.handoff && typeof continuationContext.handoff === "object" ? continuationContext.handoff : {};
   const handoffTarget = handoff.targetPullRequest && typeof handoff.targetPullRequest === "object" ? handoff.targetPullRequest : {};
-  const activeBranch = normalizeText33(runtimeState.activeBranch) || normalizeText33(handoff.headRef) || normalizeText33(handoffTarget.headRef) || normalizeText33(handoffTarget.head?.ref) || normalizeText33(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : "");
+  const activeBranch = normalizeText34(runtimeState.activeBranch) || normalizeText34(handoff.headRef) || normalizeText34(handoffTarget.headRef) || normalizeText34(handoffTarget.head?.ref) || normalizeText34(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : "");
   const [repositoryOwner] = repositoryResolution.repository.split("/");
   const [pulls, branches, workflowRuns] = await Promise.all([
     retrieveGitHubReadPlane({
@@ -66335,13 +67018,13 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
 }
 function selectPullRequestForBranch(records, target) {
   const items = Array.isArray(records) ? records : [];
-  const branch = normalizeText33(target?.branch);
-  const owner = normalizeText33(target?.owner);
+  const branch = normalizeText34(target?.branch);
+  const owner = normalizeText34(target?.owner);
   const selected = items.find(
-    (item) => normalizeText33(item?.state) === "open" && normalizeText33(item?.headRef) === branch && normalizeText33(item?.headOwner) === owner
+    (item) => normalizeText34(item?.state) === "open" && normalizeText34(item?.headRef) === branch && normalizeText34(item?.headOwner) === owner
   );
   const staleItems = items.filter(
-    (item) => normalizeText33(item?.headRef) === branch && normalizeText33(item?.headOwner) === owner
+    (item) => normalizeText34(item?.headRef) === branch && normalizeText34(item?.headOwner) === owner
   );
   if (!selected) {
     return {
@@ -66401,8 +67084,8 @@ function normalizeButlerReadConsentPayload(payload) {
 }
 function normalizeRemoteCodexHandoffPayload(payload) {
   const policyInput = payload?.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
-  const actionType = normalizeText33(policyInput.actionType);
-  const actorRole = normalizeText33(payload?.actorRole);
+  const actionType = normalizeText34(policyInput.actionType);
+  const actorRole = normalizeText34(payload?.actorRole);
   const issueNumber = normalizeIssue6(payload?.issueContext?.issueNumber);
   if (actorRole !== "butler" || actionType !== "build" || !issueNumber) {
     return payload;
@@ -66414,7 +67097,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
   const grantedCategories = Array.isArray(consent.grantedCategories) ? consent.grantedCategories : [];
   const goGranted = policyInput.go === true;
   const normalizedGrantedCategories = goGranted ? mergeGrantedConsentCategories(grantedCategories, ["read", "propose", "execute"]) : grantedCategories;
-  const requestedExecutorTransport = normalizeText33(
+  const requestedExecutorTransport = normalizeText34(
     payload?.executorTransport ?? continuationContext.executorTransport
   );
   const apiKeyRunnerAcknowledged = payload?.apiKeyRunnerAcknowledged === true || continuationContext.apiKeyRunnerAcknowledged === true || goGranted && requestedExecutorTransport === "api_key_runner";
@@ -66438,7 +67121,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         approvalScopeMatched: handoff.approvalScopeMatched === false ? false : true,
         relatedIssue: normalizeIssue6(handoff.relatedIssue) ?? issueNumber,
         developmentStrategy,
-        summary: normalizeText33(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
+        summary: normalizeText34(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
       }
     },
     policyInput: {
@@ -66448,7 +67131,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         ...consent,
         grantedCategories: normalizedGrantedCategories
       },
-      approvalPhrase: normalizeText33(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
+      approvalPhrase: normalizeText34(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
       issueTraceability: {
         ...issueTraceability,
         relatedIssue: normalizeIssue6(issueTraceability.relatedIssue) ?? issueNumber,
@@ -66479,28 +67162,28 @@ function normalizeDevelopmentStrategyObject(value) {
     return null;
   }
   const strategy = {
-    evidencePath: normalizeText33(value.evidencePath),
-    completionExperience: normalizeText33(value.completionExperience),
-    vtddArea: normalizeText33(value.vtddArea),
-    design: normalizeText33(value.design),
-    hypothesis: normalizeText33(value.hypothesis),
-    verificationPlan: normalizeText33(value.verificationPlan),
-    changeEstimate: normalizeText33(value.changeEstimate),
-    knownPath: normalizeText33(value.knownPath),
-    unknownBoundary: normalizeText33(value.unknownBoundary),
-    likelyGaps: normalizeText33(value.likelyGaps),
-    prePrChecks: normalizeText33(value.prePrChecks),
-    optionsRejected: normalizeText33(value.optionsRejected),
-    postMergeE2E: normalizeText33(value.postMergeE2E),
-    noNextPrReason: normalizeText33(value.noNextPrReason),
-    stopCondition: normalizeText33(value.stopCondition)
+    evidencePath: normalizeText34(value.evidencePath),
+    completionExperience: normalizeText34(value.completionExperience),
+    vtddArea: normalizeText34(value.vtddArea),
+    design: normalizeText34(value.design),
+    hypothesis: normalizeText34(value.hypothesis),
+    verificationPlan: normalizeText34(value.verificationPlan),
+    changeEstimate: normalizeText34(value.changeEstimate),
+    knownPath: normalizeText34(value.knownPath),
+    unknownBoundary: normalizeText34(value.unknownBoundary),
+    likelyGaps: normalizeText34(value.likelyGaps),
+    prePrChecks: normalizeText34(value.prePrChecks),
+    optionsRejected: normalizeText34(value.optionsRejected),
+    postMergeE2E: normalizeText34(value.postMergeE2E),
+    noNextPrReason: normalizeText34(value.noNextPrReason),
+    stopCondition: normalizeText34(value.stopCondition)
   };
   return Object.values(strategy).some(Boolean) ? strategy : null;
 }
 function buildButlerHandoffDevelopmentStrategyDraft({ payload, handoff, policyInput, issueNumber }) {
-  const repositoryInput = normalizeText33(policyInput?.repositoryInput) || normalizeText33(handoff.repositoryInput) || normalizeText33(payload?.repositoryInput) || "\u5BFE\u8C61 repository";
-  const branch = normalizeText33(payload?.executionTarget?.branch) || normalizeText33(policyInput?.runtimeTruth?.runtimeState?.activeBranch) || (issueNumber ? `codex/issue-${issueNumber}` : "codex/issue");
-  const ownerIntent = normalizeText33(handoff.ownerMessage) || normalizeText33(payload?.ownerMessage) || normalizeText33(payload?.message) || `Issue #${issueNumber} \u306E\u5B9F\u88C5\u3092\u9032\u3081\u308B`;
+  const repositoryInput = normalizeText34(policyInput?.repositoryInput) || normalizeText34(handoff.repositoryInput) || normalizeText34(payload?.repositoryInput) || "\u5BFE\u8C61 repository";
+  const branch = normalizeText34(payload?.executionTarget?.branch) || normalizeText34(policyInput?.runtimeTruth?.runtimeState?.activeBranch) || (issueNumber ? `codex/issue-${issueNumber}` : "codex/issue");
+  const ownerIntent = normalizeText34(handoff.ownerMessage) || normalizeText34(payload?.ownerMessage) || normalizeText34(payload?.message) || `Issue #${issueNumber} \u306E\u5B9F\u88C5\u3092\u9032\u3081\u308B`;
   const traceability = policyInput?.issueTraceability && typeof policyInput.issueTraceability === "object" ? policyInput.issueTraceability : {};
   const intentRefs = formatTraceRefs(traceability.intentRefs, `#${issueNumber} Intent`);
   const successRefs = formatTraceRefs(
@@ -66527,14 +67210,14 @@ function buildButlerHandoffDevelopmentStrategyDraft({ payload, handoff, policyIn
   };
 }
 function formatTraceRefs(value, fallback) {
-  const refs = Array.isArray(value) ? value.map(normalizeText33).filter(Boolean) : [];
+  const refs = Array.isArray(value) ? value.map(normalizeText34).filter(Boolean) : [];
   return refs.length > 0 ? refs.join(", ") : fallback;
 }
 function mergeGrantedConsentCategories(current, required2) {
   const seen = /* @__PURE__ */ new Set();
   const merged = [];
   for (const category of [...current, ...required2]) {
-    const text = normalizeText33(category);
+    const text = normalizeText34(category);
     const key = normalize7(text);
     if (!text || seen.has(key)) {
       continue;
@@ -66545,7 +67228,7 @@ function mergeGrantedConsentCategories(current, required2) {
   return merged;
 }
 function normalizeTraceRefs(value, fallback) {
-  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText33(item)))) {
+  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText34(item)))) {
     return value;
   }
   return [fallback];
@@ -66564,7 +67247,7 @@ async function resolveRuntimeAliasRegistry({ baseAliasRegistry, env }) {
         "repository nickname registry read unverified",
         stored.error,
         stored.reason
-      ].map(normalizeText33).filter(Boolean).join(": ")
+      ].map(normalizeText34).filter(Boolean).join(": ")
     ]
   };
 }
@@ -66681,7 +67364,7 @@ async function handleRepositoryNicknameDeleteRequest(request, env) {
   });
 }
 function normalizeCanonicalRepositoryInput(value) {
-  const text = normalizeText33(value).toLowerCase();
+  const text = normalizeText34(value).toLowerCase();
   if (!text) {
     return "";
   }
@@ -66748,8 +67431,8 @@ async function handlePasskeyRegistrationOptionsRequest(request, env) {
     rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
     rpName: env?.VTDD_PASSKEY_RP_NAME || "VTDD",
     origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin,
-    operatorId: normalizeText33(body?.operatorId) || "vtdd-operator",
-    operatorLabel: normalizeText33(body?.operatorLabel) || "VTDD Operator"
+    operatorId: normalizeText34(body?.operatorId) || "vtdd-operator",
+    operatorLabel: normalizeText34(body?.operatorLabel) || "VTDD Operator"
   });
   if (!created.ok) {
     return json(422, {
@@ -66783,7 +67466,7 @@ async function handlePasskeyRegistrationVerifyRequest(request, env) {
     });
   }
   const body = await readJson(request);
-  const sessionId = normalizeText33(body?.sessionId);
+  const sessionId = normalizeText34(body?.sessionId);
   const sessionRecord = await findApprovalRecordById(provider, sessionId);
   if (!sessionRecord) {
     return json(404, {
@@ -66872,7 +67555,7 @@ async function handlePasskeyApprovalVerifyRequest(request, env) {
     });
   }
   const body = await readJson(request);
-  const sessionId = normalizeText33(body?.sessionId);
+  const sessionId = normalizeText34(body?.sessionId);
   const sessionRecord = await findApprovalRecordById(provider, sessionId);
   if (!sessionRecord) {
     return json(404, {
@@ -66932,7 +67615,7 @@ function appendWarnings(result, warnings) {
     return result;
   }
   const currentWarnings = Array.isArray(result?.warnings) ? result.warnings : [];
-  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText33).filter(Boolean));
+  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText34).filter(Boolean));
   return {
     ...result,
     warnings: [...merged]
@@ -66944,7 +67627,7 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
   if (!validation.ok) {
     return { approvalGrant: null };
   }
-  const approvalId = normalizeText33(policyInput?.approvalGrantId);
+  const approvalId = normalizeText34(policyInput?.approvalGrantId);
   if (!approvalId) {
     return { approvalGrant: null };
   }
@@ -66993,12 +67676,12 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
   });
 }
 async function buildPasskeyApprovalScopeForRequest({ provider, payload }) {
-  const highRiskKind = normalizeText33(payload?.highRiskKind || payload?.policyInput?.highRiskKind);
+  const highRiskKind = normalizeText34(payload?.highRiskKind || payload?.policyInput?.highRiskKind);
   if (highRiskKind === "vps_runner_admin" || highRiskKind === "vps_admin") {
     return resolveVpsMaintenanceApprovalScopeForChallenge({ provider, payload });
   }
   if (highRiskKind === "github_actions_variable_sync") {
-    const proposalId = normalizeText33(payload?.variableProposalId || payload?.policyInput?.variableProposalId);
+    const proposalId = normalizeText34(payload?.variableProposalId || payload?.policyInput?.variableProposalId);
     if (proposalId) {
       return resolveGitHubActionsVariableSyncApprovalScopeForChallenge({ provider, proposalId });
     }
@@ -67025,7 +67708,7 @@ async function resolveGitHubActionsVariableSyncApprovalScopeForChallenge({ provi
   };
 }
 async function resolveVpsMaintenanceApprovalScopeForChallenge({ provider, payload }) {
-  const proposalId = normalizeText33(payload?.vpsProposalId || payload?.policyInput?.vpsProposalId);
+  const proposalId = normalizeText34(payload?.vpsProposalId || payload?.policyInput?.vpsProposalId);
   if (!proposalId) {
     return {
       ok: false,
@@ -67033,13 +67716,13 @@ async function resolveVpsMaintenanceApprovalScopeForChallenge({ provider, payloa
     };
   }
   const record2 = await findApprovalRecordById(provider, proposalId);
-  if (!record2 || normalizeText33(record2?.content?.kind) !== "vps_privileged_maintenance_approval_proposal") {
+  if (!record2 || normalizeText34(record2?.content?.kind) !== "vps_privileged_maintenance_approval_proposal") {
     return {
       ok: false,
       issues: ["matching VPS maintenance approval proposal was not found"]
     };
   }
-  const expiresAt = normalizeText33(record2?.content?.expiresAt || record2?.content?.approvalScope?.vpsExpiresAt);
+  const expiresAt = normalizeText34(record2?.content?.expiresAt || record2?.content?.approvalScope?.vpsExpiresAt);
   if (!expiresAt || Date.parse(expiresAt) <= Date.now()) {
     return {
       ok: false,
@@ -67061,7 +67744,7 @@ function mapGitHubHighRiskOperationToActionType(operation) {
   if (operation === GitHubHighRiskOperation.ISSUE_CLOSE) {
     return "issue_close";
   }
-  return normalizeText33(operation);
+  return normalizeText34(operation);
 }
 async function retrieveRegisteredPasskeys(provider) {
   const records = await provider.retrieve({
@@ -67078,7 +67761,7 @@ async function purgeExpiredPasskeyArtifacts(provider) {
     type: MemoryRecordType.APPROVAL_LOG,
     limit: MAX_MEMORY_LIMIT
   });
-  const expiredIds = records.filter((record2) => isExpiredPasskeyEphemeralRecord(record2)).map((record2) => normalizeText33(record2?.id)).filter(Boolean);
+  const expiredIds = records.filter((record2) => isExpiredPasskeyEphemeralRecord(record2)).map((record2) => normalizeText34(record2?.id)).filter(Boolean);
   if (expiredIds.length === 0) {
     return { ok: true, deletedCount: 0 };
   }
@@ -67093,7 +67776,7 @@ async function findApprovalRecordById(provider, recordId) {
     text: recordId,
     limit: 50
   });
-  const matched = records.find((record2) => normalizeText33(record2?.id) === recordId) ?? records.find((record2) => normalizeText33(record2?.content?.approvalId) === recordId) ?? records.find((record2) => normalizeText33(record2?.content?.sessionId) === recordId) ?? null;
+  const matched = records.find((record2) => normalizeText34(record2?.id) === recordId) ?? records.find((record2) => normalizeText34(record2?.content?.approvalId) === recordId) ?? records.find((record2) => normalizeText34(record2?.content?.sessionId) === recordId) ?? null;
   if (matched) {
     return matched;
   }
@@ -67104,7 +67787,7 @@ async function findApprovalRecordById(provider, recordId) {
     type: MemoryRecordType.APPROVAL_LOG,
     limit: MAX_MEMORY_LIMIT
   });
-  return fallbackRecords.find((record2) => normalizeText33(record2?.id) === recordId) ?? fallbackRecords.find((record2) => normalizeText33(record2?.content?.approvalId) === recordId) ?? fallbackRecords.find((record2) => normalizeText33(record2?.content?.sessionId) === recordId) ?? null;
+  return fallbackRecords.find((record2) => normalizeText34(record2?.id) === recordId) ?? fallbackRecords.find((record2) => normalizeText34(record2?.content?.approvalId) === recordId) ?? fallbackRecords.find((record2) => normalizeText34(record2?.content?.sessionId) === recordId) ?? null;
 }
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
   const policyInput = normalizeObject12(payload?.policyInput);
@@ -67122,7 +67805,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
   }
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
   const body = normalizeObject12(gatewayOutcome?.body);
-  const blockedByRule = normalizeText33(body.blockedByRule) || null;
+  const blockedByRule = normalizeText34(body.blockedByRule) || null;
   const recordInput = {
     id: buildGuardedAbsenceExecutionLogId({
       actionType: policyInput.actionType,
@@ -67131,15 +67814,15 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
     type: MemoryRecordType.EXECUTION_LOG,
     content: {
       mode: autonomyMode,
-      phase: normalizeText33(payload?.phase) || "execution",
-      actorRole: normalizeText33(payload?.actorRole) || null,
-      actionType: normalizeText33(policyInput.actionType) || null,
+      phase: normalizeText34(payload?.phase) || "execution",
+      actorRole: normalizeText34(payload?.actorRole) || null,
+      actionType: normalizeText34(policyInput.actionType) || null,
       allowed: body.allowed === true,
       blockedByRule,
-      reason: normalizeText33(body.reason) || null,
-      repositoryInput: normalizeText33(policyInput.repositoryInput) || null,
-      repository: normalizeText33(body.repository) || null,
-      requiredApproval: normalizeText33(body.requiredApproval) || null,
+      reason: normalizeText34(body.reason) || null,
+      repositoryInput: normalizeText34(policyInput.repositoryInput) || null,
+      repository: normalizeText34(body.repository) || null,
+      requiredApproval: normalizeText34(body.requiredApproval) || null,
       stopCategory: classifyGuardedStopCategory(blockedByRule)
     },
     metadata: {
@@ -67434,7 +68117,7 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
   };
 }
 function buildOperationalMemoryRetrievalInput({ payload, operationalMemoryRequest }) {
-  const repository = normalizeText33(payload?.policyInput?.repository) || normalizeText33(payload?.policyInput?.repositoryInput) || normalizeText33(payload?.repository) || null;
+  const repository = normalizeText34(payload?.policyInput?.repository) || normalizeText34(payload?.policyInput?.repositoryInput) || normalizeText34(payload?.repository) || null;
   return {
     text: operationalMemoryRequest.text || operationalMemoryRequest.queryHint,
     repository,
@@ -67493,8 +68176,8 @@ function buildCrossRetrievalInput({ payload, responseBody, crossRetrievalRequest
   const relatedIssue = crossRetrievalRequest.relatedIssue ?? responseBody?.memoryWritePersisted?.relatedIssue ?? inferRelatedIssueFromGatewayInput(payload) ?? inferRelatedIssueFromProposalGatewayInput(payload);
   const issueContextInput = payload?.issueContext ?? {};
   const issueNumber = normalizeIssue6(issueContextInput.issueNumber) ?? relatedIssue;
-  const issueTitle = normalizeText33(issueContextInput.issueTitle);
-  const issueUrl = normalizeText33(issueContextInput.issueUrl);
+  const issueTitle = normalizeText34(issueContextInput.issueTitle);
+  const issueUrl = normalizeText34(issueContextInput.issueUrl);
   return {
     phase: crossRetrievalRequest.phase,
     limit: crossRetrievalRequest.limit,
@@ -67535,7 +68218,7 @@ function normalizeCrossRetrievalRequest(request) {
     limit: normalizeLimit8(value.limit, 5),
     displayMode: normalize7(value.displayMode) === "expanded" ? "expanded" : "short",
     relatedIssue: normalizeIssue6(value.relatedIssue),
-    text: normalizeText33(value.text) || normalizeText33(value.queryHint) || null,
+    text: normalizeText34(value.text) || normalizeText34(value.queryHint) || null,
     semanticRetrieval: normalizeSemanticRetrievalRequest(value.semanticRetrieval)
   };
 }
@@ -67548,9 +68231,9 @@ function normalizeOperationalMemoryRequest(request) {
     limit: normalizeLimit8(value.limit, mode === "inventory" ? 1 : 5),
     displayMode: normalize7(value.displayMode) === "expanded" ? "expanded" : "short",
     relatedIssue: normalizeIssue6(value.relatedIssue),
-    text: normalizeText33(value.text) || null,
-    queryHint: normalizeText33(value.queryHint) || null,
-    reasonTags: Array.isArray(value.reasonTags) ? value.reasonTags.map((item) => normalizeText33(item)).filter(Boolean).slice(0, 8) : []
+    text: normalizeText34(value.text) || null,
+    queryHint: normalizeText34(value.queryHint) || null,
+    reasonTags: Array.isArray(value.reasonTags) ? value.reasonTags.map((item) => normalizeText34(item)).filter(Boolean).slice(0, 8) : []
   };
 }
 function normalizeSemanticRetrievalRequest(value) {
@@ -67566,9 +68249,9 @@ function parseBooleanQueryParam(value) {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 function buildRetrieveRuntimeTruth(url) {
-  const currentState = normalizeText33(url.searchParams.get("currentState"));
-  const source = normalizeText33(url.searchParams.get("runtimeTruthSource"));
-  const checkedAt = normalizeText33(url.searchParams.get("checkedAt"));
+  const currentState = normalizeText34(url.searchParams.get("currentState"));
+  const source = normalizeText34(url.searchParams.get("runtimeTruthSource"));
+  const checkedAt = normalizeText34(url.searchParams.get("checkedAt"));
   if (!currentState && !source && !checkedAt) {
     return null;
   }
@@ -67891,8 +68574,8 @@ async function buildDashboardChatTrafficControlContext({ env, repository, relate
       issueNumber: normalizePositiveInteger11(relatedIssue),
       phase: "execution",
       currentSurface: "dashboard_butler",
-      queryText: normalizeText33(text) || `Dashboard Butler traffic control ${relatedIssue ? `Issue #${relatedIssue}` : ""}`,
-      runtimeOrigin: normalizeText33(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local",
+      queryText: normalizeText34(text) || `Dashboard Butler traffic control ${relatedIssue ? `Issue #${relatedIssue}` : ""}`,
+      runtimeOrigin: normalizeText34(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local",
       env
     });
     return {
@@ -67916,7 +68599,7 @@ async function buildDashboardChatTrafficControlContext({ env, repository, relate
       status: "\u672A\u78BA\u8A8D",
       repository: normalizedRepository,
       relatedIssue: normalizePositiveInteger11(relatedIssue) || null,
-      reason: normalizeText33(error2?.message) || "startup preflight failed",
+      reason: normalizeText34(error2?.message) || "startup preflight failed",
       currentSurface: "dashboard_butler",
       authorityBoundary: "read_only_preflight",
       nextSafeAction: "preflight failure \u3092 owner-facing blocker \u3068\u3057\u3066\u5831\u544A\u3059\u308B\u3002"
@@ -69931,7 +70614,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
     },
     { threadId }
   );
-  const hasVpsApprovalContinuationIntent = Boolean(normalizeText33(input.vpsProposalId || input.vps_proposal_id)) && Boolean(normalizeText33(input.approvalGrantId || input.approval_grant_id)) && Boolean(threadId) && Boolean(repository) && Boolean(relatedIssue);
+  const hasVpsApprovalContinuationIntent = Boolean(normalizeText34(input.vpsProposalId || input.vps_proposal_id)) && Boolean(normalizeText34(input.approvalGrantId || input.approval_grant_id)) && Boolean(threadId) && Boolean(repository) && Boolean(relatedIssue);
   const hasVpsPrivilegedMaintenanceIntent = hasVpsApprovalContinuationIntent || detectDashboardVpsPrivilegedMaintenanceIntent({ text });
   const vpsMaintenanceFlow = hasVpsPrivilegedMaintenanceIntent ? await buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
     payload: { ...input, relatedIssue, issueNumber: relatedIssue },
@@ -69965,9 +70648,9 @@ async function buildDashboardChatTurn(payload, options = {}) {
   };
 }
 function shouldDashboardVpsMaintenanceFlowStayInWorker(flow = null, options = {}) {
-  const status = normalizeText33(flow?.execution?.status || flow?.messageStatus);
+  const status = normalizeText34(flow?.execution?.status || flow?.messageStatus);
   const runtimeTruth = flow?.execution?.runtimeTruth || {};
-  return ["approval_required", "queued_for_vps_helper_execution", "sent"].includes(status) || status === "blocked" && (normalizeText33(runtimeTruth.requiredTransport) === "vps_local_helper_queue" || normalizeText33(runtimeTruth.disabledTransport) === "github_issue_comment_queue" || normalizeText33(runtimeTruth.status) === "vps_local_helper_queue_unavailable") || options.approvalContinuation === true && status === "blocked";
+  return ["approval_required", "queued_for_vps_helper_execution", "sent"].includes(status) || status === "blocked" && (normalizeText34(runtimeTruth.requiredTransport) === "vps_local_helper_queue" || normalizeText34(runtimeTruth.disabledTransport) === "github_issue_comment_queue" || normalizeText34(runtimeTruth.status) === "vps_local_helper_queue_unavailable") || options.approvalContinuation === true && status === "blocked";
 }
 async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
   payload,
@@ -70002,8 +70685,8 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
       }
     };
   }
-  const approvalGrantId = normalizeText33(payload?.approvalGrantId || payload?.approval_grant_id);
-  const vpsProposalIdInput = normalizeText33(payload?.vpsProposalId || payload?.vps_proposal_id);
+  const approvalGrantId = normalizeText34(payload?.approvalGrantId || payload?.approval_grant_id);
+  const vpsProposalIdInput = normalizeText34(payload?.vpsProposalId || payload?.vps_proposal_id);
   if (!approvalGrantId) {
     const proposalPayload = buildDashboardVpsMaintenanceProposalPayload({
       payload,
@@ -70045,7 +70728,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
       };
     }
     const dashboardThreadId = normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id);
-    const executionId = normalizeText33(payload?.executionId || payload?.execution_id) || createDashboardRequestId(`dashboard-butler-issue${relatedIssue || "unknown"}-vps-maintenance`);
+    const executionId = normalizeText34(payload?.executionId || payload?.execution_id) || createDashboardRequestId(`dashboard-butler-issue${relatedIssue || "unknown"}-vps-maintenance`);
     const proposal = await createVpsPrivilegedMaintenanceProposal({
       payload: {
         ...proposalPayload,
@@ -70181,7 +70864,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
     payload: {
       repository,
       issueNumber: relatedIssue,
-      executionId: normalizeText33(payload?.executionId || payload?.execution_id) || `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helper.body.helperRequest.requestId)}`,
+      executionId: normalizeText34(payload?.executionId || payload?.execution_id) || `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helper.body.helperRequest.requestId)}`,
       dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
       approvalActor: "Dashboard Butler",
       executionEnvelope: execution.body.executionEnvelope
@@ -70223,9 +70906,9 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
 function isDashboardVpsMaintenanceLowRiskReadProposal(proposalBody = {}) {
   const proposal = proposalBody?.proposal || {};
   const capability = proposal?.capability || {};
-  const operation = normalizeText33(proposalBody?.approvalScope?.vpsOperation || proposal?.operation);
+  const operation = normalizeText34(proposalBody?.approvalScope?.vpsOperation || proposal?.operation);
   if (operation !== "review") return false;
-  if (normalizeText33(capability.riskLevel) !== "low") return false;
+  if (normalizeText34(capability.riskLevel) !== "low") return false;
   const registryEntry = listVpsPrivilegedMaintenanceCommandRegistry().find(
     (entry) => entry.commandClass === capability.commandClass
   );
@@ -70309,7 +70992,7 @@ async function queueDashboardVpsMaintenanceLowRiskRead({
     payload: {
       repository,
       issueNumber: relatedIssue,
-      executionId: normalizeText33(payload?.executionId || payload?.execution_id) || `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helperRequest.requestId)}`,
+      executionId: normalizeText34(payload?.executionId || payload?.execution_id) || `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helperRequest.requestId)}`,
       dashboardThreadId: normalizeDashboardSingleMainChatThreadId(payload?.threadId || payload?.thread_id),
       approvalActor: "Dashboard Butler low-risk read",
       executionEnvelope: execution.body.executionEnvelope
@@ -70357,7 +71040,7 @@ function buildDashboardVpsMaintenanceProposalPreflight({ proposalPayload, reposi
   const issues = [];
   const missingContext = [];
   const missingConfiguration = [];
-  const capabilityId = normalizeText33(payload.id || payload.capabilityId) || "unknown capability";
+  const capabilityId = normalizeText34(payload.id || payload.capabilityId) || "unknown capability";
   if (!normalizeCanonicalRepositoryInput(repository || payload.repository)) {
     missingContext.push("repository");
     issues.push("proposal repository is required");
@@ -70366,7 +71049,7 @@ function buildDashboardVpsMaintenanceProposalPreflight({ proposalPayload, reposi
     missingContext.push("relatedIssue");
     issues.push("relatedIssue or issueNumber is required");
   }
-  if (!normalizeText33(payload.host)) {
+  if (!normalizeText34(payload.host)) {
     missingConfiguration.push("host");
     issues.push("proposal host is required");
   }
@@ -70431,7 +71114,7 @@ function buildDashboardVpsMaintenancePassThroughContext({ text, repository, rela
   };
 }
 function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
-  const normalized = normalizeText33(text);
+  const normalized = normalizeText34(text);
   if (!normalized) return false;
   const lower = normalized.toLowerCase();
   const mentionsRecoveryTarget = lower.includes("runner") || lower.includes("app-server") || lower.includes("app server") || lower.includes("bridge") || normalized.includes("\u30E9\u30F3\u30CA\u30FC") || normalized.includes("\u5B9F\u884C\u5668") || normalized.includes("\u30D6\u30EA\u30C3\u30B8");
@@ -70441,7 +71124,7 @@ function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
   return hasVpsMaintenance || hasJapaneseMaintenance || mentionsRecoveryTarget && mentionsRecoveryAction;
 }
 function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, relatedIssue, env } = {}) {
-  const workingDirectory = normalizeText33(env?.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR);
+  const workingDirectory = normalizeText34(env?.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR);
   const preset = resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingDirectory });
   if (preset) {
     return {
@@ -70481,10 +71164,10 @@ function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, rela
   };
 }
 function normalizeDashboardVpsMaintenanceHost({ payload, env } = {}) {
-  return normalizeText33(env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST);
+  return normalizeText34(env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST);
 }
 function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingDirectory } = {}) {
-  const text = normalizeText33(payload?.text || payload?.message || payload?.ownerMessage || payload?.owner_message);
+  const text = normalizeText34(payload?.text || payload?.message || payload?.ownerMessage || payload?.owner_message);
   if (!text) return null;
   const lower = text.toLowerCase();
   const wantsLogs = lower.includes("logs") || lower.includes("log") || text.includes("\u30ED\u30B0");
@@ -70543,9 +71226,9 @@ function buildDashboardVpsMaintenanceManifest({ helperRequest, now } = {}) {
 function buildDashboardVpsPrivilegedMaintenanceApprovalRequiredReply({ repository, relatedIssue, proposal } = {}) {
   const capability = proposal?.proposal?.capability || {};
   const scope = proposal?.approvalScope || {};
-  const title = normalizeText33(capability.title) || normalizeText33(scope.vpsCapabilityId) || "VPS maintenance capability";
-  const operation = normalizeText33(scope.vpsOperation || proposal?.proposal?.operation) || "review";
-  const riskLevel = normalizeText33(capability.riskLevel) || "unknown";
+  const title = normalizeText34(capability.title) || normalizeText34(scope.vpsCapabilityId) || "VPS maintenance capability";
+  const operation = normalizeText34(scope.vpsOperation || proposal?.proposal?.operation) || "review";
+  const riskLevel = normalizeText34(capability.riskLevel) || "unknown";
   return [
     "VPS \u5FA9\u65E7\u30FB\u4FDD\u5B88\u306E\u78BA\u8A8D\u30EA\u30AF\u30A8\u30B9\u30C8\u3068\u3057\u3066\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002",
     "",
@@ -70666,7 +71349,7 @@ async function normalizeDashboardPushSubscription(value) {
   };
 }
 async function sha256Hex(value) {
-  const text = normalizeText33(value);
+  const text = normalizeText34(value);
   if (!text) {
     return "";
   }
@@ -70720,7 +71403,7 @@ function normalizeDashboardThreadId(value) {
   return text.slice(0, 160);
 }
 function sanitizeDashboardChatText(value) {
-  const text = normalizeText33(value).replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]").replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]").replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]").replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]").replace(/\b(CLOUDFLARE_API_TOKEN|OPENAI_API_KEY|GITHUB_TOKEN)=\S+/gi, "$1=[redacted]").replace(/([?&](?:token|approvalGrantId|approval_grant_id|key|secret)=)[^&\s]+/gi, "$1[redacted]");
+  const text = normalizeText34(value).replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]").replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]").replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]").replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]").replace(/\b(CLOUDFLARE_API_TOKEN|OPENAI_API_KEY|GITHUB_TOKEN)=\S+/gi, "$1=[redacted]").replace(/([?&](?:token|approvalGrantId|approval_grant_id|key|secret)=)[^&\s]+/gi, "$1[redacted]");
   return text.slice(0, 4e3);
 }
 function isDashboardChatThreadApiPath(pathname) {
@@ -70733,7 +71416,7 @@ function isDashboardAppServerBridgeSocketPath(pathname) {
   return pathname === `${CANONICAL_API_PREFIX}/dashboard/app-server/ws` || pathname === `${LEGACY_API_PREFIX}/dashboard/app-server/ws`;
 }
 function extractDashboardBridgeBearerProtocol(value) {
-  const protocols = normalizeText33(value).split(",").map((item) => item.trim()).filter(Boolean);
+  const protocols = normalizeText34(value).split(",").map((item) => item.trim()).filter(Boolean);
   const encoded = protocols.find((item) => item.startsWith("vtdd-bearer."))?.slice("vtdd-bearer.".length);
   if (!encoded) {
     return "";
@@ -70741,7 +71424,7 @@ function extractDashboardBridgeBearerProtocol(value) {
   try {
     const base643 = encoded.replace(/-/g, "+").replace(/_/g, "/");
     const padded = `${base643}${"=".repeat((4 - base643.length % 4) % 4)}`;
-    return normalizeText33(atob(padded));
+    return normalizeText34(atob(padded));
   } catch {
     return "";
   }
@@ -70840,7 +71523,7 @@ function createD1MemoryIndexAdapter(d1) {
         record2.id,
         record2.type,
         record2.content === null || record2.content === void 0 ? null : JSON.stringify(record2.content),
-        normalizeText33(record2.contentRef) || null,
+        normalizeText34(record2.contentRef) || null,
         JSON.stringify(record2.metadata ?? {}),
         Number(record2.priority ?? 50),
         JSON.stringify(record2.tags ?? []),
@@ -70849,22 +71532,22 @@ function createD1MemoryIndexAdapter(d1) {
     },
     async queryRecords(filter = {}) {
       await ensureSchema();
-      const ids = Array.isArray(filter.ids) ? filter.ids.map((item) => normalizeText33(item)).filter(Boolean) : [];
-      const type = normalizeText33(filter.type);
+      const ids = Array.isArray(filter.ids) ? filter.ids.map((item) => normalizeText34(item)).filter(Boolean) : [];
+      const type = normalizeText34(filter.type);
       const limit = normalizeMemoryLimit(filter.limit);
       const statement = buildMemorySelectStatement({ ids, type });
       const result = await d1.prepare(statement.sql).bind(...statement.params).all();
       const rows = Array.isArray(result?.results) ? result.results : [];
       let records = rows.map(mapStoredMemoryRecord).filter(Boolean);
       if (Array.isArray(filter.tags) && filter.tags.length > 0) {
-        const requiredTags = filter.tags.map((tag) => normalizeText33(tag).toLowerCase()).filter(Boolean);
+        const requiredTags = filter.tags.map((tag) => normalizeText34(tag).toLowerCase()).filter(Boolean);
         records = records.filter(
           (record2) => requiredTags.every(
-            (tag) => Array.isArray(record2.tags) && record2.tags.some((recordTag) => normalizeText33(recordTag).toLowerCase() === tag)
+            (tag) => Array.isArray(record2.tags) && record2.tags.some((recordTag) => normalizeText34(recordTag).toLowerCase() === tag)
           )
         );
       }
-      const queryText = normalizeText33(filter.text).toLowerCase();
+      const queryText = normalizeText34(filter.text).toLowerCase();
       if (queryText) {
         records = records.filter((record2) => JSON.stringify(record2).toLowerCase().includes(queryText));
       }
@@ -70883,7 +71566,7 @@ function createD1MemoryIndexAdapter(d1) {
     },
     async deleteRecords(input = {}) {
       await ensureSchema();
-      const ids = Array.isArray(input?.ids) ? input.ids.map((item) => normalizeText33(item)).filter(Boolean) : [];
+      const ids = Array.isArray(input?.ids) ? input.ids.map((item) => normalizeText34(item)).filter(Boolean) : [];
       if (ids.length === 0) {
         return { ok: true, deletedCount: 0 };
       }
@@ -70961,14 +71644,14 @@ function mapStoredMemoryRecord(row) {
     return null;
   }
   return {
-    id: normalizeText33(row.id),
-    type: normalizeText33(row.type),
+    id: normalizeText34(row.id),
+    type: normalizeText34(row.type),
     content: row.content_json ? safeParseJson(row.content_json) : null,
-    contentRef: normalizeText33(row.content_ref) || void 0,
+    contentRef: normalizeText34(row.content_ref) || void 0,
     metadata: safeParseJson(row.metadata_json, {}),
     priority: Number(row.priority ?? 50),
     tags: safeParseJson(row.tags_json, []),
-    createdAt: normalizeText33(row.created_at)
+    createdAt: normalizeText34(row.created_at)
   };
 }
 function resolveMemoryBlobThreshold(env) {
@@ -70995,7 +71678,7 @@ function safeParseJson(value, fallback = null) {
 function attachGatewayWarning(gatewayOutcome, warning) {
   const body = normalizeObject12(gatewayOutcome?.body);
   const warnings = Array.isArray(body.warnings) ? body.warnings : [];
-  const merged = [...new Set([...warnings, normalizeText33(warning)].filter(Boolean))];
+  const merged = [...new Set([...warnings, normalizeText34(warning)].filter(Boolean))];
   return {
     status: gatewayOutcome.status,
     body: {
@@ -71040,11 +71723,11 @@ function classifyGuardedStopCategory(blockedByRule) {
 function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
   const runtimeEnv = env ?? {};
   const routeLabel = `/${CANONICAL_API_PREFIX.replace(/^\//, "")}${apiSuffix} (legacy ${LEGACY_API_PREFIX}${apiSuffix} is also accepted)`;
-  const bearerToken = normalizeText33(
+  const bearerToken = normalizeText34(
     runtimeEnv.VTDD_GATEWAY_BEARER_TOKEN ?? runtimeEnv.MVP_GATEWAY_BEARER_TOKEN
   );
   if (bearerToken) {
-    const authorizationHeader = normalizeText33(request.headers.get("authorization"));
+    const authorizationHeader = normalizeText34(request.headers.get("authorization"));
     const provided = parseBearerToken(request.headers.get("authorization"));
     if (!authorizationHeader) {
       return {
@@ -71069,11 +71752,11 @@ function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
       reason: `provided bearer token is invalid for ${routeLabel}`
     };
   }
-  const accessClientId = normalizeText33(runtimeEnv.CF_ACCESS_CLIENT_ID);
-  const accessClientSecret = normalizeText33(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
+  const accessClientId = normalizeText34(runtimeEnv.CF_ACCESS_CLIENT_ID);
+  const accessClientSecret = normalizeText34(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
   if (accessClientId || accessClientSecret) {
-    const providedId = normalizeText33(request.headers.get("cf-access-client-id"));
-    const providedSecret = normalizeText33(request.headers.get("cf-access-client-secret"));
+    const providedId = normalizeText34(request.headers.get("cf-access-client-id"));
+    const providedSecret = normalizeText34(request.headers.get("cf-access-client-secret"));
     if (!providedId && !providedSecret) {
       return {
         ok: false,
@@ -71124,7 +71807,7 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   const accessLogin = normalize7(
     request.headers.get("cf-access-authenticated-user-login") || request.headers.get("x-github-login") || request.headers.get("x-github-username")
   );
-  const accessJwt = normalizeText33(request.headers.get("cf-access-jwt-assertion"));
+  const accessJwt = normalizeText34(request.headers.get("cf-access-jwt-assertion"));
   if (!accessEmail && !accessLogin) {
     if (passkeyAuth.blocking) {
       return {
@@ -71228,7 +71911,7 @@ async function authorizeDashboardPasskeySession({ request, env }) {
       reason: "dashboard session was not found; open the dashboard passkey sign-in link again"
     };
   }
-  if (normalizeText33(record2?.content?.kind) === DASHBOARD_READ_SESSION_KIND) {
+  if (normalizeText34(record2?.content?.kind) === DASHBOARD_READ_SESSION_KIND) {
     if (isExpiredDashboardReadSessionRecord(record2)) {
       return {
         ok: false,
@@ -71240,10 +71923,10 @@ async function authorizeDashboardPasskeySession({ request, env }) {
     return {
       ok: true,
       authType: "dashboard_read_session",
-      subject: normalizeText33(record2?.content?.deviceLabel) || "dashboard session"
+      subject: normalizeText34(record2?.content?.deviceLabel) || "dashboard session"
     };
   }
-  if (normalizeText33(record2?.content?.kind) !== "passkey_grant") {
+  if (normalizeText34(record2?.content?.kind) !== "passkey_grant") {
     return {
       ok: false,
       blocking: true,
@@ -71270,11 +71953,11 @@ async function authorizeDashboardPasskeySession({ request, env }) {
   return {
     ok: true,
     authType: "passkey_dashboard_session",
-    subject: normalizeText33(record2?.content?.credentialId) || "passkey"
+    subject: normalizeText34(record2?.content?.credentialId) || "passkey"
   };
 }
 function isDashboardPasskeyScope(scope = {}) {
-  return normalizeText33(scope?.actionType) === "read" && normalizeText33(scope?.highRiskKind) === "dashboard_access";
+  return normalizeText34(scope?.actionType) === "read" && normalizeText34(scope?.highRiskKind) === "dashboard_access";
 }
 function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, userAgent } = {}) {
   const sessionId = createDashboardRequestId("dashboard-session");
@@ -71287,8 +71970,8 @@ function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, us
       kind: DASHBOARD_READ_SESSION_KIND,
       status: "active",
       sessionId,
-      sourceApprovalId: normalizeText33(approvalGrant.approvalId),
-      credentialId: normalizeText33(credentialId),
+      sourceApprovalId: normalizeText34(approvalGrant.approvalId),
+      credentialId: normalizeText34(credentialId),
       deviceLabel: normalizeDashboardDeviceLabel(userAgent),
       createdAt,
       lastSeenAt: createdAt,
@@ -71300,7 +71983,7 @@ function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, us
     },
     metadata: {
       source: "dashboard_passkey_session_verify",
-      sourceApprovalId: normalizeText33(approvalGrant.approvalId)
+      sourceApprovalId: normalizeText34(approvalGrant.approvalId)
     },
     priority: 95,
     tags: [DASHBOARD_READ_SESSION_KIND, "dashboard_session"],
@@ -71309,11 +71992,11 @@ function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, us
   return record2;
 }
 function isExpiredDashboardReadSessionRecord(record2) {
-  const expiresAt = normalizeText33(record2?.content?.expiresAt);
+  const expiresAt = normalizeText34(record2?.content?.expiresAt);
   return !expiresAt || Date.parse(expiresAt) <= Date.now();
 }
 function normalizeDashboardDeviceLabel(userAgent) {
-  const value = normalizeText33(userAgent);
+  const value = normalizeText34(userAgent);
   if (!value) {
     return "dashboard device";
   }
@@ -71332,7 +72015,7 @@ function normalizeDashboardDeviceLabel(userAgent) {
   return "dashboard device";
 }
 function buildDashboardPasskeySessionCookie(sessionRecord = {}) {
-  const sessionId = normalizeText33(sessionRecord.id || sessionRecord.sessionId || sessionRecord.approvalId);
+  const sessionId = normalizeText34(sessionRecord.id || sessionRecord.sessionId || sessionRecord.approvalId);
   return [
     `${DASHBOARD_PASSKEY_SESSION_COOKIE}=${encodeURIComponent(sessionId)}`,
     "Path=/",
@@ -71353,7 +72036,7 @@ async function createDashboardReadSessionCookieHeadersFromAuth({ request, env, d
   }
   const dashboardSession = createDashboardReadSessionRecord({
     approvalGrant: {},
-    credentialId: normalizeText33(dashboardAuth.subject) || "cloudflare_access",
+    credentialId: normalizeText34(dashboardAuth.subject) || "cloudflare_access",
     userAgent: request?.headers?.get("user-agent")
   });
   if (!dashboardSession.ok) {
@@ -71369,9 +72052,9 @@ async function createDashboardReadSessionCookieHeadersFromAuth({ request, env, d
 }
 function parseCookieHeader(value) {
   const cookies = {};
-  for (const part of normalizeText33(value).split(";")) {
+  for (const part of normalizeText34(value).split(";")) {
     const [rawName, ...rawValueParts] = part.split("=");
-    const name = normalizeText33(rawName);
+    const name = normalizeText34(rawName);
     if (!name) {
       continue;
     }
@@ -71389,14 +72072,14 @@ function extractCloudflareAccessJwtIdentity(payload) {
   };
 }
 function parseAuthList(value) {
-  return normalizeText33(value).split(/[\s,]+/).map((item) => normalize7(item)).filter(Boolean);
+  return normalizeText34(value).split(/[\s,]+/).map((item) => normalize7(item)).filter(Boolean);
 }
 async function verifyCloudflareAccessJwt({ token, env }) {
   if (typeof env?.CF_ACCESS_JWT_VERIFIER === "function") {
     return env.CF_ACCESS_JWT_VERIFIER(token);
   }
   const teamDomain = normalizeCloudflareAccessTeamDomain(env?.CF_ACCESS_TEAM_DOMAIN);
-  const expectedAudience = normalizeText33(env?.CF_ACCESS_AUD);
+  const expectedAudience = normalizeText34(env?.CF_ACCESS_AUD);
   if (!teamDomain || !expectedAudience) {
     return {
       ok: false,
@@ -71408,14 +72091,14 @@ async function verifyCloudflareAccessJwt({ token, env }) {
   if (!parsed.ok) {
     return parsed;
   }
-  if (normalizeText33(parsed.header.alg) !== "RS256") {
+  if (normalizeText34(parsed.header.alg) !== "RS256") {
     return {
       ok: false,
       status: 403,
       reason: "Cloudflare Access JWT must use RS256"
     };
   }
-  if (normalizeText33(parsed.payload.iss).replace(/\/$/, "") !== `https://${teamDomain}`) {
+  if (normalizeText34(parsed.payload.iss).replace(/\/$/, "") !== `https://${teamDomain}`) {
     return {
       ok: false,
       status: 403,
@@ -71423,7 +72106,7 @@ async function verifyCloudflareAccessJwt({ token, env }) {
     };
   }
   const aud = Array.isArray(parsed.payload.aud) ? parsed.payload.aud : [parsed.payload.aud];
-  if (!aud.map((item) => normalizeText33(item)).includes(expectedAudience)) {
+  if (!aud.map((item) => normalizeText34(item)).includes(expectedAudience)) {
     return {
       ok: false,
       status: 403,
@@ -71463,7 +72146,7 @@ async function verifyCloudflareAccessJwt({ token, env }) {
   if (!jwks.ok) {
     return jwks;
   }
-  const jwk = (jwks.keys || []).find((candidate) => normalizeText33(candidate.kid) === normalizeText33(parsed.header.kid));
+  const jwk = (jwks.keys || []).find((candidate) => normalizeText34(candidate.kid) === normalizeText34(parsed.header.kid));
   if (!jwk) {
     return {
       ok: false,
@@ -71494,12 +72177,12 @@ async function verifyCloudflareAccessJwt({ token, env }) {
   return { ok: true, payload: parsed.payload };
 }
 function normalizeCloudflareAccessTeamDomain(value) {
-  const text = normalizeText33(value).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const text = normalizeText34(value).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   return text || "";
 }
 async function fetchCloudflareAccessJwks({ teamDomain, env }) {
   const fetcher = env?.CF_ACCESS_JWKS_FETCH ?? fetch;
-  const jwksUrl = normalizeText33(env?.CF_ACCESS_JWKS_URL) || `https://${teamDomain}/cdn-cgi/access/certs`;
+  const jwksUrl = normalizeText34(env?.CF_ACCESS_JWKS_URL) || `https://${teamDomain}/cdn-cgi/access/certs`;
   const now = Date.now();
   const cached2 = cloudflareAccessJwksCache.get(jwksUrl);
   if (cached2 && cached2.expiresAt > now) {
@@ -71536,7 +72219,7 @@ async function fetchCloudflareAccessJwks({ teamDomain, env }) {
   }
 }
 function parseJwt(token) {
-  const parts = normalizeText33(token).split(".");
+  const parts = normalizeText34(token).split(".");
   if (parts.length !== 3) {
     return {
       ok: false,
@@ -71564,7 +72247,7 @@ function base64UrlDecodeText(value) {
   return new TextDecoder().decode(base64UrlDecodeBytes(value));
 }
 function base64UrlDecodeBytes(value) {
-  const normalized = normalizeText33(value).replace(/-/g, "+").replace(/_/g, "/");
+  const normalized = normalizeText34(value).replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   if (typeof atob === "function") {
     return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
@@ -71572,7 +72255,7 @@ function base64UrlDecodeBytes(value) {
   return Uint8Array.from(Buffer.from(padded, "base64"));
 }
 function sanitizeErrorMessage(error2) {
-  return normalizeText33(error2?.message || error2).replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]");
+  return normalizeText34(error2?.message || error2).replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]");
 }
 async function authorizePasskeyRegistrationRequest({ request, env, apiSuffix }) {
   const machineAuth = authorizeGatewayRequest({ request, env, apiSuffix });
@@ -71621,7 +72304,7 @@ function authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix }) {
   return machineAuth;
 }
 function authorizePasskeyBootstrapTokenRequest({ request, env }) {
-  const expectedToken = normalizeText33(env?.VTDD_PASSKEY_BOOTSTRAP_TOKEN);
+  const expectedToken = normalizeText34(env?.VTDD_PASSKEY_BOOTSTRAP_TOKEN);
   if (!expectedToken) {
     return {
       ok: false,
@@ -71629,7 +72312,7 @@ function authorizePasskeyBootstrapTokenRequest({ request, env }) {
       reason: "browser passkey bootstrap token is not configured; use machine auth or configure VTDD_PASSKEY_BOOTSTRAP_TOKEN before first registration"
     };
   }
-  const providedToken = normalizeText33(request.headers.get("x-vtdd-passkey-bootstrap-token")) || normalizeText33(request.headers.get("x-passkey-bootstrap-token"));
+  const providedToken = normalizeText34(request.headers.get("x-vtdd-passkey-bootstrap-token")) || normalizeText34(request.headers.get("x-passkey-bootstrap-token"));
   if (!providedToken) {
     return {
       ok: false,
@@ -71647,7 +72330,7 @@ function authorizePasskeyBootstrapTokenRequest({ request, env }) {
   return { ok: true };
 }
 function isSameOriginBrowserRequest(request) {
-  const originHeader = normalizeText33(request.headers.get("origin"));
+  const originHeader = normalizeText34(request.headers.get("origin"));
   const fetchSite = normalize7(request.headers.get("sec-fetch-site"));
   const contentType = normalize7(request.headers.get("content-type"));
   if (!originHeader) {
@@ -71696,12 +72379,12 @@ function normalizeIssue6(value) {
 }
 function readObservedSetupFailureFromUrl(url) {
   return {
-    actionName: normalizeText33(url.searchParams.get("actionName")),
+    actionName: normalizeText34(url.searchParams.get("actionName")),
     httpStatus: normalizeIssue6(url.searchParams.get("httpStatus")),
-    error: normalizeText33(url.searchParams.get("error")),
-    reason: normalizeText33(url.searchParams.get("reason")),
-    visibleBodyFields: normalizeText33(url.searchParams.get("visibleBodyFields")),
-    missingBodyFields: normalizeText33(url.searchParams.get("missingBodyFields"))
+    error: normalizeText34(url.searchParams.get("error")),
+    reason: normalizeText34(url.searchParams.get("reason")),
+    visibleBodyFields: normalizeText34(url.searchParams.get("visibleBodyFields")),
+    missingBodyFields: normalizeText34(url.searchParams.get("missingBodyFields"))
   };
 }
 function normalizeObject12(value) {
@@ -72142,7 +72825,7 @@ function normalizeDashboardUrl(value) {
   }
 }
 function normalizeIsoTimestamp(value) {
-  const text = normalizeText33(value);
+  const text = normalizeText34(value);
   if (!text) {
     return "";
   }
@@ -72182,7 +72865,7 @@ async function retrieveRecentDashboardEvents({ store, kind, repository, workflow
     if (!sinceTimestamp) {
       return [latest];
     }
-    const latestTime = new Date(normalizeText33(latest.updatedAt)).getTime();
+    const latestTime = new Date(normalizeText34(latest.updatedAt)).getTime();
     const sinceTime = new Date(sinceTimestamp).getTime();
     if (Number.isNaN(latestTime) || Number.isNaN(sinceTime) || latestTime < sinceTime) {
       return [];
@@ -72398,7 +73081,7 @@ function buildDashboardEventSubject(event, { limit = 80 } = {}) {
   );
 }
 function formatDashboardRelativeTime(value, now = /* @__PURE__ */ new Date()) {
-  const timestamp = new Date(normalizeText33(value));
+  const timestamp = new Date(normalizeText34(value));
   const nowTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
   if (Number.isNaN(timestamp.getTime()) || Number.isNaN(nowTime)) {
     return "";
@@ -72473,11 +73156,11 @@ async function renderDashboardPreflightPage({ url, env } = {}) {
   const origin = normalize7(url?.origin);
   const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const issueNumber = normalizeIssue6(url?.searchParams?.get("issueNumber"));
-  const phase = normalizeText33(url?.searchParams?.get("phase")) || "execution";
-  const currentSurface = normalizeText33(url?.searchParams?.get("currentSurface")) || "dashboard";
+  const phase = normalizeText34(url?.searchParams?.get("phase")) || "execution";
+  const currentSurface = normalizeText34(url?.searchParams?.get("currentSurface")) || "dashboard";
   const startupPreflight = await buildStartupPreflight({
     repository,
-    ref: normalizeText33(url?.searchParams?.get("ref")) || "main",
+    ref: normalizeText34(url?.searchParams?.get("ref")) || "main",
     issueNumber,
     phase,
     currentSurface,
@@ -72559,8 +73242,8 @@ async function renderDashboardMemoryPage({ url, env } = {}) {
   const origin = normalize7(url?.origin);
   const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const retrieved = await retrieveOperationalMemory(resolveMemoryProvider(env), {
-    text: normalizeText33(url.searchParams.get("text")) || normalizeText33(url.searchParams.get("q")),
-    recordId: normalizeText33(url.searchParams.get("recordId")),
+    text: normalizeText34(url.searchParams.get("text")) || normalizeText34(url.searchParams.get("q")),
+    recordId: normalizeText34(url.searchParams.get("recordId")),
     repository,
     limit: normalizeLimit8(url.searchParams.get("limit"), 8),
     runtimeTruth: buildRetrieveRuntimeTruth(url)
@@ -72582,7 +73265,7 @@ async function renderDashboardSelfParityPage({ url, env } = {}) {
   const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const parity = await evaluateButlerSelfParity({
     repository,
-    ref: normalizeText33(url.searchParams.get("ref")),
+    ref: normalizeText34(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
     pullNumber: normalizeIssue6(url.searchParams.get("pullNumber")),
     runtimeOrigin: origin,
@@ -73340,7 +74023,7 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
 </html>`;
 }
 function renderDashboardHandoffPage({ url } = {}) {
-  const queryPayload = normalizeText33(url?.searchParams?.get("payload") || "");
+  const queryPayload = normalizeText34(url?.searchParams?.get("payload") || "");
   const queryText = sanitizeDashboardChatText(url?.searchParams?.get("text") || "");
   const querySummary = sanitizeDashboardChatText(url?.searchParams?.get("summary") || "");
   const queryIntent = sanitizeDashboardChatText(url?.searchParams?.get("intent") || "");
@@ -73633,7 +74316,7 @@ function renderDashboardNewsPage({ runtimeOrigin, env } = {}) {
   });
 }
 function normalizeDashboardExternalUrl(value) {
-  const text = normalizeText33(value);
+  const text = normalizeText34(value);
   if (!text) {
     return "";
   }
@@ -73646,9 +74329,9 @@ function normalizeDashboardExternalUrl(value) {
 }
 function normalizeTextList2(value) {
   if (Array.isArray(value)) {
-    return value.map(normalizeText33).filter(Boolean);
+    return value.map(normalizeText34).filter(Boolean);
   }
-  const text = normalizeText33(value);
+  const text = normalizeText34(value);
   return text ? [text] : [];
 }
 function uniqueTextList2(value) {
@@ -77242,7 +77925,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 </html>`;
 }
 function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
-  const origin = normalizeText33(runtimeOrigin);
+  const origin = normalizeText34(runtimeOrigin);
   const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
@@ -77295,7 +77978,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
 </html>`;
 }
 function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = {}) {
-  const normalizedOrigin = normalizeText33(origin);
+  const normalizedOrigin = normalizeText34(origin);
   const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const redirectUrl = normalizedOrigin ? `${normalizedOrigin}${sanitizedReturnPath}` : sanitizedReturnPath;
   return `${normalizedOrigin || ""}/cdn-cgi/access/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
@@ -77351,7 +78034,7 @@ function normalizeDashboardReturnQueryValue2(value) {
 function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
   const origin = normalize7(runtimeOrigin);
   const mode = "v2";
-  const resolvedAutonomyMode = normalizeText33(autonomyMode) || "normal";
+  const resolvedAutonomyMode = normalizeText34(autonomyMode) || "normal";
   const cards = [
     ["Worker", "\u6B63\u5E38", "Cloudflare Worker \u306F\u5FDC\u7B54\u3057\u3066\u3044\u307E\u3059\u3002"],
     ["Mode", mode, "\u73FE\u5728\u306E runtime mode \u3067\u3059\u3002"],
@@ -77490,7 +78173,7 @@ function png(status, dataUrl) {
 function normalize7(value) {
   return String(value ?? "").trim().toLowerCase();
 }
-function normalizeText33(value) {
+function normalizeText34(value) {
   return String(value ?? "").trim();
 }
 function normalizePositiveInteger11(value) {
@@ -77505,10 +78188,10 @@ function isSocketOpen(socket) {
   return socket?.readyState === 1 || typeof WebSocket !== "undefined" && socket?.readyState === WebSocket.OPEN;
 }
 function normalizeTag3(value) {
-  return normalizeText33(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+  return normalizeText34(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 function parseBearerToken(value) {
-  const text = normalizeText33(value);
+  const text = normalizeText34(value);
   if (!text) {
     return "";
   }
@@ -77516,7 +78199,7 @@ function parseBearerToken(value) {
   if (normalize7(scheme) !== "bearer") {
     return "";
   }
-  return normalizeText33(token);
+  return normalizeText34(token);
 }
 function isApiPath(pathname, suffix) {
   return pathname === `${CANONICAL_API_PREFIX}${suffix}` || pathname === `${LEGACY_API_PREFIX}${suffix}`;

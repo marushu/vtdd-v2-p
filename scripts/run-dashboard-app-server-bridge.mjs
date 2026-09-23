@@ -272,6 +272,14 @@ export function buildDashboardTurnInputText(request = {}) {
     request.vpsMaintenancePassThrough && typeof request.vpsMaintenancePassThrough === "object"
       ? request.vpsMaintenancePassThrough
       : null;
+  const businessMission =
+    request.businessMission && typeof request.businessMission === "object"
+      ? request.businessMission
+      : null;
+  const businessMissionSummary =
+    request.businessMissionSummary && typeof request.businessMissionSummary === "object"
+      ? request.businessMissionSummary
+      : null;
   const usageProfile =
     request.usageProfile && typeof request.usageProfile === "object"
       ? normalizeDashboardAppServerUsageProfile(request.usageProfile)
@@ -283,6 +291,7 @@ export function buildDashboardTurnInputText(request = {}) {
       relatedIssue ||
       trafficControl ||
       vpsMaintenancePassThrough ||
+      businessMission ||
       mediaReferences.length > 0
   );
   if (!hasDashboardContext) {
@@ -321,6 +330,42 @@ export function buildDashboardTurnInputText(request = {}) {
 
   if (authority) {
     lines.push(`- authority: ${JSON.stringify(authority)}`);
+  }
+
+  if (businessMission) {
+    const compactMission = {
+      missionId: normalizeBridgeText(businessMission.missionId),
+      ownerGoal: normalizeBridgeText(businessMission.ownerGoal),
+      target: normalizeBridgeText(businessMission.target) || null,
+      kind: normalizeBridgeText(businessMission.kind),
+      status: normalizeBridgeText(businessMission.status),
+      progress:
+        businessMissionSummary?.progress && typeof businessMissionSummary.progress === "object"
+          ? businessMissionSummary.progress
+          : null,
+      nextAutomaticWork: Array.isArray(businessMissionSummary?.nextAutomaticWork)
+        ? businessMissionSummary.nextAutomaticWork.slice(0, 3)
+        : [],
+      ownerActions: Array.isArray(businessMissionSummary?.ownerActions)
+        ? businessMissionSummary.ownerActions.slice(0, 3)
+        : [],
+      blockers: Array.isArray(businessMissionSummary?.blockers)
+        ? businessMissionSummary.blockers.slice(0, 3)
+        : [],
+      workstreams: Array.isArray(businessMission.workstreams)
+        ? businessMission.workstreams.slice(0, 12).map((item) => ({
+            workstreamId: normalizeBridgeText(item?.workstreamId),
+            role: normalizeBridgeText(item?.role),
+            status: normalizeBridgeText(item?.status),
+            purpose: normalizeBridgeText(item?.purpose)
+          }))
+        : []
+    };
+    lines.push(`- businessMission: ${JSON.stringify(compactMission)}`);
+    lines.push("- businessMissionRule: これは owner が与えた上位目的です。ready workstream から reversible な調査・設計・draft・code・test・benchmark・PR準備を主体的に進め、必要なら subagent / Skill / repo-backed tool を使ってください。");
+    lines.push("- businessMissionCoordinationRule: Agent / subagent の内部交通整理を owner に戻さず、Butler がまとめて扱ってください。確認のための確認を増やさず、真の blocker または owner action boundary まで前へ進めてください。");
+    lines.push("- businessMissionRepositoryRule: Issue traceability、開発前作戦図、tests、PR evidence など repository guardrail は維持してください。Mission はそれらを省略する許可ではありません。");
+    lines.push("- businessMissionAuthorityRule: Mission は merge / deploy / spend / external publish / contract / credential / permission / destructive action の passkey/GO 境界を解除しません。高リスク境界では停止し、必要な owner action だけを簡潔に返してください。");
   }
 
   if (usageProfile || costBoundary) {

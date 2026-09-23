@@ -6,6 +6,9 @@ import {
   CustomGptSetupArtifact,
   CustomGptSetupChannel,
   MemoryRecordType,
+  BusinessMissionStatus,
+  buildBusinessMissionOwnerSummary,
+  createBusinessMission,
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
   buildCodexAnalyticsUsageDelta,
@@ -55,6 +58,9 @@ import {
   buildVtddCloudflarePageDirectory,
   renderVtddHelpGuidePage,
   sanitizeCodexAnalyticsUsageSnapshot,
+  shouldAttachBusinessMissionToOwnerGoal,
+  shouldStartBusinessMissionFromOwnerGoal,
+  shouldSupersedeBusinessMission,
   sanitizeGitHubActionsVariableSyncErrorMessage,
   sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
@@ -110,6 +116,24 @@ const DASHBOARD_DEPLOY_BRIDGE_COMMAND_CLASS = "dashboard_bridge_unresolved_deplo
 const DASHBOARD_DEPLOY_BRIDGE_SERVICE = "vtdd-dashboard-app-server-bridge-unresolved.service";
 const DASHBOARD_DEPLOY_BRIDGE_REF = "origin/main";
 
+function isDashboardBusinessMissionOpen(mission) {
+  const status = normalizeDashboardEventText(mission?.status).toLowerCase();
+  return [
+    BusinessMissionStatus.PROPOSED,
+    BusinessMissionStatus.ACTIVE,
+    BusinessMissionStatus.BLOCKED
+  ].includes(status);
+}
+
+function buildDashboardBusinessMissionId({ threadId, messageId, createdAt } = {}) {
+  const normalizedThreadId = normalizeDashboardThreadId(threadId) || "dashboard-main";
+  const normalizedMessageId =
+    normalizeDashboardEventText(messageId) ||
+    normalizeDashboardEventText(createdAt) ||
+    createDashboardRequestId("business-mission");
+  return `mission:${normalizedThreadId}:${normalizedMessageId}`;
+}
+
 export class DashboardChatRoom {
   constructor(state, env) {
     this.ctx = state;
@@ -148,7 +172,8 @@ export class DashboardChatRoom {
       return json(200, {
         ok: true,
         threadId,
-        transientProgressSnapshot: await this.readTransientProgressSnapshot(threadId)
+        transientProgressSnapshot: await this.readTransientProgressSnapshot(threadId),
+        businessMission: await this.readBusinessMission(threadId)
       });
     }
 
@@ -464,6 +489,10 @@ export class DashboardChatRoom {
       },
       { threadId }
     );
+    const businessMission = await this.resolveBusinessMissionForOwnerMessage({
+      threadId,
+      ownerMessage
+    });
     const vpsMaintenanceMessages = await this.buildVpsMaintenanceIntentMessages({
       payload,
       threadId,
@@ -539,16 +568,26 @@ export class DashboardChatRoom {
     await this.dispatchOwnerMessageToAppServerBridge({
       threadId,
       bridgeSocket: bridgeSockets[0],
-      ownerMessage
+      ownerMessage,
+      businessMission
     });
   }
 
-  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage }) {
+  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage, businessMission = undefined }) {
     const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
     const text = sanitizeDashboardChatText(message.text || "");
     if (!threadId || !text || !bridgeSocket) {
       return false;
     }
+    const resolvedBusinessMission = businessMission === undefined
+      ? await this.resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage: message })
+      : businessMission;
+    const activeBusinessMission = isDashboardBusinessMissionOpen(resolvedBusinessMission)
+      ? resolvedBusinessMission
+      : null;
+    const businessMissionSummary = activeBusinessMission
+      ? buildBusinessMissionOwnerSummary(activeBusinessMission)
+      : null;
     const repository = normalizeCanonicalRepositoryInput(message.repository);
     const relatedIssue = normalizePositiveInteger(message.relatedIssue || message.issueNumber);
     const mediaReferences = normalizeMediaReferences(message.mediaReferences || message.media_references || []);
@@ -597,7 +636,9 @@ export class DashboardChatRoom {
       usageProfile,
       costBoundary,
       trafficControl,
-      vpsMaintenancePassThrough
+      vpsMaintenancePassThrough,
+      businessMission: activeBusinessMission,
+      businessMissionSummary
     };
     return this.sendSocket(bridgeSocket, turnRequest);
   }
@@ -811,12 +852,14 @@ export class DashboardChatRoom {
   async broadcastThread({ threadId, messages = null }) {
     const resolvedMessages = Array.isArray(messages) ? messages : await this.listThreadMessages(threadId);
     const transientProgressSnapshot = await this.readTransientProgressSnapshot(threadId);
+    const businessMission = await this.readBusinessMission(threadId);
     const payload = JSON.stringify({
       type: "thread",
       ok: true,
       threadId,
       messages: resolvedMessages,
-      transientProgressSnapshot
+      transientProgressSnapshot,
+      businessMission
     });
     for (const socket of this.connectedSockets()) {
       const attachment = this.getSocketAttachment(socket);
@@ -866,13 +909,15 @@ export class DashboardChatRoom {
     if (!isSocketOpen(socket)) return;
     try {
       const transientProgressSnapshot = await this.readTransientProgressSnapshot(threadId);
+      const businessMission = await this.readBusinessMission(threadId);
       socket.send(
         JSON.stringify({
           type: "thread",
           ok: true,
           threadId,
           messages: await this.listThreadMessages(threadId),
-          transientProgressSnapshot
+          transientProgressSnapshot,
+          businessMission
         })
       );
     } catch (error) {
@@ -894,6 +939,123 @@ export class DashboardChatRoom {
       return [];
     }
     return store.listThread(threadId, { limit: 80 });
+  }
+
+  businessMissionStateKey(threadId) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    return normalizedThreadId ? `business_mission_active:${normalizedThreadId}` : "";
+  }
+
+  async readBusinessMission(threadId) {
+    const key = this.businessMissionStateKey(threadId);
+    if (!key || typeof this.ctx?.storage?.get !== "function") {
+      return null;
+    }
+    try {
+      const record = normalizeObject(await this.ctx.storage.get(key));
+      if (!normalizeDashboardEventText(record.missionId) || !sanitizeDashboardChatText(record.ownerGoal)) {
+        return null;
+      }
+      return record;
+    } catch {
+      return null;
+    }
+  }
+
+  async writeBusinessMission(threadId, mission) {
+    const key = this.businessMissionStateKey(threadId);
+    const normalizedMission = normalizeObject(mission);
+    const missionId = normalizeDashboardEventText(normalizedMission.missionId);
+    if (!key || !missionId || typeof this.ctx?.storage?.put !== "function") {
+      return false;
+    }
+    await this.ctx.storage.put(key, normalizedMission);
+    await this.ctx.storage.put(`business_mission:${missionId}`, normalizedMission);
+    return true;
+  }
+
+  async resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage } = {}) {
+    const existing = await this.readBusinessMission(threadId);
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
+    const ownerGoal = sanitizeDashboardChatText(message.text || "");
+    if (!ownerGoal) {
+      return null;
+    }
+
+    const startsMission = shouldStartBusinessMissionFromOwnerGoal(ownerGoal);
+    if (isDashboardBusinessMissionOpen(existing)) {
+      if (
+        startsMission &&
+        shouldSupersedeBusinessMission({
+          mission: existing,
+          ownerGoal
+        })
+      ) {
+        return this.createBusinessMissionFromOwnerMessage({
+          threadId,
+          ownerMessage: message,
+          supersedes: existing
+        });
+      }
+
+      return shouldAttachBusinessMissionToOwnerGoal({
+        mission: existing,
+        ownerGoal
+      })
+        ? existing
+        : null;
+    }
+
+    if (!startsMission) {
+      return null;
+    }
+
+    return this.createBusinessMissionFromOwnerMessage({
+      threadId,
+      ownerMessage: message
+    });
+  }
+
+  async createBusinessMissionFromOwnerMessage({ threadId, ownerMessage, supersedes = null } = {}) {
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
+    const ownerGoal = sanitizeDashboardChatText(message.text || "");
+    if (!ownerGoal) {
+      return null;
+    }
+    const createdAt = normalizeIsoTimestamp(message.createdAt || message.created_at) || new Date().toISOString();
+    const missionId = buildDashboardBusinessMissionId({
+      threadId,
+      messageId: message.messageId,
+      createdAt
+    });
+    const mission = createBusinessMission({
+      missionId,
+      ownerGoal,
+      target: normalizeCanonicalRepositoryInput(message.repository) || null,
+      accepted: true,
+      source: "dashboard_butler",
+      createdAt,
+      acceptedAt: createdAt
+    });
+
+    if (
+      supersedes &&
+      normalizeDashboardEventText(supersedes.missionId) &&
+      typeof this.ctx?.storage?.put === "function"
+    ) {
+      await this.ctx.storage.put(
+        `business_mission:${normalizeDashboardEventText(supersedes.missionId)}`,
+        {
+          ...normalizeObject(supersedes),
+          status: BusinessMissionStatus.CANCELLED,
+          supersededByMissionId: mission.missionId,
+          supersededAt: createdAt
+        }
+      );
+    }
+
+    await this.writeBusinessMission(threadId, mission);
+    return mission;
   }
 
   transientProgressSnapshotKey(threadId) {
