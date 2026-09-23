@@ -512,7 +512,13 @@ export function getReadyBusinessWorkstreams(mission) {
   );
 
   return workstreams.filter((item) => {
-    if (![BusinessWorkstreamStatus.READY, BusinessWorkstreamStatus.PENDING].includes(item?.status)) {
+    if (
+      ![
+        BusinessWorkstreamStatus.READY,
+        BusinessWorkstreamStatus.RUNNING,
+        BusinessWorkstreamStatus.PENDING
+      ].includes(item?.status)
+    ) {
       return false;
     }
     const dependencies = Array.isArray(item.dependsOn) ? item.dependsOn : [];
@@ -543,7 +549,8 @@ export function applyBusinessWorkstreamResult(mission, result = {}) {
       status: nextStatus,
       outcome: normalizeNullableText(result.outcome),
       blocker: normalizeNullableText(result.blocker),
-      requiredAction: normalizeNullableText(result.requiredAction)
+      requiredAction: normalizeNullableText(result.requiredAction),
+      evidence: normalizeTextArray(result.evidence)
     };
   });
 
