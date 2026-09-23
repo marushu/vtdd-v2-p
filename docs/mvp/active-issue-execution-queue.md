@@ -54,6 +54,12 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
   improve while the owner still performs traffic control. Issue #845 becomes
   `Now` for the bounded Business Mission core slice. Issue #741 remains active
   and resumes after this slice; it is not complete or downscoped.
+- 2026-09-23 owner input classified Issue #849 as a bounded `ROOT` governance
+  preemption: AGENTS/startup/strategy/CI ceremony is consuming avoidable credit
+  and slowing Issue #845 itself. Issue #849 temporarily becomes `Now` to make
+  execution risk-proportional. Issue #845 remains the product ROOT and moves to
+  `Next` without being completed, deferred, or downscoped. Issue #741 and all
+  other open work remain active/incomplete.
 - 2026-05-29 owner input classified Issue #606 as `ROOT`: the 2-minute
   passkey grant coupling blocks the ordinary iPhone/PWA chat recovery path for
   Issue #579, Issue #590, Issue #604, and Issue #605. Issue #606 moves to
@@ -217,18 +223,20 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
 
 ## Now
 
-- Issue #845: Business Mission Orchestrator first core slice. Add the durable
-  Mission contract, mission kind classifier, domain workstream role registry,
-  mission-scoped reversible action authority classification, deterministic
-  workstream planning, result reconciliation, owner-facing summary, and
-  continuous-improvement proposal shape. This slice does not claim Dashboard
-  Butler runtime integration, external connector integration, deploy, release
-  submission, marketing spend, or Issue #845 completion. It exists so future
-  Butler work can organize product development, support, marketing, analytics,
-  and improvement around one owner goal instead of requiring the owner to
-  manually coordinate Issue-sized tasks.
+- Issue #849: Lean Butler Execution Contract. Replace the default all-active-Issue
+  / full-preflight / full-strategy execution ritual with current Mission/current
+  Issue + direct dependencies, minimal startup, small/normal/root planning tiers,
+  generation-before-test ordering, scoped tests before one final full suite, and
+  CI as verification rather than the edit-test debugger. Existing open Issues
+  remain active/incomplete and existing authority boundaries remain unchanged.
 
 ## Next
+
+- Issue #845: resume Business Mission Orchestrator after Issue #849 merges.
+  PR #846/#847/#848 established the Mission core, Dashboard runtime, and actual
+  Codex prompt handoff. Issue #845 remains incomplete; structured workstream
+  reconciliation, standing Mission execution authority, external connectors,
+  and production iPhone/PWA E2E remain open.
 
 - Issue #741: resume the existing VPS local helper queue / bridge continuation
   slice immediately after Issue #845's bounded Mission core PR reaches its stop
@@ -251,6 +259,11 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
 
 ## Root Blockers
 
+- Issue #849: governance overhead is a temporary root blocker for efficient
+  progress because repeated broad reads / full strategy / repeated CI consume
+  credit without increasing safety for low-risk work. It must preserve the
+  authority and lifecycle guarantees of the existing open Issues while reducing
+  default context and validation cost.
 - Issue #845: owner-goal-to-business-execution orchestration is the product-level
   root for the "ideas only" operating model. Without a durable Mission object,
   domain workstreams, authority-aware dispatch, result reconciliation, and
