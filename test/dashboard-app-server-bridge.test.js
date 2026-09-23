@@ -1582,6 +1582,100 @@ test("dashboard app-server bridge handles a fresh dashboard turn through thread/
   assert.equal(reply.text, "今日は2026年5月22日です。");
 });
 
+test("dashboard app-server bridge carries Business Mission through handleDashboardTurnRequest into turn/start input", async () => {
+  const requests = [];
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      requests.push(message);
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-mission-845" } };
+      }
+      if (message.method === "turn/start") {
+        for (const handler of handlers) {
+          handler({
+            method: "item/agentMessage/delta",
+            params: {
+              threadId: "codex-thread-mission-845",
+              turnId: "turn-mission-845",
+              delta: "Mission を受け取りました。"
+            }
+          });
+          handler({
+            method: "turn/completed",
+            params: {
+              threadId: "codex-thread-mission-845",
+              turn: { id: "turn-mission-845", status: "completed" }
+            }
+          });
+        }
+        return { turn: { id: "turn-mission-845" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main-issue845",
+      codexThreadId: null,
+      text: "TOMIO を売れる状態まで持っていって",
+      businessMission: {
+        missionId: "mission-dashboard-main-issue845-tomio",
+        ownerGoal: "TOMIO を売れる状態まで持っていって",
+        target: "TOMIO",
+        kind: "product_launch",
+        status: "active",
+        workstreams: [
+          {
+            workstreamId: "mission-dashboard-main-issue845-tomio:ws:01:research",
+            role: "research",
+            status: "ready",
+            purpose: "市場・競合・技術・既存資産・制約を読み、Mission の判断材料を作る"
+          }
+        ]
+      },
+      businessMissionSummary: {
+        progress: { completed: 0, total: 9 },
+        nextAutomaticWork: [
+          {
+            workstreamId: "mission-dashboard-main-issue845-tomio:ws:01:research",
+            role: "research",
+            purpose: "市場・競合・技術・既存資産・制約を読み、Mission の判断材料を作る"
+          }
+        ],
+        ownerActions: [],
+        blockers: []
+      }
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo"
+  });
+
+  const turnStart = requests.find((request) => request.method === "turn/start");
+  assert.ok(turnStart);
+  const inputText = turnStart.params.input[0].text;
+  assert.match(inputText, /businessMission/);
+  assert.match(inputText, /mission-dashboard-main-issue845-tomio/);
+  assert.match(inputText, /TOMIO を売れる状態まで持っていって/);
+  assert.match(inputText, /"role":"research"/);
+  assert.match(inputText, /businessMissionCoordinationRule/);
+  assert.match(inputText, /merge \/ deploy \/ spend \/ external publish/);
+  assert.ok(events.find((event) => event.type === "app_server_reply"));
+});
+
 test("dashboard app-server bridge resumes an existing Codex thread and reports resume state", async () => {
   const requests = [];
   const events = [];
