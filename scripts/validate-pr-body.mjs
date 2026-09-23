@@ -346,6 +346,10 @@ function validatePreDevelopmentStrategySemantics(fields, body, errors, options =
     }
   }
 
+  if (!requiresRepoStrategy) {
+    return;
+  }
+
   const completionExperience = fields["完了体験"] || "";
   if (completionExperience && !/(Butler|オーナー|owner|ユーザー|Dashboard)/i.test(completionExperience)) {
     errors.push("開発前作戦図 完了体験 must name the owner/Butler-facing experience.");
