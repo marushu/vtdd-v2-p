@@ -4841,6 +4841,49 @@ test("DashboardChatRoom does not create a Business Mission for ordinary conversa
   assert.equal(storage.values.has("business_mission_active:dashboard-main-unresolved"), false);
 });
 
+test("DashboardChatRoom preserves Business Mission through pending bridge replay", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const storage = createMockDurableObjectStorage();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-mission-replay");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-mission-replay");
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-mission-replay",
+      clientMessageId: "dashboard_owner_message:mission-replay-1",
+      text: "hibou の問い合わせを一つも漏らさず全部処理して"
+    })
+  );
+
+  const mission = storage.values.get("business_mission_active:dashboard-main-mission-replay");
+  assert.equal(mission.kind, "customer_inquiry");
+  assert.equal(storage.values.get("pending_app_server_owner_messages:dashboard-main-mission-replay").length, 1);
+
+  const drained = await room.drainPendingAppServerOwnerMessages({
+    threadId: "dashboard-main-mission-replay",
+    bridgeSocket
+  });
+  assert.equal(drained.ok, true);
+  assert.equal(drained.drained, 1);
+  assert.equal(bridgeSocket.sent.length, 1);
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.businessMission.missionId, mission.missionId);
+  assert.equal(turnRequest.businessMission.ownerGoal, "hibou の問い合わせを一つも漏らさず全部処理して");
+  assert.equal(turnRequest.businessMissionSummary.nextAutomaticWork[0].role, "customer_support");
+});
+
 test("DashboardChatRoom sends ordinary owner turns to connected app-server bridge without repository resolution", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
