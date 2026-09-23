@@ -24,9 +24,15 @@ if (before !== after) {
     maxBuffer: 16 * 1024 * 1024
   });
   if (diff.stdout) {
-    console.error("BEGIN_GENERATED_WORKER_DIFF");
-    console.error(diff.stdout);
-    console.error("END_GENERATED_WORKER_DIFF");
+    const encoded = Buffer.from(diff.stdout, "utf8").toString("base64");
+    const chunkSize = 20000;
+    const chunkCount = Math.ceil(encoded.length / chunkSize);
+    console.error(`WORKER_DIFF_B64_META:${encoded.length}:${chunkCount}`);
+    for (let index = 0; index < chunkCount; index += 1) {
+      console.error(
+        `WORKER_DIFF_B64:${index + 1}/${chunkCount}:${encoded.slice(index * chunkSize, (index + 1) * chunkSize)}`
+      );
+    }
   }
   process.exit(1);
 }
