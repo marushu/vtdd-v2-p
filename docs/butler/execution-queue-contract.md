@@ -105,7 +105,20 @@ current queue contract.
 
 ## Startup Requirement
 
-Before starting or resuming Issue-backed work, read:
+The queue is durable traffic control, not a mandatory full-context scan before
+every edit.
+
+For ordinary scoped implementation, use the current Mission / current Issue and
+direct dependencies. Read the full active queue only when:
+
+- owner input may preempt current work
+- ROOT / EMERGENCY classification is plausible
+- thread/surface handoff or recovery requires reconstruction
+- current queue position is unknown or conflicting
+- a PR materially changes queue position
+- the owner asks for a queue/status audit
+
+When a full queue read is required, read:
 
 1. `AGENTS.md`
 2. `docs/butler/thread-independent-startup-contract.md`
@@ -113,7 +126,9 @@ Before starting or resuming Issue-backed work, read:
 4. `docs/mvp/active-issue-execution-queue.md`
 5. the target Issue and open PR runtime truth
 
-If any source is unavailable, report `未確認` and do not replace it with memory.
+If a required source is unavailable, report `未確認` and do not replace it with
+memory. Existing open Issues remain active/incomplete even when they are not
+loaded into the current scoped context.
 
 ## Reporting Requirement
 
@@ -130,6 +145,7 @@ blocked, unconnected, or incomplete.
 
 ## Boundary
 
-This contract does not shrink MVP, active Issue coverage, or Butler Completion
-Gate requirements. It exists to prevent the assistant from chasing the most
-recent input while the root system remains unfinished.
+This contract does not close, defer, or mark active Issues complete. It changes
+traffic-control reading depth, not Issue lifecycle. It exists to prevent the
+assistant from chasing the most recent input while also avoiding a full queue
+scan for unrelated scoped work.
