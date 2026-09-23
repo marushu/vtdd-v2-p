@@ -31,3 +31,16 @@ Issue #845 の Dashboard Mission Runtime slice について、owner が目的だ
 ## Completion reading
 
 この E2E は local mapped runtime evidence であり、production iPhone/PWA live truth、structured workstream reconciliation、standing Mission execution authority、external connector execution を証明しない。Issue #845 全体 completion は未達のまま扱う。
+
+
+## Runtime handoff correction after PR #847
+
+PR #847 merge後の再読で、`app_server_turn_requested.businessMission` は DashboardChatRoom から bridge request までは届いていたが、`handleDashboardTurnRequest()` が `buildDashboardTurnInputText()` へ `businessMission` / `businessMissionSummary` を渡していないことを確認した。
+
+このため、以前の local mapped test が prompt builder を直接呼ぶことで runtime 中継点を飛ばしていた。Issue #845 の次の fix slice では次を evidence に追加する。
+
+- `handleDashboardTurnRequest()` が request の Mission truth を prompt builder へ渡す。
+- `test/dashboard-app-server-bridge.test.js` が actual `thread/start -> turn/start` integration path の input text に Mission ID / ownerGoal / `research` workstream / coordination rule / authority rule が存在することを直接検証する。
+- existing `test/issue845-dashboard-mission-runtime-e2e.test.js` も再実行する。
+
+この correction は authority boundary を変更しない。structured reconciliation / standing Mission authority / production deploy / iPhone live E2E は引き続き未完了。
