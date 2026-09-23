@@ -333,6 +333,10 @@ export function buildDashboardTurnInputText(request = {}) {
   }
 
   if (businessMission) {
+    const currentWorkstream =
+      (Array.isArray(businessMissionSummary?.nextAutomaticWork) && businessMissionSummary.nextAutomaticWork[0]) ||
+      (Array.isArray(businessMissionSummary?.running) && businessMissionSummary.running[0]) ||
+      null;
     const compactMission = {
       missionId: normalizeBridgeText(businessMission.missionId),
       ownerGoal: normalizeBridgeText(businessMission.ownerGoal),
@@ -366,6 +370,19 @@ export function buildDashboardTurnInputText(request = {}) {
     lines.push("- businessMissionCoordinationRule: Agent / subagent の内部交通整理を owner に戻さず、Butler がまとめて扱ってください。確認のための確認を増やさず、真の blocker または owner action boundary まで前へ進めてください。");
     lines.push("- businessMissionRepositoryRule: Issue traceability、開発前作戦図、tests、PR evidence など repository guardrail は維持してください。Mission はそれらを省略する許可ではありません。");
     lines.push("- businessMissionAuthorityRule: Mission は merge / deploy / spend / external publish / contract / credential / permission / destructive action の passkey/GO 境界を解除しません。高リスク境界では停止し、必要な owner action だけを簡潔に返してください。");
+    if (currentWorkstream?.workstreamId) {
+      const resultTemplate = {
+        missionId: normalizeBridgeText(businessMission.missionId),
+        workstreamId: normalizeBridgeText(currentWorkstream.workstreamId),
+        status: "completed|blocked|in_progress",
+        summary: "このworkstreamで実際に達成したこと",
+        evidence: ["検証可能な成果・ファイル・PR・計測・調査結果"],
+        requiredAction: null
+      };
+      lines.push(`- businessMissionCurrentWorkstream: ${JSON.stringify(currentWorkstream)}`);
+      lines.push("- businessMissionResultRule: このturnでは current workstream を実際に前進させてください。最終回答の最後に、コードブロックへ入れず、次の prefix から始まるJSON 1行を必ず1行だけ付けてください。completed は purpose を実際に満たし evidence がある時だけ、blocked は owner action / external authority / missing capability で止まる時、in_progress は自律作業を続けられるがこのturnでは未完了の時に使ってください。");
+      lines.push(`- businessMissionResultFormat: VTDD_BUSINESS_MISSION_RESULT: ${JSON.stringify(resultTemplate)}`);
+    }
   }
 
   if (usageProfile || costBoundary) {
@@ -374,6 +391,135 @@ export function buildDashboardTurnInputText(request = {}) {
 
   lines.push("", "Owner message:", ownerText);
   return lines.join("\n");
+}
+
+export function extractBusinessMissionResultFromText({
+  text = "",
+  businessMission = null,
+  businessMissionSummary = null
+} = {}) {
+  const originalText = String(text || "").replace(/\r\n?/g, "\n");
+  const missionId = normalizeBridgeText(businessMission?.missionId);
+  const currentWorkstream =
+    (Array.isArray(businessMissionSummary?.nextAutomaticWork) && businessMissionSummary.nextAutomaticWork[0]) ||
+    (Array.isArray(businessMissionSummary?.running) && businessMissionSummary.running[0]) ||
+    null;
+  const workstreamId = normalizeBridgeText(currentWorkstream?.workstreamId);
+
+  if (!missionId || !workstreamId) {
+    return {
+      visibleText: originalText.trim(),
+      result: null
+    };
+  }
+
+  const lines = originalText.split("\n");
+  let markerIndex = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (lines[index].trim().startsWith("VTDD_BUSINESS_MISSION_RESULT:")) {
+      markerIndex = index;
+      break;
+    }
+  }
+
+  if (markerIndex < 0) {
+    return {
+      visibleText: originalText.trim(),
+      result: {
+        missionId,
+        workstreamId,
+        status: "unverified",
+        reason: "result_marker_missing",
+        summary: null,
+        evidence: [],
+        requiredAction: null
+      }
+    };
+  }
+
+  const markerLine = lines[markerIndex].trim();
+  const jsonText = markerLine.slice("VTDD_BUSINESS_MISSION_RESULT:".length).trim();
+  const visibleLines = lines.filter((_, index) => index !== markerIndex);
+  if (visibleLines[markerIndex - 1]?.trim() === "```" && visibleLines[markerIndex]?.trim() === "```") {
+    visibleLines.splice(markerIndex - 1, 2);
+  }
+  const visibleText = visibleLines.join("\n").trim();
+
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    return {
+      visibleText,
+      result: {
+        missionId,
+        workstreamId,
+        status: "unverified",
+        reason: "result_marker_invalid_json",
+        summary: null,
+        evidence: [],
+        requiredAction: null
+      }
+    };
+  }
+
+  const parsedMissionId = normalizeBridgeText(parsed?.missionId);
+  const parsedWorkstreamId = normalizeBridgeText(parsed?.workstreamId);
+  const status = normalizeBridgeText(parsed?.status).toLowerCase();
+  if (parsedMissionId !== missionId || parsedWorkstreamId !== workstreamId) {
+    return {
+      visibleText,
+      result: {
+        missionId: parsedMissionId || missionId,
+        workstreamId: parsedWorkstreamId || workstreamId,
+        status: "unverified",
+        reason: "result_scope_mismatch",
+        expectedMissionId: missionId,
+        expectedWorkstreamId: workstreamId,
+        summary: normalizeBridgeText(parsed?.summary) || null,
+        evidence: normalizeBusinessMissionResultEvidence(parsed?.evidence),
+        requiredAction: normalizeBridgeText(parsed?.requiredAction) || null
+      }
+    };
+  }
+
+  if (!["completed", "blocked", "in_progress"].includes(status)) {
+    return {
+      visibleText,
+      result: {
+        missionId,
+        workstreamId,
+        status: "unverified",
+        reason: "result_status_invalid",
+        summary: normalizeBridgeText(parsed?.summary) || null,
+        evidence: normalizeBusinessMissionResultEvidence(parsed?.evidence),
+        requiredAction: normalizeBridgeText(parsed?.requiredAction) || null
+      }
+    };
+  }
+
+  return {
+    visibleText,
+    result: {
+      missionId,
+      workstreamId,
+      status,
+      reason: null,
+      summary: normalizeBridgeText(parsed?.summary) || null,
+      evidence: normalizeBusinessMissionResultEvidence(parsed?.evidence),
+      requiredAction: normalizeBridgeText(parsed?.requiredAction) || null
+    }
+  };
+}
+
+function normalizeBusinessMissionResultEvidence(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => normalizeBridgeText(item))
+    .filter(Boolean)
+    .slice(0, 12);
 }
 
 export function formatDashboardMediaReferenceLines(mediaReferences = []) {
@@ -2224,8 +2370,16 @@ export async function handleDashboardTurnRequest({
       stopLiveProgressFallback();
     }
     if (event.type === "app_server_status" && event.status === "replied") {
+      const missionResult = extractBusinessMissionResultFromText({
+        text: accumulatedText || event.text,
+        businessMission: request.businessMission,
+        businessMissionSummary: request.businessMissionSummary
+      });
       event.type = "app_server_reply";
-      event.text = accumulatedText || event.text;
+      event.text = missionResult.visibleText || (accumulatedText || event.text);
+      if (missionResult.result) {
+        event.businessMissionResult = missionResult.result;
+      }
       if (timedOut) {
         event.lateCompletion = true;
         event.text = `遅れて返信が届きました。\n\n${event.text}`;
