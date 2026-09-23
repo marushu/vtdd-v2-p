@@ -543,7 +543,10 @@ export function applyBusinessWorkstreamResult(mission, result = {}) {
       status: nextStatus,
       outcome: normalizeNullableText(result.outcome),
       blocker: normalizeNullableText(result.blocker),
-      requiredAction: normalizeNullableText(result.requiredAction)
+      requiredAction: normalizeNullableText(result.requiredAction),
+      evidence: normalizeTextArray(result.evidence),
+      resultSource: normalizeNullableString(result.resultSource),
+      reconciledAt: normalizeNullableText(result.reconciledAt)
     };
   });
 
