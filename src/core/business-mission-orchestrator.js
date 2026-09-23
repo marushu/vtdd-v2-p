@@ -241,6 +241,104 @@ export function inferBusinessMissionKind(ownerGoal) {
   return BusinessMissionKind.OPERATIONS;
 }
 
+export function shouldStartBusinessMissionFromOwnerGoal(ownerGoal) {
+  const goal = normalizeText(ownerGoal).toLowerCase();
+  if (!goal) {
+    return false;
+  }
+
+  const standingScopeSignals = [
+    "売れる状態まで",
+    "形にして",
+    "作り上げ",
+    "一つも漏らさず",
+    "全部処理",
+    "全部やって",
+    "全部やれ",
+    "ぜんぶやって",
+    "ぜーーんぶ",
+    "収益を上げ",
+    "仕事自体を",
+    "俺の代わりに",
+    "私の代わりに",
+    "take it from here",
+    "end to end",
+    "end-to-end"
+  ];
+  if (matchesAny(goal, standingScopeSignals)) {
+    return true;
+  }
+
+  const executionSignals = [
+    "作って",
+    "作り上げて",
+    "実装して",
+    "開発して",
+    "リリースして",
+    "申請して",
+    "出して",
+    "売って",
+    "進めて",
+    "回して",
+    "片付けて",
+    "処理して",
+    "対応して",
+    "運用して",
+    "自動化して",
+    "改善して",
+    "獲得して",
+    "増やして",
+    "やって",
+    "やれ",
+    "任せる",
+    "任せた",
+    "build it",
+    "ship it",
+    "launch it",
+    "handle it",
+    "run it",
+    "grow it"
+  ];
+
+  const businessSignals = [
+    "tomio",
+    "アプリ",
+    "app",
+    "app store",
+    "リリース",
+    "release",
+    "問い合わせ",
+    "問合せ",
+    "顧客",
+    "customer",
+    "マーケ",
+    "marketing",
+    "広告",
+    "ad ",
+    "ads",
+    "売上",
+    "収益",
+    "ユーザー",
+    "集客",
+    "hibou",
+    "wordpress",
+    "webサイト",
+    "サイト",
+    "事業",
+    "business"
+  ];
+
+  const obviousQuestion =
+    /[?？]$/.test(goal) ||
+    /(教えて|どう思う|どうする|可能[？?]?|できる[？?]?|確認して|見て|調べて)$/.test(goal);
+
+  if (obviousQuestion && !matchesAny(goal, standingScopeSignals)) {
+    return false;
+  }
+
+  return matchesAny(goal, executionSignals) && matchesAny(goal, businessSignals);
+}
+
 export function createBusinessMission(input = {}) {
   const missionId = normalizeString(input.missionId);
   const ownerGoal = normalizeText(input.ownerGoal);
