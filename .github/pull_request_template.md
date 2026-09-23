@@ -18,7 +18,8 @@ None.
 
 ## 開発前作戦図
 
-- 作戦図 evidence:
+- Planning tier: <!-- small / normal / root -->
+- 作戦図 evidence: <!-- root のみ必須。small / normal は省略可 -->
 - 完了体験:
 - VTDD 全体で進める部分:
 - 設計:
