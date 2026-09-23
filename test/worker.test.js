@@ -4741,6 +4741,106 @@ test("DashboardChatRoom replays pending WebSocket owner messages when app-server
   assert.match(reconnectStatus.text, /接続しました/);
 });
 
+test("DashboardChatRoom creates and reuses a durable Business Mission for strong owner goals", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const storage = createMockDurableObjectStorage();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      clientMessageId: "dashboard_owner_message:mission-tomio-1",
+      text: "TOMIO を売れる状態まで持っていって"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 1);
+  const firstTurn = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(firstTurn.type, "app_server_turn_requested");
+  assert.equal(firstTurn.businessMission.ownerGoal, "TOMIO を売れる状態まで持っていって");
+  assert.equal(firstTurn.businessMission.kind, "product_launch");
+  assert.equal(firstTurn.businessMission.status, "active");
+  assert.equal(firstTurn.businessMission.source, "dashboard_butler");
+  assert.equal(firstTurn.businessMissionSummary.nextAutomaticWork[0].role, "research");
+  assert.equal(firstTurn.businessMissionSummary.ownerActions.length, 0);
+
+  const activeKey = "business_mission_active:dashboard-main-unresolved";
+  const storedMission = storage.values.get(activeKey);
+  assert.equal(storedMission.missionId, firstTurn.businessMission.missionId);
+  assert.equal(storedMission.ownerGoal, "TOMIO を売れる状態まで持っていって");
+
+  const firstThreadPayload = dashboardSocket.sent
+    .map((message) => JSON.parse(message))
+    .find((message) => message.type === "thread");
+  assert.equal(firstThreadPayload.businessMission.missionId, storedMission.missionId);
+
+  const stateResponse = await room.fetch(
+    new Request("https://dashboard-room.local/thread-state?threadId=dashboard-main-unresolved")
+  );
+  assert.equal(stateResponse.status, 200);
+  const state = await stateResponse.json();
+  assert.equal(state.businessMission.missionId, storedMission.missionId);
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      clientMessageId: "dashboard_owner_message:mission-tomio-followup",
+      text: "今どこまで進んだ？"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 2);
+  const followupTurn = JSON.parse(bridgeSocket.sent[1]);
+  assert.equal(followupTurn.businessMission.missionId, storedMission.missionId);
+  assert.equal(followupTurn.businessMission.ownerGoal, "TOMIO を売れる状態まで持っていって");
+});
+
+test("DashboardChatRoom does not create a Business Mission for ordinary conversation", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const storage = createMockDurableObjectStorage();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "今日は何月何日？日本時間を答えて"
+    })
+  );
+
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.businessMission, null);
+  assert.equal(turnRequest.businessMissionSummary, null);
+  assert.equal(storage.values.has("business_mission_active:dashboard-main-unresolved"), false);
+});
+
 test("DashboardChatRoom sends ordinary owner turns to connected app-server bridge without repository resolution", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
