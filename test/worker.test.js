@@ -4808,6 +4808,41 @@ test("DashboardChatRoom creates and reuses a durable Business Mission for strong
   const followupTurn = JSON.parse(bridgeSocket.sent[1]);
   assert.equal(followupTurn.businessMission.missionId, storedMission.missionId);
   assert.equal(followupTurn.businessMission.ownerGoal, "TOMIO を売れる状態まで持っていって");
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      clientMessageId: "dashboard_owner_message:mission-unrelated-date",
+      text: "今日は何月何日？日本時間を答えて"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 3);
+  const unrelatedTurn = JSON.parse(bridgeSocket.sent[2]);
+  assert.equal(unrelatedTurn.businessMission, null);
+  assert.equal(unrelatedTurn.businessMissionSummary, null);
+  assert.equal(storage.values.get(activeKey).missionId, storedMission.missionId);
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      clientMessageId: "dashboard_owner_message:mission-hibou-switch",
+      text: "hibou の問い合わせを一つも漏らさず全部処理して"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 4);
+  const switchedTurn = JSON.parse(bridgeSocket.sent[3]);
+  assert.equal(switchedTurn.businessMission.kind, "customer_inquiry");
+  assert.notEqual(switchedTurn.businessMission.missionId, storedMission.missionId);
+  assert.equal(storage.values.get(activeKey).missionId, switchedTurn.businessMission.missionId);
+  const supersededMission = storage.values.get(`business_mission:${storedMission.missionId}`);
+  assert.equal(supersededMission.status, "cancelled");
+  assert.equal(supersededMission.supersededByMissionId, switchedTurn.businessMission.missionId);
 });
 
 test("DashboardChatRoom does not create a Business Mission for ordinary conversation", async () => {
