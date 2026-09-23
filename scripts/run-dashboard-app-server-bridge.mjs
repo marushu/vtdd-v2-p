@@ -366,6 +366,17 @@ export function buildDashboardTurnInputText(request = {}) {
     lines.push("- businessMissionCoordinationRule: Agent / subagent の内部交通整理を owner に戻さず、Butler がまとめて扱ってください。確認のための確認を増やさず、真の blocker または owner action boundary まで前へ進めてください。");
     lines.push("- businessMissionRepositoryRule: Issue traceability、開発前作戦図、tests、PR evidence など repository guardrail は維持してください。Mission はそれらを省略する許可ではありません。");
     lines.push("- businessMissionAuthorityRule: Mission は merge / deploy / spend / external publish / contract / credential / permission / destructive action の passkey/GO 境界を解除しません。高リスク境界では停止し、必要な owner action だけを簡潔に返してください。");
+    const reconciliationTarget = compactMission.nextAutomaticWork[0] || null;
+    if (reconciliationTarget?.workstreamId) {
+      lines.push(`- businessMissionResultTarget: ${JSON.stringify({
+        missionId: compactMission.missionId,
+        workstreamId: normalizeBridgeText(reconciliationTarget.workstreamId),
+        role: normalizeBridgeText(reconciliationTarget.role)
+      })}`);
+      lines.push("- businessMissionResultRule: このturnで上記ready workstreamを実際に完了した場合だけ、最終本文の末尾に exactly one HTML comment marker 'VTDD_BUSINESS_WORKSTREAM_RESULT' を付けてください。status=completed には non-empty evidence 配列を必須にしてください。真の blocker に到達した場合だけ status=blocked と blocker を返してください。単なる進捗確認・説明・会話では marker を出さないでください。missionId/workstreamId は businessMissionResultTarget と完全一致させてください。");
+      lines.push("- businessMissionResultFormat: <!-- VTDD_BUSINESS_WORKSTREAM_RESULT {\"missionId\":\"...\",\"workstreamId\":\"...\",\"status\":\"completed|blocked\",\"outcome\":\"...\",\"blocker\":\"...\",\"requiredAction\":\"...\",\"evidence\":[\"...\"]} -->");
+      lines.push("- businessMissionResultSafetyRule: marker は内部 reconciliation 用であり、merge / deploy / spend / external publish / contract / credential / permission / destructive action の承認や実行権限を意味しません。");
+    }
   }
 
   if (usageProfile || costBoundary) {
@@ -374,6 +385,81 @@ export function buildDashboardTurnInputText(request = {}) {
 
   lines.push("", "Owner message:", ownerText);
   return lines.join("\n");
+}
+
+export function stripBusinessMissionWorkstreamResultMarkers(text = "") {
+  const raw = String(text || "");
+  const markerStart = raw.search(/<!--\s*VTDD_BUSINESS_WORKSTREAM_RESULT\b/);
+  return markerStart >= 0 ? raw.slice(0, markerStart).trimEnd() : raw;
+}
+
+export function extractBusinessMissionWorkstreamResult(
+  text = "",
+  { businessMission = null, businessMissionSummary = null } = {}
+) {
+  const raw = String(text || "");
+  const cleanText = stripBusinessMissionWorkstreamResultMarkers(raw);
+  const matches = [...raw.matchAll(/<!--\s*VTDD_BUSINESS_WORKSTREAM_RESULT\s+({[\s\S]*?})\s*-->/g)];
+
+  if (matches.length === 0) {
+    return { cleanText, result: null, reason: "marker_missing" };
+  }
+  if (matches.length !== 1) {
+    return { cleanText, result: null, reason: "marker_count_invalid" };
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(matches[0][1]);
+  } catch {
+    return { cleanText, result: null, reason: "marker_json_invalid" };
+  }
+
+  const expectedMissionId = normalizeBridgeText(businessMission?.missionId);
+  const ready = Array.isArray(businessMissionSummary?.nextAutomaticWork)
+    ? businessMissionSummary.nextAutomaticWork[0]
+    : null;
+  const expectedWorkstreamId = normalizeBridgeText(ready?.workstreamId);
+
+  const missionId = normalizeBridgeText(payload?.missionId);
+  const workstreamId = normalizeBridgeText(payload?.workstreamId);
+  const status = normalizeBridgeText(payload?.status).toLowerCase();
+  const outcome = normalizeBridgeText(payload?.outcome);
+  const blocker = normalizeBridgeText(payload?.blocker);
+  const requiredAction = normalizeBridgeText(payload?.requiredAction);
+  const evidence = Array.isArray(payload?.evidence)
+    ? payload.evidence.map((item) => normalizeBridgeText(item)).filter(Boolean)
+    : [];
+
+  if (!expectedMissionId || missionId !== expectedMissionId) {
+    return { cleanText, result: null, reason: "mission_mismatch" };
+  }
+  if (!expectedWorkstreamId || workstreamId !== expectedWorkstreamId) {
+    return { cleanText, result: null, reason: "workstream_mismatch" };
+  }
+  if (!["completed", "blocked"].includes(status)) {
+    return { cleanText, result: null, reason: "status_invalid" };
+  }
+  if (status === "completed" && evidence.length === 0) {
+    return { cleanText, result: null, reason: "completed_evidence_required" };
+  }
+  if (status === "blocked" && !blocker) {
+    return { cleanText, result: null, reason: "blocked_reason_required" };
+  }
+
+  return {
+    cleanText,
+    reason: null,
+    result: {
+      missionId,
+      workstreamId,
+      status,
+      outcome: outcome || null,
+      blocker: blocker || null,
+      requiredAction: requiredAction || null,
+      evidence
+    }
+  };
 }
 
 export function formatDashboardMediaReferenceLines(mediaReferences = []) {
@@ -1359,8 +1445,9 @@ function buildDashboardAppServerMediaFailureDetail(mediaReferences = []) {
 
 export function buildAppServerReplyDeltaProgressText({ accumulatedText = "", delta = "", maxLength = 1200 } = {}) {
   const fullText = String(`${accumulatedText || ""}${delta || ""}`).replace(/\r\n?/g, "\n");
-  if (!fullText) return "";
-  const normalized = formatAppServerProgressNarration(fullText);
+  const visibleText = stripBusinessMissionWorkstreamResultMarkers(fullText);
+  if (!visibleText) return "";
+  const normalized = formatAppServerProgressNarration(visibleText);
   if (normalized.length <= maxLength) return normalized;
   const head = normalized.slice(0, maxLength);
   const paragraphEnd = head.lastIndexOf("\n\n");
@@ -2225,12 +2312,28 @@ export async function handleDashboardTurnRequest({
     }
     if (event.type === "app_server_status" && event.status === "replied") {
       event.type = "app_server_reply";
-      event.text = accumulatedText || event.text;
+      const rawReplyText = accumulatedText || event.text;
+      const reconciliation = extractBusinessMissionWorkstreamResult(rawReplyText, {
+        businessMission: request.businessMission,
+        businessMissionSummary: request.businessMissionSummary
+      });
+      event.text = reconciliation.cleanText || "Mission workstream の結果を記録しました。";
       if (timedOut) {
         event.lateCompletion = true;
         event.text = `遅れて返信が届きました。\n\n${event.text}`;
       }
       void sendDashboardEvent(event);
+      if (reconciliation.result) {
+        void sendDashboardEvent({
+          type: "business_mission_workstream_result",
+          schema: DEFAULT_SCHEMA,
+          threadId: dashboardThreadId,
+          codexThreadId: codexThreadId || null,
+          turnId: activeTurnId || null,
+          createdAt: new Date().toISOString(),
+          ...reconciliation.result
+        });
+      }
       if (timedOut) {
         cleanupNotifications();
         return;
