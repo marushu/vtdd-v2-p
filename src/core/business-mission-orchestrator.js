@@ -194,7 +194,7 @@ export function classifyBusinessActionAuthority(actionType) {
 }
 
 export function inferBusinessMissionKind(ownerGoal) {
-  const goal = normalizeString(ownerGoal);
+  const goal = normalizeText(ownerGoal).toLowerCase();
   if (!goal) {
     throw new TypeError("ownerGoal is required");
   }
@@ -243,7 +243,7 @@ export function inferBusinessMissionKind(ownerGoal) {
 
 export function createBusinessMission(input = {}) {
   const missionId = normalizeString(input.missionId);
-  const ownerGoal = normalizeString(input.ownerGoal);
+  const ownerGoal = normalizeText(input.ownerGoal);
 
   if (!missionId) {
     throw new TypeError("missionId is required");
@@ -263,15 +263,15 @@ export function createBusinessMission(input = {}) {
   const mission = {
     missionId,
     ownerGoal,
-    target: normalizeNullableString(input.target),
+    target: normalizeNullableText(input.target),
     kind,
     status,
-    successMetrics: normalizeStringArray(input.successMetrics),
-    constraints: normalizeStringArray(input.constraints),
+    successMetrics: normalizeTextArray(input.successMetrics),
+    constraints: normalizeTextArray(input.constraints),
     budgetBoundary: normalizeBudgetBoundary(input.budgetBoundary),
     source: normalizeNullableString(input.source) ?? "butler",
-    createdAt: normalizeNullableString(input.createdAt),
-    acceptedAt: input.accepted === true ? normalizeNullableString(input.acceptedAt) : null,
+    createdAt: normalizeNullableText(input.createdAt),
+    acceptedAt: input.accepted === true ? normalizeNullableText(input.acceptedAt) : null,
     workstreams: []
   };
 
@@ -357,9 +357,9 @@ export function applyBusinessWorkstreamResult(mission, result = {}) {
     return {
       ...cloneWorkstream(item),
       status: nextStatus,
-      outcome: normalizeNullableString(result.outcome),
-      blocker: normalizeNullableString(result.blocker),
-      requiredAction: normalizeNullableString(result.requiredAction)
+      outcome: normalizeNullableText(result.outcome),
+      blocker: normalizeNullableText(result.blocker),
+      requiredAction: normalizeNullableText(result.requiredAction)
     };
   });
 
@@ -399,7 +399,7 @@ export function buildBusinessMissionOwnerSummary(mission) {
   const completed = workstreams.filter((item) => item?.status === BusinessWorkstreamStatus.COMPLETED);
 
   const ownerActions = blocked
-    .filter((item) => normalizeNullableString(item.requiredAction))
+    .filter((item) => normalizeNullableText(item.requiredAction))
     .map((item) => ({
       workstreamId: item.workstreamId,
       role: item.role,
@@ -422,13 +422,13 @@ export function buildBusinessMissionOwnerSummary(mission) {
       : [],
     ownerActions,
     blockers: blocked
-      .filter((item) => !normalizeNullableString(item.requiredAction))
+      .filter((item) => !normalizeNullableText(item.requiredAction))
       .map(pickOwnerFacingWorkstream)
   };
 }
 
 export function buildBusinessImprovementProposal({ mission, observation } = {}) {
-  const summary = normalizeString(observation?.summary);
+  const summary = normalizeText(observation?.summary);
   if (!summary) {
     throw new TypeError("observation.summary is required");
   }
@@ -444,7 +444,7 @@ export function buildBusinessImprovementProposal({ mission, observation } = {}) 
     source,
     severity,
     summary,
-    evidence: normalizeStringArray(observation?.evidence),
+    evidence: normalizeTextArray(observation?.evidence),
     proposedRole: BusinessWorkstreamRole.IMPROVEMENT,
     authority: BusinessAuthorityClass.MISSION_SCOPED_AUTO,
     status: "proposal"
@@ -521,13 +521,18 @@ function normalizeFiniteNumber(value) {
   return numeric;
 }
 
-function normalizeStringArray(value) {
+function normalizeTextArray(value) {
   if (!Array.isArray(value)) {
     return [];
   }
   return value
-    .map((item) => normalizeString(item))
+    .map((item) => normalizeText(item))
     .filter(Boolean);
+}
+
+function normalizeNullableText(value) {
+  const normalized = normalizeText(value);
+  return normalized || null;
 }
 
 function normalizeNullableString(value) {
@@ -535,8 +540,12 @@ function normalizeNullableString(value) {
   return normalized || null;
 }
 
+function normalizeText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function normalizeString(value) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
+  return normalizeText(value).toLowerCase();
 }
 
 function matchesAny(value, needles) {
