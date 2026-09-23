@@ -14,30 +14,53 @@ deploy, or recovery action.
 The goal is not to make startup verbose. The goal is to stop hidden
 thread-local assumptions from becoming drift.
 
-## Required startup sources
+## Startup depth
 
-Read or explicitly mark missing:
+Startup is risk-proportional.
 
-1. The user's current explicit instruction.
-2. The active GitHub Issue text and latest relevant comments.
-3. This contract, `AGENTS.md`, and the Butler setup instructions when surface
-   behavior or doctrine matters.
-4. `docs/butler/execution-queue-contract.md` and
-   `docs/mvp/active-issue-execution-queue.md` before treating owner input as
-   implementation work.
-5. GitHub runtime truth: branch, PR, review, check, workflow, deploy, and setup
-   state relevant to the requested action.
-6. Shared RAG / operational memory for prior decisions, failures, repair
-   patterns, checkpoints, and tension notes.
-7. Current surface capability: Butler, mac Codex, VPS Codex CLI, reviewer, or
-   fallback reviewer.
+### Minimal startup — default
 
-If a source cannot be read, say `未確認` or the exact error. Do not replace it
-with a guess.
+For ordinary scoped implementation, read only:
 
-## Required startup report
+1. the owner's current explicit instruction
+2. current Mission or target Issue
+3. current PR / branch truth when one exists
+4. directly relevant source and tests
+5. directly relevant canonical contract only when needed
 
-Before handoff or implementation, summarize in Japanese:
+Do not automatically read the whole active queue, all open Issues, all RAG,
+all setup docs, or all historical PRs.
+
+If a source was already read in the current run and its SHA/state has not
+changed, reuse it.
+
+### Full startup / preflight
+
+Escalate to the full durable-source reconstruction when:
+
+- thread or surface handoff occurs
+- work resumes after unknown/stale state
+- runtime truth conflicts
+- ROOT / EMERGENCY preemption is being considered
+- high-risk execution is requested
+- an explicit status/readiness audit needs broad truth
+- abandoned or ambiguous work is being resumed
+
+Full startup may read:
+
+1. the active GitHub Issue text and latest relevant comments
+2. this contract and `AGENTS.md`
+3. `docs/butler/execution-queue-contract.md` and the active queue
+4. relevant GitHub runtime truth
+5. relevant shared RAG / operational memory
+6. current surface capability
+
+If a required source cannot be read, say `未確認` or the exact error. Do not
+replace it with a guess.
+
+## Full startup report
+
+When full startup/preflight is actually required, summarize in Japanese:
 
 - target repository, Issue, PR, and branch, or `未確認`
 - current surface and its limits
@@ -51,7 +74,8 @@ Before handoff or implementation, summarize in Japanese:
 - cross-Issue or cross-surface risk
 - next safe action and stop condition
 
-This report is a guardrail. It is not completion evidence.
+This report is a guardrail for full startup cases. It is not required before
+every ordinary edit, and it is not completion evidence.
 
 ## Shared behavior to preserve
 
