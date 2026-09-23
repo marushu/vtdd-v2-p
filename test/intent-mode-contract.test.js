@@ -50,6 +50,9 @@ test("intent mode contract preserves autonomy without allowing drift", () => {
   assert.equal(agents.includes("After creating or updating a PR, check\nthe PR state again"), true);
   assert.equal(agents.includes(".agents/skills/vtdd-status-advisor/SKILL.md"), true);
   assert.equal(agents.includes("readonly does not mean\npassive"), true);
+  assert.equal(agents.includes("Planning depth is tiered: \`small\`, \`normal\`, \`root\`."), true);
+  assert.equal(agents.includes("Do not use GitHub Actions as the normal edit-test-debug loop."), true);
+  assert.equal(agents.includes("run the full repository test suite once"), true);
 });
 
 test("vtdd chief butler skill is repository-backed traffic control", () => {
@@ -65,6 +68,9 @@ test("vtdd chief butler skill is repository-backed traffic control", () => {
   assert.equal(skill.includes("`vps_handoff_gap_found`"), true);
   assert.equal(skill.includes("`recovery_gap_found`"), true);
   assert.equal(skill.includes("Before runtime code edits"), true);
+  assert.equal(skill.includes("Use minimal startup by default"), true);
+  assert.equal(skill.includes("select the planning tier"), true);
+  assert.equal(skill.includes("Do not load the whole active queue"), true);
   assert.equal(skill.includes("Repository Sharing Gate"), true);
   assert.equal(skill.includes("Dashboard Butler / VPS Codex CLI readability is stated honestly"), true);
   assert.equal(skill.includes("Operator URL Rule"), true);
