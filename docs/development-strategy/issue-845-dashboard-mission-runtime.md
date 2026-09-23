@@ -77,7 +77,7 @@ Mission を DashboardChatRoom に durable 化し、app-server request / prompt �
 
 ### E2E
 
-Mapped local E2E: Dashboard Butler WebSocket から strong Mission owner turn を送り、owner message ack → durable Mission → `app_server_turn_requested.businessMission` → bridge `buildDashboardTurnInputText` まで同じ Mission ID / goal / workstream が保持されることを検証する。
+Mapped local E2E: `test/issue845-dashboard-mission-runtime-e2e.test.js` で Dashboard Butler WebSocket owner turn → DashboardChatRoom durable Mission → `app_server_turn_requested.businessMission` → bridge `buildDashboardTurnInputText` まで同じ Mission ID / goal / workstream が保持されることを検証する。さらに unrelated turn では Mission context が外れ、follow-up では復帰し、別種 strong goal では supersede することまで同一 scenario で確認する。
 
 ## 改修見積もり
 
@@ -90,6 +90,7 @@ Mapped local E2E: Dashboard Butler WebSocket から strong Mission owner turn �
 | `test/business-mission-orchestrator.test.js` | core unit | strong-intent cases | classifier false positive/negative |
 | `test/worker.test.js` | Worker / DO integration | Mission persistence / turn request / pending replay | existing WebSocket ordering assumptions |
 | `test/dashboard-app-server-bridge.test.js` | bridge unit | Mission prompt context | existing prompt exact-match regression |
+| `test/issue845-dashboard-mission-runtime-e2e.test.js` | mapped local E2E | owner turn → DO Mission → bridge request → VPS prompt / unrelated isolation / supersede | mock transport が production network truth と混同されないこと |
 | `worker.js` | generated artifact | build result | direct edit禁止 |
 
 ## 既に通っている経路
@@ -144,7 +145,7 @@ Mapped local E2E: Dashboard Butler WebSocket から strong Mission owner turn �
 
 ## merge 後に通す E2E
 
-Issue #845 mapped E2E として、Dashboard Butler の通常チャットで「TOMIO を売れる状態まで持っていって」に相当する test Mission を開始し、同じ Mission ID が durable state / thread payload / app-server request / bridge prompt に保持され、通常 follow-up turn でも再利用されることを live-path相当のWebSocket E2Eで検証する。
+Issue #845 mapped E2E として、`test/issue845-dashboard-mission-runtime-e2e.test.js` を CI で通し、Dashboard Butler の通常チャット相当 owner turn から同じ Mission ID が durable state / app-server request / bridge prompt に保持され、unrelated turn では付与されず、follow-up で再利用され、別種 strong goal で supersede することを検証する。production iPhone/PWA live E2E は Issue #845 全体 completion 前の別 gate として残す。
 
 ## 次の PR を増やさない理由
 
