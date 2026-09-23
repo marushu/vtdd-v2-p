@@ -25,7 +25,7 @@ if (before !== after) {
   });
   if (diff.stdout) {
     const encoded = Buffer.from(diff.stdout, "utf8").toString("base64");
-    const chunkSize = 20000;
+    const chunkSize = 3000;
     const chunkCount = Math.ceil(encoded.length / chunkSize);
     console.error(`WORKER_DIFF_B64_META:${encoded.length}:${chunkCount}`);
     for (let index = 0; index < chunkCount; index += 1) {
