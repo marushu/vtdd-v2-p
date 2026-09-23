@@ -45,23 +45,25 @@ Call out any violation of declared non-goals, or state `None.` when there are no
 
 ### `開発前作戦図`
 
-Record the design, hypothesis, and verification plan before implementation.
-This section must point to a repository-backed strategy file under
-`docs/development-strategy/issue-<number>-<slug>.md`.
+Planning is risk-proportional.
 
-This section exists to make prediction and first-principles planning happen
-before Issue-backed implementation PR code edits, not after review or CI
-failures. It does not apply to ordinary conversation, brainstorming, Read/Think,
-or lightweight triage that does not start implementation. It must cover the
-completion experience, VTDD area advanced, design, hypothesis, verification
-plan, concrete change estimate by file/line/function/feature boundary,
-already-working paths, unknown boundaries, likely gaps, pre-PR checks,
-implementation options and rejected options, post-merge E2E, why the PR should
-not spawn predictable follow-up PRs, and stop condition.
+- `small`: isolated fixes and generated-artifact syncs. Require target,
+  intended change, and validation. No separate strategy file.
+- `normal`: coherent feature/subsystem work. Require completion experience,
+  design, hypothesis, verification plan, change estimate, and stop condition.
+  Reuse an existing strategy when it already covers the scope; a new strategy
+  file is optional.
+- `root`: authority, persistence/data model, public API/protocol,
+  cross-service execution, Mission orchestration, security, or recovery
+  architecture. A repository-backed strategy file under
+  `docs/development-strategy/issue-<number>-<slug>.md` is required and the
+  full strategy fields remain mandatory.
 
-Generated placeholder text is intentionally not valid for real PRs. Authors
-must replace it with concrete Issue-specific planning before implementation.
-Template mode may contain blanks; real PR validation must not.
+PR bodies created before Planning tier existed are validated as
+`legacy_full`; existing open PRs do not need migration solely for this policy.
+
+Generated placeholder text is intentionally not valid for required fields in
+real PRs. Template mode may contain blanks; real PR validation must not.
 
 ### `Dry-run Impact Report`
 
@@ -154,10 +156,10 @@ stable.
 ## Guardrail Usage
 
 Use `scripts/render-pr-body.mjs` to generate the guarded headings instead of
-hand-writing them. The renderer intentionally emits non-passable strategy
-guidance until the author supplies a concrete development strategy evidence
-path, design, hypothesis, and verification plan. This prevents AI-authored PRs
-from passing with only after-the-fact template text. Validate the result
+hand-writing them. The renderer emits `normal` planning by default; use
+`--planningTier small` for truly isolated low-risk fixes and
+`--planningTier root` for cross-cutting/high-risk work. Root planning remains
+non-passable until concrete strategy evidence and required fields are supplied. Validate the result
 locally with `node scripts/validate-pr-body.mjs <path>` before `gh pr create`
 or `gh pr edit --body-file`.
 
