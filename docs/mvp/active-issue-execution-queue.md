@@ -223,20 +223,14 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
 
 ## Now
 
-- Issue #849: Lean Butler Execution Contract. Replace the default all-active-Issue
-  / full-preflight / full-strategy execution ritual with current Mission/current
-  Issue + direct dependencies, minimal startup, small/normal/root planning tiers,
-  generation-before-test ordering, scoped tests before one final full suite, and
-  CI as verification rather than the edit-test debugger. Existing open Issues
-  remain active/incomplete and existing authority boundaries remain unchanged.
+- Issue #845: Mission Workstream Reconciliation. The Business Mission already
+  reaches the actual Codex prompt; this slice closes the return path so a
+  completed/blocked current workstream updates durable Mission state and unlocks
+  the next ready workstream without treating conversation-only replies as
+  completion. Standing Mission authority remains a later Issue #845 slice.
 
 ## Next
 
-- Issue #845: resume Business Mission Orchestrator after Issue #849 merges.
-  PR #846/#847/#848 established the Mission core, Dashboard runtime, and actual
-  Codex prompt handoff. Issue #845 remains incomplete; structured workstream
-  reconciliation, standing Mission execution authority, external connectors,
-  and production iPhone/PWA E2E remain open.
 
 - Issue #741: resume the existing VPS local helper queue / bridge continuation
   slice immediately after Issue #845's bounded Mission core PR reaches its stop
@@ -259,11 +253,8 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
 
 ## Root Blockers
 
-- Issue #849: governance overhead is a temporary root blocker for efficient
-  progress because repeated broad reads / full strategy / repeated CI consume
-  credit without increasing safety for low-risk work. It must preserve the
-  authority and lifecycle guarantees of the existing open Issues while reducing
-  default context and validation cost.
+- Issue #849: Lean Butler Execution Contract is merged. The Issue remains open
+  until its own human closure judgment, but it no longer preempts Issue #845.
 - Issue #845: owner-goal-to-business-execution orchestration is the product-level
   root for the "ideas only" operating model. Without a durable Mission object,
   domain workstreams, authority-aware dispatch, result reconciliation, and
