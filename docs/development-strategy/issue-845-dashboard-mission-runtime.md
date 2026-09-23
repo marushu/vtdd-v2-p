@@ -2,7 +2,7 @@
 
 ## 完了体験
 
-Owner は Dashboard Butler の通常チャットで「TOMIO を売れる状態まで持っていって」「hibou の問い合わせを全部処理して」のように目的だけを伝える。DashboardChatRoom は強い mission intent を検出した場合、その owner goal を thread-scoped durable Mission として保存し、以後の app-server turn に同じ Mission truth を必ず添付する。VPS Codex / codex app-server は Mission の ready workstream と authority boundary を受け取り、owner に内部 Agent 管理をさせず、reversible work を前へ進める。
+Owner は Dashboard Butler の通常チャットで「TOMIO を売れる状態まで持っていって」「hibou の問い合わせを全部処理して」のように目的だけを伝える。DashboardChatRoom は強い mission intent を検出した場合、その owner goal を thread-scoped durable Mission として保存する。以後は Mission 関連の follow-up にだけ同じ Mission truth を添付し、無関係な通常会話には standing Mission を混ぜない。別種の strong business goal は新しい Mission として切り替えられる。VPS Codex / codex app-server は Mission の ready workstream と authority boundary を受け取り、owner に内部 Agent 管理をさせず、reversible work を前へ進める。
 
 この slice では Mission の runtime 入口 / durable state / bridge handoff までを接続する。外部サービスへの実支出・公開・deploy・credential mutation は実行しない。
 
@@ -27,9 +27,13 @@ Owner は Dashboard Butler の通常チャットで「TOMIO を売れる状態�
 - `writeBusinessMission(threadId, mission)`
 - `resolveBusinessMissionForOwnerMessage({ threadId, ownerMessage })`
 
-Mission ID は owner message ID と thread ID から決定的に作る。既存 active / blocked Mission がある場合は、通常 follow-up turn で新しい Mission を上書きしない。新規 Mission は active Mission が無い場合か、既存 Mission が completed/cancelled の場合だけ strong-intent owner turn から開始する。
+Mission ID は owner message ID と thread ID から決定的に作る。既存 active / blocked Mission がある場合でも、すべての turn に自動付与しない。core classifier で `attach / supersede / unrelated` を分ける。
 
-`dispatchOwnerMessageToAppServerBridge()` は毎回 active Mission を読み、`businessMission` と `businessMissionSummary` を turn request へ付ける。これにより pending replay / context reset retry でも同じ Mission truth が VPS app-server に届く。
+- 同じ Mission の follow-up / progress / continuation は既存 Mission を再利用する。
+- 無関係な通常会話は active Mission を durable state に残したまま、その turn の app-server request には Mission を付けない。
+- `別件` / `新しいミッション` 等の明示切替、Mission kind の変化、TOMIO→hibou のような business anchor の明確な変化を伴う strong goal は、新しい Mission を作って active pointer を切り替える。
+
+`dispatchOwnerMessageToAppServerBridge()` は caller が Mission context を明示した場合はその値を尊重し、pending replay / context reset retry のような caller 未指定時だけ owner message から Mission context を再解決する。これにより「null=この turn は Mission 非関連」を active Mission で勝手に上書きしない。
 
 `scripts/run-dashboard-app-server-bridge.mjs` の `buildDashboardTurnInputText()` は Mission context を prompt に追加し、以下を明示する。
 
@@ -54,7 +58,10 @@ Mission を DashboardChatRoom に durable 化し、app-server request / prompt �
 - ordinary question 「今日は何月何日？」は Mission を開始しない。
 - 「TOMIO を売れる状態まで持っていって」は Mission を開始する。
 - 「hibou の問い合わせを全部処理して」は customer_inquiry Mission を開始する。
-- active Mission がある状態の通常 follow-up は同じ Mission を保持する。
+- active Mission がある状態の mission follow-up は同じ Mission を保持する。
+- active Mission があっても「今日は何月何日？」のような無関係 turn は `businessMission=null` で app-server に届く。
+- active TOMIO Mission 中に「hibou の問い合わせを全部処理して」のような別種 strong goal を投げると、新しい Mission ID に切り替わる。
+- 同じ target/kind の strong follow-up は不要に Mission を分裂させない。
 - Mission が completed/cancelled の後の新規 strong intent は新しい Mission を開始できる。
 - Worker の `app_server_turn_requested` に Mission / summary が入る。
 - bridge 未接続で pending replay した後も Mission context が入る。
@@ -104,7 +111,8 @@ Mapped local E2E: Dashboard Butler WebSocket から strong Mission owner turn �
 ## 穴が出そうな箇所
 
 - 「〜したい」だけの雑談を strong mission と誤検出すると勝手に Mission が増える。
-- active Mission 中の新規別事業アイデアを同一 Mission に誤って吸収する可能性がある。
+- active Mission を無関係 turn にまで付けると、owner が別の質問をしただけでも app-server が旧 Mission を進め続ける。`null` と `未指定` を区別する必要がある。
+- active Mission 中の新規別事業アイデアを同一 Mission に誤って吸収しないため、supersede 判定が必要。
 - Mission JSON を prompt に丸ごと入れると token cost が増えるため compact context が必要。
 - DO storage が thread-scoped なので cross-thread Mission lookup は別 index が必要。
 - retry / pending replay が Mission を再作成せず同じ Mission を読むことを保証する必要がある。
@@ -123,7 +131,9 @@ Mapped local E2E: Dashboard Butler WebSocket から strong Mission owner turn �
 - strong-intent only の Mission creation。
 - DashboardChatRoom DO storage を initial runtime truth にする。
 - app-server request と prompt へ compact Mission context を渡す。
-- active Mission は follow-up turn で再利用する。
+- active Mission は mission-related follow-up turn だけで再利用する。
+- unrelated turn は Mission state を消さずに context attachment だけ外す。
+- strong new goal は kind / explicit switch / business anchor で supersede 判定する。
 
 捨てた案:
 - 全 owner turn を Mission 化する。
