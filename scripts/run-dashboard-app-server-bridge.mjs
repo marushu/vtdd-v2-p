@@ -2315,7 +2315,9 @@ export async function handleDashboardTurnRequest({
       vpsMaintenancePassThrough: request.vpsMaintenancePassThrough,
       usageProfile: turnUsageProfile,
       costBoundary: turnCostBoundary,
-      mediaReferences: materializedMediaReferences
+      mediaReferences: materializedMediaReferences,
+      businessMission: request.businessMission,
+      businessMissionSummary: request.businessMissionSummary
     });
     const startedTurn = await awaitAppServerRequestWithTimeout(
       appServer.request(
