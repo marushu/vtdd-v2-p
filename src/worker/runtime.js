@@ -114,6 +114,24 @@ const DASHBOARD_DEPLOY_BRIDGE_COMMAND_CLASS = "dashboard_bridge_unresolved_deplo
 const DASHBOARD_DEPLOY_BRIDGE_SERVICE = "vtdd-dashboard-app-server-bridge-unresolved.service";
 const DASHBOARD_DEPLOY_BRIDGE_REF = "origin/main";
 
+function isDashboardBusinessMissionOpen(mission) {
+  const status = normalizeDashboardEventText(mission?.status).toLowerCase();
+  return [
+    BusinessMissionStatus.PROPOSED,
+    BusinessMissionStatus.ACTIVE,
+    BusinessMissionStatus.BLOCKED
+  ].includes(status);
+}
+
+function buildDashboardBusinessMissionId({ threadId, messageId, createdAt } = {}) {
+  const normalizedThreadId = normalizeDashboardThreadId(threadId) || "dashboard-main";
+  const normalizedMessageId =
+    normalizeDashboardEventText(messageId) ||
+    normalizeDashboardEventText(createdAt) ||
+    createDashboardRequestId("business-mission");
+  return `mission:${normalizedThreadId}:${normalizedMessageId}`;
+}
+
 export class DashboardChatRoom {
   constructor(state, env) {
     this.ctx = state;
