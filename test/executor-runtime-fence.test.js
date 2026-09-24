@@ -71,3 +71,10 @@ test('current primary VPS may inspect an empty queue; admission is repeated befo
  assert.equal(result.ok,true);assert.match(result.message,/No pending/);assert.ok(authorizations>=2);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+test('browser monitor admission rejects a different executor or generation before network',async()=>{
+ const f=fixture();
+ for(const expectedExecutor of [{executorId:'vps',generation:1},{executorId:'mac',generation:2}]) {
+  const result=await authorizeRuntimeExecutor({env:f.identity('mac',1),purpose:'dashboard_turn',expectedExecutor,fetchImpl:()=>{throw Error('must not call');}});
+  assert.equal(result.allowed,false);assert.equal(result.reason,'executor_monitor_identity_mismatch');
+ }
+});

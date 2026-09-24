@@ -81,3 +81,10 @@ test('documented completion survives reporter retirement and offline without hea
   }
   assert.notEqual(view({ ...completed, evidenceSummary: '' }, now + 86400000).currentState, 'completed');
 });
+test('durable alarm freshness uses cadence and never requires or invents PID liveness',()=>{
+ const now=Date.now(),at=new Date(now-180000).toISOString();
+ const m=normalize({source:'browser-scheduler',id:'monitor',title:'予約監視',executionKind:'durable_alarm',status:'no_slots',observedAt:at,lastAttemptAt:at,lastSuccessAt:at,intervalSeconds:300,processAlive:null},now);
+ assert.equal(view(m,now).currentState,'no_slots');
+ assert.equal(view(m,now+500000).currentState,'sync_stale');
+ assert.equal(view({...m,lastSuccessAt:null},now).currentState,'unknown');
+});

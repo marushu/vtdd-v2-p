@@ -28,6 +28,10 @@ export function normalizeMonitorSnapshot(input, now = Date.now()) {
     if (typeof input[key] !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(input[key])) fail(`invalid ${key}`);
     out[key] = input[key];
   }
+  if (input.executionKind != null) {
+    if (input.executionKind !== 'durable_alarm') fail('invalid execution kind');
+    out.executionKind = input.executionKind;
+  }
   out.type = input.type ?? 'monitor';
   if (!['monitor', 'task'].includes(out.type)) fail('invalid type');
   out.status = input.status ?? 'unknown';
@@ -58,15 +62,17 @@ export function computeMonitorView(snapshot, now = Date.now(), connected = true)
   const m = snapshot;
   const age = value => value && Number.isFinite(Date.parse(value)) ? (now - Date.parse(value)) / 1000 : Infinity;
   let state = m.status;
+  const durable = m.executionKind === 'durable_alarm';
+  const reportingWindow = durable ? Math.max(2 * m.intervalSeconds + 60, 180) : 120;
   const documentedCompletion = m.status === 'completed' && Boolean(m.observedAt && m.completedAt && m.evidenceSummary) && !m.consecutiveFailures;
-  const reporterState = !connected ? 'unknown' : age(m.receivedAt) > 120 || age(m.observedAt) > 120 ? 'sync_stale' : 'connected';
+  const reporterState = !connected ? 'unknown' : age(m.receivedAt) > reportingWindow || age(m.observedAt) > reportingWindow ? 'sync_stale' : 'connected';
   if (documentedCompletion) state = 'completed';
   else if (!connected) state = 'unknown';
-  else if (!m.observedAt || !m.receivedAt || m.processAlive == null || !m.intervalSeconds) state = 'unknown';
-  else if (age(m.receivedAt) > 120 || age(m.observedAt) > 120) state = 'sync_stale';
-  else if (m.processAlive === false || m.mode === 'paused' || m.status === 'stopped') state = 'stopped';
+  else if (!m.observedAt || !m.receivedAt || (!durable && m.processAlive == null) || !m.intervalSeconds) state = 'unknown';
+  else if (age(m.receivedAt) > reportingWindow || age(m.observedAt) > reportingWindow) state = 'sync_stale';
   else if (m.status === 'error' || m.consecutiveFailures > 0) state = 'error';
   else if (m.status === 'action_required') state = 'action_required';
+  else if (m.processAlive === false || m.mode === 'paused' || m.status === 'stopped') state = 'stopped';
   else if (!m.lastAttemptAt || !m.lastSuccessAt) state = 'unknown';
   else if (age(m.lastSuccessAt) > Math.max(2 * m.intervalSeconds + 60, 180)) state = 'checking_unverified';
   else if (m.status === 'completed') state = 'unknown';

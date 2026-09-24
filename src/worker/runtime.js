@@ -1,3 +1,6 @@
+import { renderBrowserMonitorPage } from './browser-monitor-page.js';
+import { BrowserThreadMonitor } from './browser-thread-monitor.js';
+import { BROWSER_MONITOR_ROOM, BrowserMonitorError } from '../core/browser-thread-monitor.js';
 import { transportEnrollmentScope, transportTokenDigest, validTransportToken } from '../core/executor-transport-credential.js';
 import { enrollmentScope } from '../core/executor-node-identity.js';
 import { executorOverview, resolveExecutorStore, readExecutorBody, strictObject, executorApprovalScope, executorVersionScope, authorizeExecutor, verifyLeaseReceipt, ExecutorInputError } from "../core/executor-failover-state.js";
@@ -151,8 +154,34 @@ export class DashboardChatRoom {
     this.sessions = new Map();
   }
 
+  browserMonitor() {
+    return new BrowserThreadMonitor(this, { notify: (_state, entry) => notifyBrowserMonitorEvent(this.env, entry) });
+  }
+
+  async alarm() {
+    return this.ctx.blockConcurrencyWhile(() => this.browserMonitor().alarm());
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/browser-monitor')) {
+      try {
+        return await this.ctx.blockConcurrencyWhile(async () => {
+          const monitor = this.browserMonitor();
+          if (request.method === 'GET' && url.pathname === '/browser-monitor') return json(200, await monitor.view());
+          const body = await readMonitorBody(request);
+          if (url.pathname === '/browser-monitor-control') return json(200, await monitor.control(body));
+          if (url.pathname === '/browser-monitor-claim') return json(200, await monitor.claim(body));
+          if (url.pathname === '/browser-monitor-result') return json(200, await monitor.result(body));
+          if (url.pathname === '/browser-monitor-dispatch') {
+            const executor = await resolveExecutorStore(this.env)?.get();
+            const allowed = executor && authorizeExecutor(executor, { executorId: 'mac', generation: body.browserMonitor?.generation, purpose: 'dashboard_turn' }).allowed;
+            return json(200, { sent: allowed === true && monitor.dispatch(body) });
+          }
+          return json(404, { error: 'not_found' });
+        });
+      } catch (error) { return json(error instanceof BrowserMonitorError || error instanceof MonitorInputError ? error.status : 503, { error: error instanceof BrowserMonitorError || error instanceof MonitorInputError ? error.message : 'monitor_unavailable' }); }
+    }
     if (request.method === "POST" && url.pathname === "/broadcast") {
       const payload = await readJson(request);
       const threadId = normalizeDashboardThreadId(payload.threadId || payload.thread_id);
@@ -499,6 +528,23 @@ export class DashboardChatRoom {
       },
       { threadId }
     );
+    const monitorIntent = /^(?:ブラウザ予約監視|予約監視|misumi監視)(?:を|の)?(?:停止|止めて|再開|状況|状態|確認|設定|登録)(?:して|する|してください|を見せて)?[。！!]?$/i.test(text.replace(/\s/g, ''));
+    if (monitorIntent) {
+      const target = resolveDashboardChatRoomStub(this.env, BROWSER_MONITOR_ROOM);
+      const action = /停止|止めて/.test(text) ? 'stop' : /再開/.test(text) ? 'resume' : null;
+      let reply = '監視の設定と状態は [予約監視](/dashboard/browser-monitor) で確認できます。';
+      if (target) {
+        const response = await target.fetch(new Request('https://room/browser-monitor' + (action ? '-control' : ''), { method: action ? 'POST' : 'GET', headers: { 'content-type': 'application/json' }, ...(action ? { body: JSON.stringify({ action }) } : {}) }));
+        const view = await response.json();
+        reply += response.ok ? ` 状態: ${view.status || '未登録'}。最終実取得: ${view.lastFreshAt || '未確認'}。次回: ${view.nextRunAt || 'なし'}。${view.summary || ''}` : ' 前回の結果が未確認のため操作できません。管理画面の状態を確認します。';
+      }
+      const messages = [ownerMessage, normalizeDashboardChatMessage({ threadId, role: 'butler', text: reply, status: 'replied', createdAt: now }, { threadId })];
+      if (store) await store.appendMany(threadId, messages);
+      await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
+      this.sendSocket(socket, { type: 'owner_message_accepted', ok: true, clientMessageId, messageId: ownerMessage.messageId });
+      await this.broadcastThread({ threadId, messages });
+      return;
+    }
     const businessMission = await this.resolveBusinessMissionForOwnerMessage({
       threadId,
       ownerMessage
@@ -691,6 +737,12 @@ export class DashboardChatRoom {
   }
 
   async acceptAppServerBridgeMessage({ socket, attachment, payload }) {
+    if (payload?.type === 'browser_monitor_result') {
+      if (attachment?.threadId && payload.threadId !== attachment.threadId) return;
+      const room = resolveDashboardChatRoomStub(this.env, BROWSER_MONITOR_ROOM);
+      if (room) await room.fetch(new Request('https://room/browser-monitor-result', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }));
+      return;
+    }
     if (normalizeDashboardEventText(payload?.type).toLowerCase() === "deploy_bridge_sync_restart_result") {
       await this.acceptDeployBridgeSyncRestartResult({ socket, attachment, payload });
       return;
@@ -1583,6 +1635,27 @@ export default {
       } catch (error) {
         return json(error instanceof ExecutorInputError ? error.status : 503, { error: error instanceof ExecutorInputError ? error.message : "executor_store_unavailable" }, headers);
       }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/dashboard/browser-monitor') {
+      const auth = await authorizeDashboardRequest({ request, env, apiSuffix: '/dashboard/browser-monitor' });
+      if (!auth.ok) return json(auth.status, { error: 'unauthorized' });
+      return html(200, renderBrowserMonitorPage(), { 'cache-control': 'no-store' });
+    }
+
+    if (url.pathname === '/v2/dashboard/browser-monitor' || url.pathname === '/v2/dashboard/browser-monitor/claim') {
+      const claim = url.pathname.endsWith('/claim');
+      const auth = claim ? authorizeGatewayRequest({ request, env, apiSuffix: '/dashboard/browser-monitor/claim' }) : await authorizeDashboardRequest({ request, env, apiSuffix: '/dashboard/browser-monitor' });
+      if (!auth.ok) return json(auth.status, { error: 'unauthorized' });
+      if (!['GET','POST'].includes(request.method) || (claim && request.method !== 'POST')) return json(405, { error: 'method_not_allowed' });
+      if (request.method === 'POST' && request.headers.get('origin') && request.headers.get('origin') !== url.origin) return json(403, { error: 'same_origin_required' });
+      const room = resolveDashboardChatRoomStub(env, BROWSER_MONITOR_ROOM);
+      if (!room) return json(503, { error: 'monitor_unavailable' });
+      try {
+        const body = request.method === 'POST' ? await readMonitorBody(request) : null;
+        const response = await room.fetch(new Request('https://room/browser-monitor' + (claim ? '-claim' : body ? '-control' : ''), { method: request.method, headers: { 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) }));
+        return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+      } catch { return json(422, { error: 'invalid_monitor_request' }); }
     }
 
     if ((request.method === "POST" && url.pathname === "/v2/dashboard/monitors") ||
@@ -6534,6 +6607,30 @@ async function handleVpsRunnerEventRequest(request, env) {
     webSocketBroadcast,
     webPush: recorded.webPush
   });
+}
+
+// Uses the existing event store and Web Push stack. Monitor outbox owns retry timing.
+export async function notifyBrowserMonitorEvent(env, entry) {
+  const store = resolveDashboardEventStore(env);
+  if (!store) return { ok: false, status: 503 };
+  const actionId = `browser-monitor-${entry.id}`;
+  const eventId = entry.kind === 'completed' ? actionId : `owner-action-required:${entry.repository}:${actionId}`;
+  const previous = typeof store.get === 'function' ? await store.get(eventId) : null;
+  if (previous?.pwaNotificationStatus === 'sent') return { ok: true, status: 202 };
+  if (entry.kind === 'completed') {
+    const recorded = await recordDashboardNotificationEvent({ env, eventStore: store, event: {
+      id: eventId, kind: 'browser_monitor_completed', repository: entry.repository,
+      workflowName: 'browser-monitor', runId: entry.id, status: 'completed', conclusion: 'success',
+      title: entry.title, changeSummary: entry.body, runUrl: '/dashboard/browser-monitor'
+    }});
+    return { ok: recorded.webPush.ok === true, status: recorded.webPush.status };
+  }
+  const response = await handleOwnerActionRequiredEventRequest(new Request('https://room/events', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ repository: entry.repository, actionId, title: entry.body, summary: entry.title, workflowName: 'browser-monitor', url: '/dashboard/notifications' })
+  }), env);
+  const result = await response.json();
+  return { ok: result.ok === true, status: response.status };
 }
 
 async function handleOwnerActionRequiredEventRequest(request, env) {
@@ -12598,6 +12695,7 @@ export function buildDashboardWebPushPayload(event) {
   const title = buildDashboardWebPushTitle(record);
   const body = buildDashboardWebPushBody(record);
   return {
+    ...(record.workflowName === 'browser-monitor' ? { renotify: false } : {}),
     title,
     body: body || "Dashboard Butler の通知です。",
     tag: `vtdd-${record.kind || "dashboard"}-${record.runId || record.id || "event"}`.slice(0, 120),
@@ -12615,6 +12713,7 @@ export function buildDashboardWebPushPayload(event) {
 }
 
 function buildDashboardWebPushTitle(record) {
+  if (record.kind === 'browser_monitor_completed') return '予約が確定しました';
   const repository = shortRepositoryName(record.repository);
   if (record.kind === "dashboard_push_test") {
     return "VTDD Butler テスト通知";
@@ -12645,6 +12744,7 @@ function buildDashboardWebPushTitle(record) {
 }
 
 function buildDashboardWebPushBody(record) {
+  if (record.kind === 'browser_monitor_completed') return compactNotificationText(record.changeSummary, 180);
   if (record.kind === "dashboard_push_test") {
     return "通知経路は正常です。iPhone PWA にサーバ送信できました。";
   }
