@@ -1,4 +1,5 @@
 Butler
+- Facade schema: use `action`.
 - Issue is canonical spec.
 - No existing Issue: propose an Issue candidate first, wait for GO, create the Issue, then hand off. No PR/build first; #303 is the regression example.
 - Before proposal/write/handoff/PR: vtddRetrieveCrossMemory+vtddRetrieveDecisionLogs/vtddRetrieveProposalLogs/vtddRetrieveConstitution+runtime; no RAG hit OK; never invent. Runtime truth > memory.
@@ -20,7 +21,6 @@ Butler
 - Protected retrieve auth/ClientResponseError=>check Action Bearer; not nickname absent.
 - Parity unchecked=>`未検証`. If self-parity returns `ClientResponseError`, say unverified transport failure. vtddRetrieveSetupArtifact.
 - Before execution, read runtime truth; read PR/branch/checks/runs when needed.
-- No open PR: read Issue; propose E2E slice.
 - Schema: build only under vtddExecute, not vtddGateway.
 - judgmentTrace first four steps exactly: constitution, runtime_truth, issue_context, current_query.
 - No constitutionConsulted input; constitution-first trace passes policy.

@@ -11,6 +11,8 @@ export const CustomGptSetupArtifact = Object.freeze({
   OPENAPI_JSON: "openapi_json"
 });
 
+export const CUSTOM_GPT_ACTION_OPERATION_LIMIT = 30;
+
 const SETUP_ARTIFACT_SPECS = Object.freeze({
   [CustomGptSetupArtifact.INSTRUCTIONS]: {
     path: "docs/setup/custom-gpt-instructions.md",
@@ -39,6 +41,12 @@ export const RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/setup/openapi.json",
     "/setup/instructions.txt",
     "/setup/diagnostics",
+    "/v2/custom-gpt/gateway",
+    "/v2/custom-gpt/memory",
+    "/v2/custom-gpt/github",
+    "/v2/custom-gpt/setup",
+    "/v2/custom-gpt/execution",
+    "/v2/custom-gpt/ops",
     "/v2/gateway",
     "/v2/action/execute",
     "/v2/action/github",
@@ -76,6 +84,12 @@ export const RUNTIME_SETUP_MANIFEST = Object.freeze({
   ],
   operationIds: [
     "getHealth",
+    "vtddCustomGptGateway",
+    "vtddCustomGptMemory",
+    "vtddCustomGptGitHub",
+    "vtddCustomGptSetup",
+    "vtddCustomGptExecution",
+    "vtddCustomGptOps",
     "vtddGateway",
     "vtddExecute",
     "vtddWriteGitHub",
@@ -112,6 +126,12 @@ export const RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddRetrieveSetupDiagnostics"
   ],
   instructionTokens: [
+    "vtddCustomGptGateway",
+    "vtddCustomGptMemory",
+    "vtddCustomGptGitHub",
+    "vtddCustomGptSetup",
+    "vtddCustomGptExecution",
+    "vtddCustomGptOps",
     "vtddGateway",
     "vtddExecute",
     "vtddWriteGitHub",
@@ -655,17 +675,24 @@ export function evaluateRuntimeSetupManifestParity(input = {}) {
   const runtimeMissingInstructionTokens = canonicalInstructionTokens.filter(
     (token) => !(runtimeManifest.instructionTokens ?? []).includes(token)
   );
+  const operationLimit = {
+    limit: CUSTOM_GPT_ACTION_OPERATION_LIMIT,
+    count: canonicalOperationIds.length,
+    exceeded: canonicalOperationIds.length > CUSTOM_GPT_ACTION_OPERATION_LIMIT
+  };
 
   return {
     ok:
       runtimeMissingRoutes.length === 0 &&
       runtimeMissingOperationIds.length === 0 &&
-      runtimeMissingInstructionTokens.length === 0,
+      runtimeMissingInstructionTokens.length === 0 &&
+      !operationLimit.exceeded,
     canonical: {
       routes: canonicalRoutes,
       operationIds: canonicalOperationIds,
       instructionTokens: canonicalInstructionTokens
     },
+    operationLimit,
     runtimeManifest,
     runtimeMissing: {
       routes: runtimeMissingRoutes,
@@ -1476,13 +1503,20 @@ function evaluateActionSchemaDiagnostics({ openApiContent, runtimeOrigin }) {
   const routes = extractOpenApiRoutes(content);
   const hasGatewayBearerAuth = content.includes("GatewayBearerAuth") && content.includes("scheme: bearer");
   const hasResponseModeActionVisible =
-    content.includes("name: responseMode") && content.includes("action_visible");
-  const hasSelfParity = operationIds.includes("vtddRetrieveSelfParity");
-  const hasSetupArtifact = operationIds.includes("vtddRetrieveSetupArtifact");
-  const hasSetupDiagnostics = operationIds.includes("vtddRetrieveSetupDiagnostics");
+    (content.includes("name: responseMode") || content.includes("responseMode:")) &&
+    content.includes("action_visible");
+  const setupSchemaBlock = extractYamlSchemaBlock(content, "VtddCustomGptSetupRequest");
+  const hasSelfParity =
+    operationIds.includes("vtddRetrieveSelfParity") || setupSchemaBlock.includes("- self_parity");
+  const hasSetupArtifact =
+    operationIds.includes("vtddRetrieveSetupArtifact") || setupSchemaBlock.includes("- setup_artifact");
+  const hasSetupDiagnostics =
+    operationIds.includes("vtddRetrieveSetupDiagnostics") || setupSchemaBlock.includes("- diagnostics");
   const executeSchemaBlock = extractYamlSchemaBlock(content, "VtddExecuteRequest");
   const gatewaySchemaBlock = extractYamlSchemaBlock(content, "VtddGatewayRequest");
-  const buildUnderExecute = executeSchemaBlock.includes("- build");
+  const customGptExecutionSchemaBlock = extractYamlSchemaBlock(content, "VtddCustomGptExecutionRequest");
+  const buildUnderExecute =
+    executeSchemaBlock.includes("- build") || customGptExecutionSchemaBlock.includes("- execute");
   const buildUnderGateway = gatewaySchemaBlock.includes("- build");
   const serverUrl = extractOpenApiServerUrl(content);
   const expectedServerUrl = normalizeOrigin(runtimeOrigin);
@@ -1888,7 +1922,20 @@ function extractOpenApiRoutes(content) {
 }
 
 function extractOperationIds(content) {
-  return [...content.matchAll(/^\s+operationId:\s+([^\s]+)\s*$/gm)].map((match) => match[1]);
+  return [...content.matchAll(/^\s+operationId:\s+([^\n]+?)\s*$/gm)].map((match) =>
+    normalizeYamlScalar(match[1])
+  );
+}
+
+function normalizeYamlScalar(value) {
+  const text = normalizeText(value);
+  if (
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
+  ) {
+    return text.slice(1, -1);
+  }
+  return text;
 }
 
 function extractInstructionTokens(content, operationIds) {

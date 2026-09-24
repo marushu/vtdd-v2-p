@@ -392,49 +392,32 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
   }
 });
 
-test("custom gpt openapi doc exposes current gateway, execute, and progress routes", () => {
+test("custom gpt openapi doc exposes facade routes under the operation limit", () => {
   const doc = fs.readFileSync(OPENAPI_PATH, "utf8");
   assert.match(doc, /openapi:\s+3\.(0|1)\.\d+/);
-  assert.equal(doc.includes("/v2/gateway:"), true);
-  assert.equal(doc.includes("/v2/action/execute:"), true);
-  assert.equal(doc.includes("/v2/action/github:"), true);
-  assert.equal(doc.includes("/v2/action/github-authority:"), true);
-  assert.equal(doc.includes("/v2/action/deploy:"), true);
-  assert.equal(doc.includes("/v2/action/github-actions-secret:"), true);
-  assert.equal(doc.includes("- VTDD_GATEWAY_BEARER_TOKEN"), true);
-  assert.equal(doc.includes("/v2/action/github-actions-variable:"), true);
-  assert.equal(doc.includes("operationId: vtddSyncGitHubActionsVariable"), true);
-  assert.equal(doc.includes("- VTDD_DASHBOARD_VPS_MAINTENANCE_HOST"), true);
-  assert.equal(doc.includes("- VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR"), true);
-  assert.equal(doc.includes("/v2/action/repository-nickname:"), true);
-  assert.equal(doc.includes("/v2/action/repository-nickname/delete:"), true);
-  assert.equal(doc.includes("/v2/action/progress:"), true);
-  assert.equal(doc.includes("/v2/retrieve/github:"), true);
-  assert.equal(doc.includes("/v2/retrieve/cloudflare-pages:"), true);
-  assert.equal(doc.includes("/v2/retrieve/repository-nicknames:"), true);
-  assert.equal(doc.includes("/v2/retrieve/setup-artifact:"), true);
-  assert.equal(doc.includes("/v2/retrieve/self-parity:"), true);
-  assert.equal(doc.includes("/v2/retrieve/setup-diagnostics:"), true);
-  assert.equal(doc.includes("/v2/retrieve/approval-grant:"), true);
-  assert.equal(doc.includes("/v2/retrieve/constitution:"), true);
-  assert.equal(doc.includes("/v2/retrieve/decisions:"), true);
-  assert.equal(doc.includes("/v2/retrieve/proposals:"), true);
-  assert.equal(doc.includes("/v2/retrieve/cross:"), true);
-  assert.equal(doc.includes("/v2/retrieve/startup-preflight:"), true);
-  assert.equal(doc.includes("/v2/retrieve/vps-maintenance-install-inventory:"), true);
-  assert.equal(doc.includes("execution queue traffic-control truth"), true);
-  assert.equal(doc.includes("- dashboard_butler"), true);
-  assert.equal(doc.includes("operationId: vtddRetrieveConstitution"), true);
-  assert.equal(doc.includes("operationId: vtddRetrieveDecisionLogs"), true);
-  assert.equal(doc.includes("operationId: vtddRetrieveProposalLogs"), true);
-  assert.equal(doc.includes("operationId: vtddRetrieveCrossMemory"), true);
-  assert.equal(doc.includes("operationId: vtddRetrieveOperationalMemory"), true);
-  assert.equal(doc.includes("operationId: vtddStartupPreflight"), true);
-  assert.equal(doc.includes("operationId: vtddRetrieveVpsMaintenanceInstallInventory"), true);
-  assert.equal(doc.includes("operationId: vtddRetrieveCloudflarePages"), true);
-  assert.equal(doc.includes("operationId: vtddRetrieveSetupDiagnostics"), true);
-  assert.equal(doc.includes("OperationalMemoryResponse:"), true);
-  assert.equal(doc.includes("$ref: \"#/components/schemas/OperationalMemoryResponse\""), true);
+  const operationIds = [...doc.matchAll(/operationId:\s+([^\n]+)/g)].map((match) =>
+    match[1].trim().replace(/^["']|["']$/g, "")
+  );
+  assert.deepEqual(operationIds, [
+    "getHealth",
+    "vtddCustomGptGateway",
+    "vtddCustomGptMemory",
+    "vtddCustomGptGitHub",
+    "vtddCustomGptSetup",
+    "vtddCustomGptExecution",
+    "vtddCustomGptOps"
+  ]);
+  assert.equal(operationIds.length <= 30, true);
+  assert.equal(doc.includes("/v2/custom-gpt/gateway:"), true);
+  assert.equal(doc.includes("/v2/custom-gpt/memory:"), true);
+  assert.equal(doc.includes("/v2/custom-gpt/github:"), true);
+  assert.equal(doc.includes("/v2/custom-gpt/setup:"), true);
+  assert.equal(doc.includes("/v2/custom-gpt/execution:"), true);
+  assert.equal(doc.includes("/v2/custom-gpt/ops:"), true);
+  assert.equal(doc.includes("operationId: vtddDeployProduction"), false);
+  assert.equal(doc.includes("operationId: vtddSyncGitHubActionsSecret"), false);
+  assert.equal(doc.includes("operationId: vtddCreateVpsMaintenanceProposal"), false);
+  assert.equal(doc.includes("operationId: vtddRetrieveApprovalGrant"), false);
   assert.equal(doc.includes("GatewayBearerAuth"), true);
   assert.equal(doc.includes("operationId: getHealth\n      security: []"), true);
   assert.equal(doc.includes("conversation:"), true);
@@ -443,47 +426,34 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("- issue_create"), true);
   assert.equal(doc.includes("pullNumber"), true);
   assert.equal(doc.includes("workflow_runs"), true);
-  assert.equal(doc.includes("enum:\n                - vtdd-butler-core-v1"), true);
   assert.equal(doc.includes("requiresHandoff:"), true);
-  assert.equal(doc.includes("- relatedIssue"), true);
+  assert.equal(doc.includes("relatedIssue:"), true);
   assert.equal(doc.includes("issueTraceability:"), true);
-  assert.equal(doc.includes("approvalScopeMatched:"), true);
   assert.equal(doc.includes("naturalApproval:"), true);
-  assert.equal(doc.includes("exactPayloadPresented:"), true);
-  assert.equal(doc.includes("presentedPayload:"), true);
 });
 
-test("custom gpt self-parity action exposes issue close proof parameters", () => {
+test("custom gpt setup facade exposes issue close proof parameters", () => {
   const openapiJson = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
-  const setupArtifactParams =
-    openapiJson.paths["/v2/retrieve/setup-artifact"].get.parameters.map((parameter) => parameter.name);
-  const selfParityParams =
-    openapiJson.paths["/v2/retrieve/self-parity"].get.parameters.map((parameter) => parameter.name);
+  const setupSchemaRef =
+    openapiJson.paths["/v2/custom-gpt/setup"].post.requestBody.content["application/json"].schema.$ref;
+  const setupRequest = openapiJson.components.schemas[setupSchemaRef.split("/").at(-1)];
 
-  assert.equal(setupArtifactParams.includes("issueNumber"), false);
-  assert.equal(setupArtifactParams.includes("pullNumber"), false);
-  assert.equal(selfParityParams.includes("issueNumber"), true);
-  assert.equal(selfParityParams.includes("pullNumber"), true);
+  assert.equal(setupRequest.properties.action.enum.includes("self_parity"), true);
+  assert.equal(setupRequest.properties.action.enum.includes("setup_artifact"), true);
+  assert.equal(typeof setupRequest.properties.issueNumber, "object");
+  assert.equal(typeof setupRequest.properties.pullNumber, "object");
+  assert.equal(typeof setupRequest.properties.actionName, "object");
+  assert.equal(typeof setupRequest.properties.httpStatus, "object");
+  assert.deepEqual(setupRequest.properties.responseMode.enum, ["action_visible"]);
 
   const yaml = fs.readFileSync(OPENAPI_PATH, "utf8");
-  const setupArtifactSection = yaml.slice(
-    yaml.indexOf("  /v2/retrieve/setup-artifact:"),
-    yaml.indexOf("  /v2/retrieve/self-parity:")
+  const setupSection = yaml.slice(
+    yaml.indexOf("  /v2/custom-gpt/setup:"),
+    yaml.indexOf("  /v2/custom-gpt/execution:")
   );
-  const selfParitySection = yaml.slice(
-    yaml.indexOf("  /v2/retrieve/self-parity:"),
-    yaml.indexOf("  /v2/retrieve/setup-diagnostics:")
-  );
-  assert.equal(setupArtifactSection.includes("- name: issueNumber"), false);
-  assert.equal(setupArtifactSection.includes("- name: pullNumber"), false);
-  assert.equal(selfParitySection.includes("- name: issueNumber"), true);
-  assert.equal(selfParitySection.includes("- name: pullNumber"), true);
-  assert.equal(typeof openapiJson.paths["/v2/retrieve/setup-diagnostics"], "object");
-  const diagnosticsParams =
-    openapiJson.paths["/v2/retrieve/setup-diagnostics"].get.parameters.map((parameter) => parameter.name);
-  assert.equal(diagnosticsParams.includes("actionName"), true);
-  assert.equal(diagnosticsParams.includes("httpStatus"), true);
-  assert.equal(diagnosticsParams.includes("responseMode"), true);
+  assert.equal(setupSection.includes('$ref: "#/components/schemas/VtddCustomGptSetupRequest"'), true);
+  assert.equal(yaml.includes("issueNumber:"), true);
+  assert.equal(yaml.includes("pullNumber:"), true);
 });
 
 test("custom gpt openapi keeps components.schemas while avoiding nested field refs", () => {
@@ -491,7 +461,7 @@ test("custom gpt openapi keeps components.schemas while avoiding nested field re
   assert.equal(doc.includes("components:"), true);
   assert.equal(doc.includes("schemas:"), true);
   assert.equal(doc.includes("VtddGenericResponse:"), true);
-  assert.equal(doc.includes('#/components/schemas/VtddGatewayRequest'), true);
+  assert.equal(doc.includes('#/components/schemas/VtddCustomGptGatewayRequest'), true);
   assert.equal(doc.includes("requestBody:"), true);
   assert.equal(doc.includes("policyInput:"), true);
   assert.equal(doc.includes("conversation:"), true);
@@ -501,230 +471,48 @@ test("custom gpt openapi keeps components.schemas while avoiding nested field re
   assert.equal(doc.includes("items:\n            $ref:"), false);
 });
 
-test("custom gpt openapi json parses and exposes paths as an object", () => {
+test("custom gpt openapi json parses and exposes facade paths as an object", () => {
   const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
   assert.match(doc.openapi, /^3\.(0|1)\.\d+$/);
   assert.equal(typeof doc.paths, "object");
   assert.notEqual(doc.paths, null);
-  assert.equal(typeof doc.paths["/v2/gateway"], "object");
-  assert.equal(typeof doc.paths["/v2/action/execute"], "object");
-  assert.equal(typeof doc.paths["/v2/action/github"], "object");
-  assert.equal(typeof doc.paths["/v2/action/memory-write"], "object");
-  assert.equal(doc.paths["/v2/action/memory-write"].post.operationId, "vtddWriteOperationalMemory");
-  assert.equal(typeof doc.paths["/v2/codex-analytics/usage/snapshots"], "object");
-  assert.equal(
-    doc.paths["/v2/codex-analytics/usage/snapshots"].post.operationId,
-    "vtddIngestCodexAnalyticsUsageSnapshot"
-  );
-  assert.equal(
-    doc.paths["/v2/action/github"].post.requestBody.content["application/json"].schema.properties.operation.enum.includes(
-      "issue_create"
-    ),
-    true
-  );
-  const githubWriteSchema = doc.paths["/v2/action/github"].post.requestBody.content["application/json"].schema;
-  assert.equal(typeof githubWriteSchema.properties.naturalApproval, "object");
-  assert.deepEqual(githubWriteSchema.properties.naturalApproval.properties.presentedPayload.properties.operation.enum, [
-    "issue_create",
-    "issue_comment_create",
-    "pull_comment_create"
+  assert.deepEqual(Object.keys(doc.paths), [
+    "/health",
+    "/v2/custom-gpt/gateway",
+    "/v2/custom-gpt/memory",
+    "/v2/custom-gpt/github",
+    "/v2/custom-gpt/setup",
+    "/v2/custom-gpt/execution",
+    "/v2/custom-gpt/ops"
   ]);
-  assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
-  assert.equal(typeof doc.paths["/v2/action/deploy"], "object");
-  assert.equal(typeof doc.paths["/v2/action/github-actions-secret"], "object");
+  assert.equal(doc.paths["/v2/custom-gpt/memory"].post.operationId, "vtddCustomGptMemory");
   assert.equal(
-    doc.paths["/v2/action/github-actions-secret"].post.requestBody.content[
-      "application/json"
-    ].schema.properties.secretName.enum.includes("VTDD_GATEWAY_BEARER_TOKEN"),
+    doc.components.schemas.VtddCustomGptGitHubRequest.properties.operation.enum.includes("issue_create"),
     true
   );
-  assert.equal(typeof doc.paths["/v2/action/github-actions-variable"], "object");
-  assert.equal(
-    doc.paths["/v2/action/github-actions-variable"].post.requestBody.content[
-      "application/json"
-    ].schema.properties.variableName.enum.includes("VTDD_DASHBOARD_VPS_MAINTENANCE_HOST"),
-    true
-  );
-  assert.deepEqual(
-    doc.paths["/v2/action/github-actions-variable"].post.requestBody.content[
-      "application/json"
-    ].schema.required,
-    ["repository", "variableName", "variableValue", "policyInput"]
-  );
-  assert.deepEqual(
-    doc.paths["/v2/action/github-actions-variable"].post.requestBody.content[
-      "application/json"
-    ].schema.properties.policyInput.required,
-    ["approvalGrantId"]
-  );
-  assert.equal(typeof doc.paths["/v2/action/repository-nickname"], "object");
-  assert.equal(typeof doc.paths["/v2/action/repository-nickname/delete"], "object");
-  assert.equal(
-    doc.paths["/v2/action/repository-nickname/delete"].post.operationId,
-    "vtddDeleteRepositoryNickname"
-  );
-  assert.equal(typeof doc.paths["/v2/action/progress"], "object");
-  assert.deepEqual(
-    doc.components.schemas.VtddExecuteRequest.properties.executorTransport.enum,
-    [
-      "codex_cloud_github_comment",
-      "codex_cloud_cli_control_runner",
-      "vps_runner",
-      "api_key_runner"
-    ]
-  );
-  assert.deepEqual(
-    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
-      .executorTransport.enum,
-    [
-      "codex_cloud_github_comment",
-      "codex_cloud_cli_control_runner",
-      "vps_runner",
-      "api_key_runner"
-    ]
-  );
-  assert.deepEqual(
-    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
-      .codexGoal.enum,
-    ["open_pr", "revise_pr", "respond_to_review", "post_merge_verify"]
-  );
-  assert.deepEqual(
-    doc.paths["/v2/action/progress"].get.parameters.find(
-      (parameter) => parameter.name === "executorTransport"
-    ).schema.enum,
-    [
-      "codex_cloud_github_comment",
-      "codex_cloud_cli_control_runner",
-      "vps_runner",
-      "api_key_runner"
-    ]
-  );
-  assert.equal(typeof doc.paths["/v2/retrieve/github"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/cloudflare-pages"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/repository-nicknames"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/setup-artifact"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/self-parity"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/constitution"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/decisions"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/proposals"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/cross"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/operational-memory"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/codex-analytics-usage"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/startup-preflight"], "object");
-  assert.equal(typeof doc.paths["/v2/retrieve/vps-maintenance-install-inventory"], "object");
-  assert.equal(doc.paths["/v2/retrieve/constitution"].get.operationId, "vtddRetrieveConstitution");
-  assert.equal(doc.paths["/v2/retrieve/decisions"].get.operationId, "vtddRetrieveDecisionLogs");
-  assert.equal(doc.paths["/v2/retrieve/proposals"].get.operationId, "vtddRetrieveProposalLogs");
-  assert.equal(doc.paths["/v2/retrieve/cross"].get.operationId, "vtddRetrieveCrossMemory");
-  assert.equal(
-    doc.paths["/v2/retrieve/startup-preflight"].get.operationId,
-    "vtddStartupPreflight"
-  );
-  assert.equal(
-    doc.paths["/v2/retrieve/codex-analytics-usage"].get.operationId,
-    "vtddRetrieveCodexAnalyticsUsage"
-  );
-  assert.equal(
-    doc.paths["/v2/retrieve/vps-maintenance-install-inventory"].get.operationId,
-    "vtddRetrieveVpsMaintenanceInstallInventory"
-  );
-  assert.equal(
-    doc.paths["/v2/retrieve/startup-preflight"].get.summary.includes(
-      "execution queue traffic-control truth"
-    ),
-    true
-  );
-  assert.equal(
-    doc.paths["/v2/retrieve/startup-preflight"].get.parameters
-      .find((parameter) => parameter.name === "currentSurface")
-      .schema.enum.includes("dashboard_butler"),
-    true
-  );
-  assert.equal(
-    doc.paths["/v2/retrieve/cloudflare-pages"].get.operationId,
-    "vtddRetrieveCloudflarePages"
-  );
-  assert.equal(
-    doc.paths["/v2/retrieve/operational-memory"].get.responses["200"].content["application/json"].schema.$ref,
-    "#/components/schemas/OperationalMemoryResponse"
-  );
-  assert.deepEqual(doc.components.schemas.OperationalMemoryResponse.required, [
-    "ok",
-    "architecture",
-    "memoryUseRule",
-    "compactContext",
-    "referencesByLayer",
-    "retrievalSignals"
+  assert.equal(typeof doc.components.schemas.VtddCustomGptGitHubRequest.properties.naturalApproval, "object");
+  assert.deepEqual(doc.components.schemas.VtddCustomGptExecutionRequest.properties.executorTransport.enum, [
+    "codex_cloud_github_comment",
+    "codex_cloud_cli_control_runner",
+    "vps_runner",
+    "api_key_runner"
   ]);
-  assert.equal(
-    doc.components.schemas.OperationalMemoryResponse.properties.referencesByLayer.properties.immediate_context.type,
-    "array"
-  );
-  assert.deepEqual(
-    doc.components.schemas.VtddGatewayRequest.properties.surfaceContext.properties
-      .judgmentModelId.enum,
-    ["vtdd-butler-core-v1"]
-  );
-  assert.deepEqual(
-    doc.components.schemas.VtddExecuteRequest.properties.surfaceContext.properties.judgmentModelId.enum,
-    ["vtdd-butler-core-v1"]
-  );
-  assert.equal(
-    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
-      .requiresHandoff.type,
-    "boolean"
-  );
-  assert.equal(
-    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
-      .handoff.properties.approvalScopeMatched.type,
-    "boolean"
-  );
-  assert.deepEqual(
-    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties.handoff.required,
-    ["issueTraceable", "approvalScopeMatched", "relatedIssue", "summary"]
-  );
-  assert.equal(
-    doc.components.schemas.VtddExecuteRequest.properties.policyInput.properties.issueTraceability
-      .properties.intentRefs.items.type,
-    "string"
-  );
-  assert.equal(
-    doc.components.schemas.VtddGatewayRequest.properties.policyInput.properties.actionType.enum.includes("build"),
-    false
-  );
-  assert.equal(
-    doc.components.schemas.VtddExecuteRequest.properties.policyInput.properties.actionType.enum.includes("build"),
-    true
-  );
+  assert.equal(doc.components.schemas.VtddCustomGptGatewayRequest.properties.surfaceContext.type, "object");
+  assert.equal(doc.components.schemas.VtddCustomGptExecutionRequest.properties.continuationContext.type, "object");
   assert.deepEqual(doc.paths["/health"].get.security, []);
   assert.equal(typeof doc.components.schemas, "object");
   assert.equal(doc.components.securitySchemes.GatewayBearerAuth.scheme, "bearer");
 });
 
-test("custom gpt openapi json exposes JSON bodies for Butler action auth failures", () => {
+test("custom gpt facade json exposes JSON bodies for Butler action auth failures", () => {
   const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
   const routes = [
-    ["/v2/action/github", "post"],
-    ["/v2/action/memory-write", "post"],
-    ["/v2/codex-analytics/usage/snapshots", "post"],
-    ["/v2/action/repository-nickname", "post"],
-    ["/v2/action/repository-nickname/delete", "post"],
-    ["/v2/retrieve/constitution", "get"],
-    ["/v2/retrieve/decisions", "get"],
-    ["/v2/retrieve/proposals", "get"],
-    ["/v2/retrieve/cross", "get"],
-    ["/v2/retrieve/operational-memory", "get"],
-    ["/v2/retrieve/codex-analytics-usage", "get"],
-    ["/v2/retrieve/startup-preflight", "get"],
-    ["/v2/retrieve/vps-maintenance-install-inventory", "get"],
-    ["/v2/retrieve/github", "get"],
-    ["/v2/retrieve/cloudflare-pages", "get"],
-    ["/v2/retrieve/repository-nicknames", "get"],
-    ["/v2/retrieve/setup-artifact", "get"],
-    ["/v2/retrieve/approval-grant", "get"],
-    ["/v2/retrieve/self-parity", "get"],
-    ["/v2/retrieve/setup-diagnostics", "get"]
+    ["/v2/custom-gpt/gateway", "post"],
+    ["/v2/custom-gpt/memory", "post"],
+    ["/v2/custom-gpt/github", "post"],
+    ["/v2/custom-gpt/setup", "post"],
+    ["/v2/custom-gpt/execution", "post"],
+    ["/v2/custom-gpt/ops", "post"]
   ];
 
   for (const [route, method] of routes) {
@@ -736,30 +524,15 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
   }
 });
 
-test("custom gpt retrieve actions expose action-visible response mode for test-screen debugging", () => {
+test("custom gpt facade schemas expose action-visible response mode for test-screen debugging", () => {
   const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
-  const routes = [
-    "/v2/retrieve/constitution",
-    "/v2/retrieve/decisions",
-    "/v2/retrieve/proposals",
-    "/v2/retrieve/cross",
-    "/v2/retrieve/operational-memory",
-    "/v2/retrieve/codex-analytics-usage",
-    "/v2/retrieve/startup-preflight",
-    "/v2/retrieve/vps-maintenance-install-inventory",
-    "/v2/retrieve/github",
-    "/v2/retrieve/cloudflare-pages",
-    "/v2/retrieve/repository-nicknames",
-    "/v2/retrieve/setup-artifact",
-    "/v2/retrieve/self-parity",
-    "/v2/retrieve/setup-diagnostics",
-    "/v2/retrieve/approval-grant"
-  ];
-
-  for (const route of routes) {
-    const parameter = doc.paths[route].get.parameters.find((item) => item.name === "responseMode");
-    assert.equal(parameter.in, "query");
-    assert.deepEqual(parameter.schema.enum, ["action_visible"]);
-    assert.match(parameter.description, /ClientResponseError/);
-  }
+  assert.deepEqual(doc.components.schemas.VtddCustomGptMemoryRequest.properties.responseMode.enum, [
+    "action_visible"
+  ]);
+  assert.deepEqual(doc.components.schemas.VtddCustomGptGitHubRequest.properties.responseMode.enum, [
+    "action_visible"
+  ]);
+  assert.deepEqual(doc.components.schemas.VtddCustomGptSetupRequest.properties.responseMode.enum, [
+    "action_visible"
+  ]);
 });

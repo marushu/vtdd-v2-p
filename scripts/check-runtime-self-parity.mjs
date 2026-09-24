@@ -54,6 +54,11 @@ if (!result.ok) {
   console.error(formatList(result.runtimeMissing.operationIds));
   console.error("Missing instruction tokens:");
   console.error(formatList(result.runtimeMissing.instructionTokens));
+  if (result.operationLimit?.exceeded) {
+    console.error(
+      `Custom GPT operation limit exceeded: ${result.operationLimit.count}/${result.operationLimit.limit}`
+    );
+  }
   console.error(
     "Update RUNTIME_SETUP_MANIFEST in src/core/custom-gpt-setup-artifacts.js when adding Action Schema routes or operationIds."
   );
@@ -62,4 +67,6 @@ if (!result.ok) {
 
 console.log("Runtime setup manifest parity check passed.");
 console.log(`Checked ${result.canonical.routes.length} routes.`);
-console.log(`Checked ${result.canonical.operationIds.length} operationIds.`);
+console.log(
+  `Checked ${result.canonical.operationIds.length}/${result.operationLimit.limit} Custom GPT operationIds.`
+);
