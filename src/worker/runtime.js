@@ -1,4 +1,9 @@
 import {
+  normalizeMonitorSnapshot, computeMonitorView, readMonitorBody,
+  resolveDashboardMonitorStore, MonitorInputError
+} from "../core/dashboard-monitor-state.js";
+import { renderDashboardMonitorHome } from "./dashboard-monitor-home.js";
+import {
   AutonomyMode,
   ActorRole,
   buildCustomGptRecoveryBundle,
@@ -1531,6 +1536,43 @@ export default {
       return png(200, dashboardButlerIconPngDataUrl);
     }
 
+    if ((request.method === "POST" && url.pathname === "/v2/dashboard/monitors") ||
+        (request.method === "GET" && url.pathname === "/v2/dashboard/overview")) {
+      const writing = request.method === "POST";
+      const auth = writing
+        ? authorizeGatewayRequest({ request, env, apiSuffix: "/dashboard/monitors" })
+        : await authorizeDashboardRequest({ request, env, apiSuffix: "/dashboard/overview" });
+      const headers = { "cache-control": "no-store" };
+      if (!auth.ok) return json(auth.status, { error: "unauthorized" }, headers);
+      const store = resolveDashboardMonitorStore(env);
+      if (!store) return json(503, { error: "monitor_store_unavailable" }, headers);
+      try {
+        if (writing) {
+          const snapshot = normalizeMonitorSnapshot(await readMonitorBody(request));
+          await store.put(snapshot);
+          return json(200, { ok: true, receivedAt: snapshot.receivedAt }, headers);
+        }
+        const now = Date.now();
+        const monitors = (await store.list()).slice(0, 100).map(m => computeMonitorView(m, now));
+        const events = resolveDashboardEventStore(env);
+        let notifications = [], notificationsAvailable = false;
+        if (events?.listRecent) {
+          try {
+            notifications = (await events.listRecent({ limit: 100 })).filter(event => event.kind !== "dashboard_push_received").slice(0, 12).map(event => ({
+              title: String((event.kind === "owner_action_required" ? event.changeSummary : event.title) || "通知").slice(0, 200),
+              message: String(event.kind === "owner_action_required" ? event.title || event.message || "" : event.message || event.changeSummary || "").slice(0, 1000),
+              createdAt: event.createdAt || event.updatedAt || null
+            }));
+            notificationsAvailable = true;
+          } catch { /* History failure must not disguise current monitor truth. */ }
+        }
+        return json(200, { serverTime: new Date(now).toISOString(), monitors, notifications, notificationsAvailable }, headers);
+      } catch (error) {
+        return json(error instanceof MonitorInputError ? error.status : 503,
+          { error: error instanceof MonitorInputError ? error.message : "monitor_store_unavailable" }, headers);
+      }
+    }
+
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
@@ -1546,7 +1588,7 @@ export default {
       }
     }
 
-    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
+    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/dashboard/chat" || url.pathname === "/orchestrator")) {
       const dashboardAuth = await authorizeDashboardRequest({
         request,
         env,
@@ -1559,12 +1601,14 @@ export default {
       });
       return html(
         200,
-        await renderV2DashboardPage({
+        url.pathname === "/dashboard" && !["threadId", "thread_id", "repository", "repositoryInput", "issueNumber"].some(key => url.searchParams.has(key))
+          ? renderDashboardMonitorHome()
+          : await renderV2DashboardPage({
           runtimeOrigin: url.origin,
           url,
           dashboardEventStore: resolveDashboardEventStore(env)
         }),
-        dashboardSessionHeaders
+        { ...dashboardSessionHeaders, "cache-control": "no-store" }
       );
     }
 
@@ -17023,10 +17067,11 @@ function summarizeObjectValue(value) {
 
 function renderDashboardUtilityNavLinks() {
   const items = [
-    ["Dashboard", "/dashboard"],
+    ["ホーム", "/dashboard"],
+    ["チャット", "/dashboard/chat"],
     ["通知センター", "/dashboard/notifications"],
     ["AI news", "/dashboard/news"],
-    ["GitHub truth", "/dashboard/github-truth"],
+    ["GitHub truth", "/dashboard/github"],
     ["Startup preflight", "/dashboard/preflight"],
     ["Execution progress", "/dashboard/progress"],
     ["VPS runner", "/dashboard/vps-runner"],
@@ -17207,7 +17252,7 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
               <p class="muted">${escapeDashboardHtml(subtitle || "")}</p>
             </div>
           </div>
-          <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">Dashboard</a>
+          <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">ホーム</a>
         </header>
         ${body}
       </section>
@@ -18017,7 +18062,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <span class="eyebrow">Dashboard</span>
         <div class="surface-list">
           ${renderDashboardActionList([
-            { label: "Dashboard", href: `${origin}/dashboard` },
+            { label: "ホーム", href: `${origin}/dashboard` },
             { label: "通知センター", href: `${origin}/dashboard/notifications` },
             { label: "AI news", href: `${origin}/dashboard/news` },
             { label: "Execution progress", href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "", disabledReason: "repo 設定後" },
@@ -21335,7 +21380,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
         <h1>Runtime Status</h1>
         <p>ブラウザで見るための health summary です。</p>
       </div>
-      <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">Dashboard</a>
+      <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">ホーム</a>
     </header>
 
     <section class="panel notice">

@@ -40,9 +40,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/pvtsutils/build/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/pvtsutils/build/index.js
 var require_build = __commonJS({
-  "node_modules/pvtsutils/build/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/pvtsutils/build/index.js"(exports) {
     "use strict";
     var ARRAY_BUFFER_NAME = "[object ArrayBuffer]";
     var BufferSourceConverter6 = class _BufferSourceConverter {
@@ -404,9 +404,9 @@ var require_build = __commonJS({
   }
 });
 
-// node_modules/reflect-metadata/Reflect.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/reflect-metadata/Reflect.js
 var require_Reflect = __commonJS({
-  "node_modules/reflect-metadata/Reflect.js"() {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/reflect-metadata/Reflect.js"() {
     var Reflect2;
     (function(Reflect3) {
       (function(factory) {
@@ -1495,9 +1495,9 @@ var require_crypto = __commonJS({
   }
 });
 
-// node_modules/tweetnacl/nacl-fast.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl/nacl-fast.js
 var require_nacl_fast = __commonJS({
-  "node_modules/tweetnacl/nacl-fast.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl/nacl-fast.js"(exports, module) {
     (function(nacl5) {
       "use strict";
       var gf = function(init) {
@@ -3719,18 +3719,18 @@ var require_nacl_fast = __commonJS({
   }
 });
 
-// node_modules/tweetnacl-sealedbox-js/src/consts.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/consts.js
 var import_tweetnacl, overheadLength;
 var init_consts = __esm({
-  "node_modules/tweetnacl-sealedbox-js/src/consts.js"() {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/consts.js"() {
     import_tweetnacl = __toESM(require_nacl_fast());
     overheadLength = import_tweetnacl.default.box.publicKeyLength + import_tweetnacl.default.box.overheadLength;
   }
 });
 
-// node_modules/blakejs/util.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/blakejs/util.js
 var require_util = __commonJS({
-  "node_modules/blakejs/util.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/blakejs/util.js"(exports, module) {
     var ERROR_MSG_INPUT = "Input must be an string, Buffer or Uint8Array";
     function normalizeInput(input) {
       let ret;
@@ -3800,9 +3800,9 @@ var require_util = __commonJS({
   }
 });
 
-// node_modules/blakejs/blake2b.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/blakejs/blake2b.js
 var require_blake2b = __commonJS({
-  "node_modules/blakejs/blake2b.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/blakejs/blake2b.js"(exports, module) {
     var util2 = require_util();
     function ADD64AA(v2, a, b) {
       const o0 = v2[a] + v2[b];
@@ -4274,7 +4274,7 @@ var require_blake2b = __commonJS({
   }
 });
 
-// node_modules/tweetnacl-sealedbox-js/src/nonce.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/nonce.js
 function nonce(pk1, pk2) {
   var state = import_blake2b.default.blake2bInit(import_tweetnacl2.default.box.nonceLength, null);
   import_blake2b.default.blake2bUpdate(state, pk1);
@@ -4283,24 +4283,24 @@ function nonce(pk1, pk2) {
 }
 var import_tweetnacl2, import_blake2b;
 var init_nonce = __esm({
-  "node_modules/tweetnacl-sealedbox-js/src/nonce.js"() {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/nonce.js"() {
     import_tweetnacl2 = __toESM(require_nacl_fast());
     import_blake2b = __toESM(require_blake2b());
   }
 });
 
-// node_modules/tweetnacl-sealedbox-js/src/utils.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/utils.js
 function zero(buf) {
   for (var i = 0; i < buf.length; i++) {
     buf[i] = 0;
   }
 }
 var init_utils = __esm({
-  "node_modules/tweetnacl-sealedbox-js/src/utils.js"() {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/utils.js"() {
   }
 });
 
-// node_modules/tweetnacl-sealedbox-js/src/seal.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/seal.js
 function seal(m, pk) {
   var c = new Uint8Array(overheadLength + m.length);
   var ek = import_tweetnacl3.default.box.keyPair();
@@ -4313,7 +4313,7 @@ function seal(m, pk) {
 }
 var import_tweetnacl3;
 var init_seal = __esm({
-  "node_modules/tweetnacl-sealedbox-js/src/seal.js"() {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/seal.js"() {
     import_tweetnacl3 = __toESM(require_nacl_fast());
     init_nonce();
     init_consts();
@@ -4321,7 +4321,7 @@ var init_seal = __esm({
   }
 });
 
-// node_modules/tweetnacl-sealedbox-js/src/open.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/open.js
 function open(c, pk, sk) {
   var epk = c.subarray(0, import_tweetnacl4.default.box.publicKeyLength);
   var nonce2 = nonce(epk, pk);
@@ -4330,13 +4330,13 @@ function open(c, pk, sk) {
 }
 var import_tweetnacl4;
 var init_open = __esm({
-  "node_modules/tweetnacl-sealedbox-js/src/open.js"() {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/src/open.js"() {
     import_tweetnacl4 = __toESM(require_nacl_fast());
     init_nonce();
   }
 });
 
-// node_modules/tweetnacl-sealedbox-js/entrypoint.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/entrypoint.js
 var entrypoint_exports = {};
 __export(entrypoint_exports, {
   default: () => entrypoint_default,
@@ -4346,7 +4346,7 @@ __export(entrypoint_exports, {
 });
 var entrypoint_default;
 var init_entrypoint = __esm({
-  "node_modules/tweetnacl-sealedbox-js/entrypoint.js"() {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/tweetnacl-sealedbox-js/entrypoint.js"() {
     init_consts();
     init_seal();
     init_open();
@@ -4354,9 +4354,9 @@ var init_entrypoint = __esm({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/code.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/code.js
 var require_code = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/code.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -4508,9 +4508,9 @@ var require_code = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/scope.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/scope.js
 var require_scope = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ValueScope = exports.ValueScopeName = exports.Scope = exports.varKinds = exports.UsedValueState = void 0;
@@ -4653,9 +4653,9 @@ var require_scope = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/index.js
 var require_codegen = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/codegen/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.or = exports.and = exports.not = exports.CodeGen = exports.operators = exports.varKinds = exports.ValueScopeName = exports.ValueScope = exports.Scope = exports.Name = exports.regexpCode = exports.stringify = exports.getProperty = exports.nil = exports.strConcat = exports.str = exports._ = void 0;
@@ -5373,9 +5373,9 @@ var require_codegen = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/util.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/util.js
 var require_util2 = __commonJS({
-  "node_modules/ajv/dist/compile/util.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.checkStrictMode = exports.getErrorPath = exports.Type = exports.useFunc = exports.setEvaluated = exports.evaluatedPropsToName = exports.mergeEvaluated = exports.eachItem = exports.unescapeJsonPointer = exports.escapeJsonPointer = exports.escapeFragment = exports.unescapeFragment = exports.schemaRefOrVal = exports.schemaHasRulesButRef = exports.schemaHasRules = exports.checkUnknownRules = exports.alwaysValidSchema = exports.toHash = void 0;
@@ -5540,9 +5540,9 @@ var require_util2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/names.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/names.js
 var require_names = __commonJS({
-  "node_modules/ajv/dist/compile/names.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/names.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5579,9 +5579,9 @@ var require_names = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/errors.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/errors.js
 var require_errors = __commonJS({
-  "node_modules/ajv/dist/compile/errors.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/errors.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendErrors = exports.resetErrorsCount = exports.reportExtraError = exports.reportError = exports.keyword$DataError = exports.keywordError = void 0;
@@ -5701,9 +5701,9 @@ var require_errors = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/boolSchema.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/boolSchema.js
 var require_boolSchema = __commonJS({
-  "node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.boolOrEmptySchema = exports.topBoolOrEmptySchema = void 0;
@@ -5752,9 +5752,9 @@ var require_boolSchema = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/rules.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/rules.js
 var require_rules = __commonJS({
-  "node_modules/ajv/dist/compile/rules.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/rules.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRules = exports.isJSONType = void 0;
@@ -5783,9 +5783,9 @@ var require_rules = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/applicability.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/applicability.js
 var require_applicability = __commonJS({
-  "node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.shouldUseRule = exports.shouldUseGroup = exports.schemaHasRulesForType = void 0;
@@ -5806,9 +5806,9 @@ var require_applicability = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/dataType.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/dataType.js
 var require_dataType = __commonJS({
-  "node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.reportTypeError = exports.checkDataTypes = exports.checkDataType = exports.coerceAndCheckDataType = exports.getJSONTypes = exports.getSchemaTypes = exports.DataType = void 0;
@@ -5990,9 +5990,9 @@ var require_dataType = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/defaults.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/defaults.js
 var require_defaults = __commonJS({
-  "node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.assignDefaults = void 0;
@@ -6027,9 +6027,9 @@ var require_defaults = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/code.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/code.js
 var require_code2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/code.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateUnion = exports.validateArray = exports.usePattern = exports.callValidateCode = exports.schemaProperties = exports.allSchemaProperties = exports.noPropertyInData = exports.propertyInData = exports.isOwnProperty = exports.hasPropFunc = exports.reportMissingProp = exports.checkMissingProp = exports.checkReportMissingProp = void 0;
@@ -6160,9 +6160,9 @@ var require_code2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/keyword.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/keyword.js
 var require_keyword = __commonJS({
-  "node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateKeywordUsage = exports.validSchemaType = exports.funcKeywordCode = exports.macroKeywordCode = void 0;
@@ -6278,9 +6278,9 @@ var require_keyword = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/subschema.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/subschema.js
 var require_subschema = __commonJS({
-  "node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendSubschemaMode = exports.extendSubschemaData = exports.getSubschema = void 0;
@@ -6361,9 +6361,9 @@ var require_subschema = __commonJS({
   }
 });
 
-// node_modules/fast-deep-equal/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = __commonJS({
-  "node_modules/fast-deep-equal/index.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/fast-deep-equal/index.js"(exports, module) {
     "use strict";
     module.exports = function equal(a, b) {
       if (a === b) return true;
@@ -6396,9 +6396,9 @@ var require_fast_deep_equal = __commonJS({
   }
 });
 
-// node_modules/json-schema-traverse/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/json-schema-traverse/index.js
 var require_json_schema_traverse = __commonJS({
-  "node_modules/json-schema-traverse/index.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/json-schema-traverse/index.js"(exports, module) {
     "use strict";
     var traverse = module.exports = function(schema, opts, cb) {
       if (typeof opts == "function") {
@@ -6484,9 +6484,9 @@ var require_json_schema_traverse = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/resolve.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/resolve.js
 var require_resolve = __commonJS({
-  "node_modules/ajv/dist/compile/resolve.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/resolve.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getSchemaRefs = exports.resolveUrl = exports.normalizeId = exports._getFullPath = exports.getFullPath = exports.inlineRef = void 0;
@@ -6640,9 +6640,9 @@ var require_resolve = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/index.js
 var require_validate = __commonJS({
-  "node_modules/ajv/dist/compile/validate/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/validate/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getData = exports.KeywordCxt = exports.validateFunctionCode = void 0;
@@ -7148,9 +7148,9 @@ var require_validate = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/validation_error.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/runtime/validation_error.js
 var require_validation_error = __commonJS({
-  "node_modules/ajv/dist/runtime/validation_error.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/runtime/validation_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var ValidationError = class extends Error {
@@ -7164,9 +7164,9 @@ var require_validation_error = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/ref_error.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/ref_error.js
 var require_ref_error = __commonJS({
-  "node_modules/ajv/dist/compile/ref_error.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/ref_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var resolve_1 = require_resolve();
@@ -7181,9 +7181,9 @@ var require_ref_error = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/index.js
 var require_compile = __commonJS({
-  "node_modules/ajv/dist/compile/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/compile/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.resolveSchema = exports.getCompilingSchema = exports.resolveRef = exports.compileSchema = exports.SchemaEnv = void 0;
@@ -7405,9 +7405,9 @@ var require_compile = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/data.json
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/refs/data.json
 var require_data = __commonJS({
-  "node_modules/ajv/dist/refs/data.json"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/refs/data.json"(exports, module) {
     module.exports = {
       $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
       description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
@@ -7424,9 +7424,9 @@ var require_data = __commonJS({
   }
 });
 
-// node_modules/fast-uri/lib/utils.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/fast-uri/lib/utils.js
 var require_utils = __commonJS({
-  "node_modules/fast-uri/lib/utils.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/fast-uri/lib/utils.js"(exports, module) {
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
@@ -7737,9 +7737,9 @@ var require_utils = __commonJS({
   }
 });
 
-// node_modules/fast-uri/lib/schemes.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/fast-uri/lib/schemes.js
 var require_schemes = __commonJS({
-  "node_modules/fast-uri/lib/schemes.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/fast-uri/lib/schemes.js"(exports, module) {
     "use strict";
     var { isUUID } = require_utils();
     var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
@@ -7947,9 +7947,9 @@ var require_schemes = __commonJS({
   }
 });
 
-// node_modules/fast-uri/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/fast-uri/index.js
 var require_fast_uri = __commonJS({
-  "node_modules/fast-uri/index.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/fast-uri/index.js"(exports, module) {
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
@@ -8233,9 +8233,9 @@ var require_fast_uri = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/uri.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/runtime/uri.js
 var require_uri = __commonJS({
-  "node_modules/ajv/dist/runtime/uri.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/runtime/uri.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var uri = require_fast_uri();
@@ -8244,9 +8244,9 @@ var require_uri = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/core.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/core.js
 var require_core = __commonJS({
-  "node_modules/ajv/dist/core.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/core.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = void 0;
@@ -8855,9 +8855,9 @@ var require_core = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/id.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/id.js
 var require_id = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var def = {
@@ -8870,9 +8870,9 @@ var require_id = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/ref.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/ref.js
 var require_ref = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.callRef = exports.getValidate = void 0;
@@ -8992,9 +8992,9 @@ var require_ref = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/index.js
 var require_core2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var id_1 = require_id();
@@ -9013,9 +9013,9 @@ var require_core2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitNumber.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
 var require_limitNumber = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9045,9 +9045,9 @@ var require_limitNumber = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/multipleOf.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
 var require_multipleOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9073,9 +9073,9 @@ var require_multipleOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/ucs2length.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = __commonJS({
-  "node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     function ucs2length(str) {
@@ -9099,9 +9099,9 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitLength.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitLength.js
 var require_limitLength = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9131,9 +9131,9 @@ var require_limitLength = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/pattern.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/pattern.js
 var require_pattern = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -9168,9 +9168,9 @@ var require_pattern = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitProperties.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
 var require_limitProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9197,9 +9197,9 @@ var require_limitProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/required.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/required.js
 var require_required = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -9279,9 +9279,9 @@ var require_required = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitItems.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitItems.js
 var require_limitItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9308,9 +9308,9 @@ var require_limitItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/equal.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/runtime/equal.js
 var require_equal = __commonJS({
-  "node_modules/ajv/dist/runtime/equal.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/runtime/equal.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var equal = require_fast_deep_equal();
@@ -9319,9 +9319,9 @@ var require_equal = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
 var require_uniqueItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dataType_1 = require_dataType();
@@ -9386,9 +9386,9 @@ var require_uniqueItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/const.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/const.js
 var require_const = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9415,9 +9415,9 @@ var require_const = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/enum.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/enum.js
 var require_enum = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9464,9 +9464,9 @@ var require_enum = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/index.js
 var require_validation = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var limitNumber_1 = require_limitNumber();
@@ -9502,9 +9502,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
 var require_additionalItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateAdditionalItems = void 0;
@@ -9555,9 +9555,9 @@ var require_additionalItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/items.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/items.js
 var require_items = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateTuple = void 0;
@@ -9612,9 +9612,9 @@ var require_items = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
 var require_prefixItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var items_1 = require_items();
@@ -9629,9 +9629,9 @@ var require_prefixItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/items2020.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/items2020.js
 var require_items2020 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9664,9 +9664,9 @@ var require_items2020 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/contains.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/contains.js
 var require_contains = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9758,9 +9758,9 @@ var require_contains = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/dependencies.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
 var require_dependencies = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateSchemaDeps = exports.validatePropertyDeps = exports.error = void 0;
@@ -9852,9 +9852,9 @@ var require_dependencies = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
 var require_propertyNames = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -9895,9 +9895,9 @@ var require_propertyNames = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
 var require_additionalProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -10001,9 +10001,9 @@ var require_additionalProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/properties.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/properties.js
 var require_properties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var validate_1 = require_validate();
@@ -10059,9 +10059,9 @@ var require_properties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
 var require_patternProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -10133,9 +10133,9 @@ var require_patternProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/not.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/not.js
 var require_not = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util2();
@@ -10164,9 +10164,9 @@ var require_not = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/anyOf.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
 var require_anyOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -10181,9 +10181,9 @@ var require_anyOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/oneOf.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
 var require_oneOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -10239,9 +10239,9 @@ var require_oneOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/allOf.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/allOf.js
 var require_allOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util2();
@@ -10266,9 +10266,9 @@ var require_allOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/if.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/if.js
 var require_if = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -10335,9 +10335,9 @@ var require_if = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/thenElse.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
 var require_thenElse = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util2();
@@ -10353,9 +10353,9 @@ var require_thenElse = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/index.js
 var require_applicator = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var additionalItems_1 = require_additionalItems();
@@ -10401,9 +10401,9 @@ var require_applicator = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/format/format.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/format/format.js
 var require_format = __commonJS({
-  "node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -10491,9 +10491,9 @@ var require_format = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/format/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/format/index.js
 var require_format2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var format_1 = require_format();
@@ -10502,9 +10502,9 @@ var require_format2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/metadata.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/metadata.js
 var require_metadata = __commonJS({
-  "node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.contentVocabulary = exports.metadataVocabulary = void 0;
@@ -10525,9 +10525,9 @@ var require_metadata = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/draft7.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/draft7.js
 var require_draft7 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var core_1 = require_core2();
@@ -10547,9 +10547,9 @@ var require_draft7 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/discriminator/types.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/discriminator/types.js
 var require_types = __commonJS({
-  "node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DiscrError = void 0;
@@ -10561,9 +10561,9 @@ var require_types = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/discriminator/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/discriminator/index.js
 var require_discriminator = __commonJS({
-  "node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -10666,9 +10666,9 @@ var require_discriminator = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-draft-07.json
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/refs/json-schema-draft-07.json
 var require_json_schema_draft_07 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
     module.exports = {
       $schema: "http://json-schema.org/draft-07/schema#",
       $id: "http://json-schema.org/draft-07/schema#",
@@ -10823,9 +10823,9 @@ var require_json_schema_draft_07 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/ajv.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/ajv.js
 var require_ajv = __commonJS({
-  "node_modules/ajv/dist/ajv.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv/dist/ajv.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv = void 0;
@@ -10893,9 +10893,9 @@ var require_ajv = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/formats.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv-formats/dist/formats.js
 var require_formats = __commonJS({
-  "node_modules/ajv-formats/dist/formats.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv-formats/dist/formats.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
@@ -11096,9 +11096,9 @@ var require_formats = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/limit.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv-formats/dist/limit.js
 var require_limit = __commonJS({
-  "node_modules/ajv-formats/dist/limit.js"(exports) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv-formats/dist/limit.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatLimitDefinition = void 0;
@@ -11168,9 +11168,9 @@ var require_limit = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/ajv-formats/dist/index.js
 var require_dist = __commonJS({
-  "node_modules/ajv-formats/dist/index.js"(exports, module) {
+  "../../../../hibou_works/vtdd-v2-p/node_modules/ajv-formats/dist/index.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var formats_1 = require_formats();
@@ -11209,6 +11209,358 @@ var require_dist = __commonJS({
     exports.default = formatsPlugin;
   }
 });
+
+// src/core/dashboard-monitor-state.js
+var MonitorInputError = class extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+};
+var fail = (message, status) => {
+  throw new MonitorInputError(message, status);
+};
+var statuses = ["unknown", "checking", "no_slots", "available", "error", "action_required", "completed", "stopped"];
+var modes = ["monitoring", "executing", "paused"];
+function monitorText(value, max = 500) {
+  if (value == null) return "";
+  if (typeof value !== "string" || value.length > max) fail("invalid summary");
+  if (/[/\\]/.test(value)) fail("private machine paths are not allowed");
+  if (/[\x00-\x1f\x7f]|(?:https?:\/\/|(?:^|\s)[/~\\]|[A-Za-z]:\\)|\b(?:bearer|password|secret|token|pid)\s*[:= ]|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[a-z0-9-]+\.(?:[a-z]{2,})(?:\b|\/)/i.test(value)) fail("private machine details are not allowed");
+  return value.trim();
+}
+function timestamp(value, now, future = false) {
+  if (value == null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(value)) fail("invalid timestamp");
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().replace(".000Z", "Z") !== value.replace(".000Z", "Z")) fail("invalid timestamp");
+  if (!future && parsed > now + 12e4) fail("future observation");
+  return new Date(parsed).toISOString();
+}
+function normalizeMonitorSnapshot(input, now = Date.now()) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) fail("invalid monitor");
+  const out = {};
+  for (const key of ["source", "id"]) {
+    if (typeof input[key] !== "string" || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(input[key])) fail(`invalid ${key}`);
+    out[key] = input[key];
+  }
+  out.type = input.type ?? "monitor";
+  if (!["monitor", "task"].includes(out.type)) fail("invalid type");
+  out.status = input.status ?? "unknown";
+  if (!statuses.includes(out.status)) fail("invalid status");
+  out.mode = input.mode ?? "monitoring";
+  if (!modes.includes(out.mode)) fail("invalid mode");
+  for (const key of ["title", "description", "resultSummary", "automationScope", "requiredAction", "evidenceSummary"]) out[key] = monitorText(input[key], key === "title" ? 100 : 500);
+  if (!out.title) fail("title required");
+  for (const key of ["processAlive", "automaticBookingEnabled"]) {
+    if (input[key] != null && typeof input[key] !== "boolean") fail(`invalid ${key}`);
+    out[key] = input[key] ?? null;
+  }
+  out.intervalSeconds = input.intervalSeconds ?? null;
+  if (out.intervalSeconds !== null && (!Number.isInteger(out.intervalSeconds) || out.intervalSeconds < 1 || out.intervalSeconds > 86400)) fail("invalid interval");
+  out.consecutiveFailures = input.consecutiveFailures ?? 0;
+  if (!Number.isInteger(out.consecutiveFailures) || out.consecutiveFailures < 0 || out.consecutiveFailures > 1e6) fail("invalid failure count");
+  for (const key of ["observedAt", "lastAttemptAt", "lastSuccessAt", "completedAt", "nextCheckAt"]) out[key] = timestamp(input[key], now, key === "nextCheckAt");
+  for (const key of ["lastAttemptAt", "lastSuccessAt", "completedAt"]) {
+    if (out[key] && out.observedAt && out[key] > out.observedAt) fail("event after observation");
+  }
+  out.actionURL = input.actionURL ?? null;
+  if (out.actionURL !== null && !["/dashboard/chat", "/dashboard/notifications", "/dashboard"].includes(out.actionURL)) fail("invalid action path");
+  out.receivedAt = new Date(now).toISOString();
+  return out;
+}
+function computeMonitorView(snapshot, now = Date.now(), connected = true) {
+  const m = snapshot;
+  const age = (value) => value && Number.isFinite(Date.parse(value)) ? (now - Date.parse(value)) / 1e3 : Infinity;
+  let state = m.status;
+  const documentedCompletion = m.status === "completed" && Boolean(m.observedAt && m.completedAt && m.evidenceSummary) && !m.consecutiveFailures;
+  const reporterState = !connected ? "unknown" : age(m.receivedAt) > 120 || age(m.observedAt) > 120 ? "sync_stale" : "connected";
+  if (documentedCompletion) state = "completed";
+  else if (!connected) state = "unknown";
+  else if (!m.observedAt || !m.receivedAt || m.processAlive == null || !m.intervalSeconds) state = "unknown";
+  else if (age(m.receivedAt) > 120 || age(m.observedAt) > 120) state = "sync_stale";
+  else if (m.processAlive === false || m.mode === "paused" || m.status === "stopped") state = "stopped";
+  else if (m.status === "error" || m.consecutiveFailures > 0) state = "error";
+  else if (m.status === "action_required") state = "action_required";
+  else if (!m.lastAttemptAt || !m.lastSuccessAt) state = "unknown";
+  else if (age(m.lastSuccessAt) > Math.max(2 * m.intervalSeconds + 60, 180)) state = "checking_unverified";
+  else if (m.status === "completed") state = "unknown";
+  const needsAction = ["error", "action_required", "stopped", "sync_stale", "checking_unverified"].includes(state);
+  return { ...m, currentState: state, reporterState, documentedCompletion, needsAction, healthy: ["no_slots", "available", "checking"].includes(state) };
+}
+async function readMonitorBody(request) {
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) fail("JSON required", 415);
+  if (Number(request.headers.get("content-length")) > 16384) fail("body too large", 413);
+  const reader = request.body?.getReader();
+  if (!reader) fail("body required");
+  let size = 0;
+  const chunks = [];
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 16384) {
+        await reader.cancel();
+        fail("body too large", 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    fail("invalid JSON");
+  }
+}
+function createD1DashboardMonitorStore(d1) {
+  let schema;
+  const ready = () => schema ??= d1.prepare(`CREATE TABLE IF NOT EXISTS vtdd_dashboard_monitors (
+    source TEXT NOT NULL, id TEXT NOT NULL, observed_at TEXT, payload_json TEXT NOT NULL,
+    PRIMARY KEY (source, id))`).run().catch((error2) => {
+    schema = null;
+    throw error2;
+  });
+  return {
+    async list() {
+      await ready();
+      const rows = await d1.prepare("SELECT payload_json FROM vtdd_dashboard_monitors ORDER BY source, id LIMIT 100").all();
+      return (rows.results ?? []).map((row) => JSON.parse(row.payload_json));
+    },
+    async put(m) {
+      await ready();
+      const result = await d1.prepare(`INSERT INTO vtdd_dashboard_monitors (source, id, observed_at, payload_json)
+        SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM vtdd_dashboard_monitors) < 100
+          OR EXISTS (SELECT 1 FROM vtdd_dashboard_monitors WHERE source = ? AND id = ?)
+        ON CONFLICT(source, id) DO UPDATE SET observed_at = excluded.observed_at, payload_json = excluded.payload_json
+        WHERE excluded.observed_at IS NOT NULL AND (vtdd_dashboard_monitors.observed_at IS NULL OR excluded.observed_at > vtdd_dashboard_monitors.observed_at)`).bind(m.source, m.id, m.observedAt, JSON.stringify(m), m.source, m.id).run();
+      if (!result.meta?.changes) fail("out-of-order observation or monitor limit reached", 409);
+    }
+  };
+}
+var stores = /* @__PURE__ */ new WeakMap();
+function resolveDashboardMonitorStore(env) {
+  if (env.DASHBOARD_MONITOR_STORE) return env.DASHBOARD_MONITOR_STORE;
+  const d1 = env.VTDD_MEMORY_D1 ?? env.MEMORY_D1;
+  if (!d1?.prepare) return null;
+  if (!stores.has(d1)) stores.set(d1, createD1DashboardMonitorStore(d1));
+  return stores.get(d1);
+}
+
+// src/worker/dashboard-monitor-home.js
+function mountMonitorHome(computeView) {
+  const byId = (id) => document.getElementById(id);
+  const labels = { unknown: "\u672A\u78BA\u8A8D", checking: "\u76E3\u8996\u4E2D", no_slots: "\u7A7A\u304D\u306A\u3057", available: "\u5019\u88DC\u3042\u308A", error: "\u78BA\u8A8D\u30A8\u30E9\u30FC", action_required: "\u5BFE\u5FDC\u304C\u5FC5\u8981", stopped: "\u505C\u6B62", sync_stale: "\u540C\u671F\u304C\u53E4\u3044", checking_unverified: "\u78BA\u8A8D\u7D50\u679C\u304C\u53E4\u3044", completed: "\u5B8C\u4E86\uFF08\u8A18\u9332\uFF09" };
+  const cards = /* @__PURE__ */ new Map();
+  let notificationSignature = null;
+  let lastRender = "";
+  let snapshot = null, connected = false, controller = null, serverTime = 0, loadedAt = 0, loadedWallTime = 0;
+  const localTime = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "\u672A\u78BA\u8A8D";
+  const element = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text != null) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  };
+  const interval = (seconds) => seconds % 3600 === 0 ? `${seconds / 3600}\u6642\u9593` : seconds % 60 === 0 ? `${seconds / 60}\u5206` : `${Math.floor(seconds / 60) ? Math.floor(seconds / 60) + "\u5206" : ""}${seconds % 60}\u79D2`;
+  function card(m) {
+    const node = element("article", null, "card");
+    const head = element("div", null, "card-head");
+    head.append(element("h3", m.title), element("span", labels[m.currentState] || "\u672A\u78BA\u8A8D", "chip " + (m.documentedCompletion ? "neutral" : m.healthy ? "green" : ["error", "stopped", "action_required"].includes(m.currentState) ? "red" : "amber")));
+    node.append(head);
+    if (m.description) node.append(element("p", m.description, "muted"));
+    node.append(element("p", (m.documentedCompletion ? "\u5B8C\u4E86\u306E\u8A18\u9332\uFF1A" : m.healthy ? "\u78BA\u8A8D\u7D50\u679C\uFF1A" : "\u524D\u56DE\u306E\u8A18\u9332\uFF08\u73FE\u5728\u306E\u6B63\u5E38\u6027\u306F\u672A\u78BA\u8A8D\uFF09\uFF1A") + (m.resultSummary || "\u307E\u3060\u78BA\u8A8D\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093"), "result"));
+    const facts = element("dl");
+    for (const [label, value] of [
+      ["\u6700\u7D42\u6210\u529F", localTime(m.lastSuccessAt)],
+      ...m.documentedCompletion ? [["\u5B8C\u4E86\u65E5\u6642", localTime(m.completedAt)]] : [["\u6B21\u306E\u78BA\u8A8D", localTime(m.nextCheckAt) + (m.intervalSeconds ? ` \xB7 ${interval(m.intervalSeconds)}\u3054\u3068` : " \xB7 \u9593\u9694\u672A\u78BA\u8A8D")]],
+      ["\u4EFB\u305B\u3066\u3044\u308B\u7BC4\u56F2", m.automationScope || "\u672A\u8A2D\u5B9A"],
+      ...m.type !== "task" && typeof m.automaticBookingEnabled === "boolean" ? [["\u81EA\u52D5\u4E88\u7D04", m.automaticBookingEnabled ? "\u8A2D\u5B9A\u3042\u308A\uFF08\u8868\u793A\u306E\u307F\uFF09" : "\u8A2D\u5B9A\u306A\u3057"]] : [],
+      ["\u3042\u306A\u305F\u306E\u5BFE\u5FDC", m.needsAction ? m.requiredAction || "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044" : "\u73FE\u5728\u306E\u5BFE\u5FDC\u4F9D\u983C\u306F\u3042\u308A\u307E\u305B\u3093"]
+    ]) facts.append(element("dt", label), element("dd", value));
+    node.append(facts);
+    const details = element("details");
+    const key = m.source + ":" + m.id;
+    const previous = cards.get(key);
+    details.open = previous?.details.open || false;
+    const summary = element("summary", "\u78BA\u8A8D\u306E\u8A18\u9332");
+    const focus = previous && (document.activeElement === previous.summary ? "summary" : previous.link && document.activeElement === previous.link ? "link" : null);
+    details.append(summary, element("p", "\u6700\u7D42\u8A66\u884C\uFF1A" + localTime(m.lastAttemptAt)), element("p", "\u89B3\u6E2C\uFF1A" + localTime(m.observedAt)), element("p", "\u53D7\u4FE1\uFF1A" + localTime(m.receivedAt)), element("p", `\u9023\u7D9A\u5931\u6557\uFF1A${m.consecutiveFailures}\u56DE`));
+    if (m.evidenceSummary) details.append(element("p", "\u5B8C\u4E86\u306E\u6839\u62E0\uFF1A" + m.evidenceSummary));
+    node.append(details);
+    let link;
+    if (m.needsAction && ["/dashboard/chat", "/dashboard/notifications", "/dashboard"].includes(m.actionURL)) {
+      link = element("a", "\u5BFE\u5FDC\u3092\u78BA\u8A8D", "action");
+      link.href = m.actionURL;
+      node.append(link);
+    }
+    cards.set(key, { node, details, summary, link, focus });
+    return node;
+  }
+  function render() {
+    byId("today").textContent = (/* @__PURE__ */ new Date()).toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "long" });
+    if (!snapshot) return;
+    const now = serverTime + Math.max(0, performance.now() - loadedAt, Date.now() - loadedWallTime);
+    const freshConnection = connected && now - serverTime <= 12e4;
+    if (connected && !freshConnection) byId("connection").textContent = "\u66F4\u65B0\u304C\u9014\u7D76\u3048\u3066\u3044\u307E\u3059 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D";
+    const views = snapshot.monitors.map((m) => computeView(m, now, freshConnection));
+    const signature = JSON.stringify([snapshot, freshConnection, views.map((m) => m.currentState)]);
+    if (signature === lastRender) return;
+    lastRender = signature;
+    const problems = views.filter((m) => m.needsAction);
+    byId("attention-section").hidden = problems.length === 0;
+    byId("attention").replaceChildren(...problems.map((m) => {
+      const node = element("p", null, "attention-item");
+      node.append(element("strong", m.title), element("span", " \u2014 " + (labels[m.currentState] || "\u672A\u78BA\u8A8D")));
+      return node;
+    }));
+    byId("counts").textContent = !freshConnection ? "\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D" : `${views.filter((m) => m.processAlive && m.currentState !== "completed" && m.currentState !== "unknown" && m.currentState !== "sync_stale" && m.currentState !== "stopped").length}\u4EF6 \u76E3\u8996\u30FB\u5B9F\u884C\u4E2D\u3000 /\u3000${problems.length}\u4EF6 \u8981\u78BA\u8A8D${views.some((m) => m.currentState === "unknown") ? " \xB7 \u672A\u78BA\u8A8D\u306E\u9805\u76EE\u3042\u308A" : ""}`;
+    byId("monitors").replaceChildren(...views.map(card));
+    const keys = new Set(views.map((m) => m.source + ":" + m.id));
+    for (const [key, entry] of cards) {
+      if (!keys.has(key)) {
+        cards.delete(key);
+        continue;
+      }
+      if (entry.focus) (entry[entry.focus] || entry.summary).focus({ preventScroll: true });
+    }
+    if (!views.length) byId("monitors").append(element("p", freshConnection ? "\u63A5\u7D9A\u3055\u308C\u305F\u76E3\u8996\u306F\u307E\u3060\u3042\u308A\u307E\u305B\u3093\u3002\u63A5\u7D9A\u3059\u308B\u3068\u3001\u3053\u3053\u306B\u73FE\u5728\u306E\u72B6\u614B\u304C\u5C4A\u304D\u307E\u3059\u3002" : "\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u306E\u56DE\u5FA9\u3092\u304A\u5F85\u3061\u304F\u3060\u3055\u3044\u3002", "empty"));
+    const historySignature = JSON.stringify([snapshot.notifications, snapshot.notificationsAvailable, freshConnection]);
+    if (historySignature === notificationSignature) return;
+    notificationSignature = historySignature;
+    byId("notifications").replaceChildren(...snapshot.notifications.map((n) => {
+      const node = element("article", null, "history");
+      node.append(element("h3", n.title || "\u901A\u77E5"), element("p", n.message || "\u672C\u6587\u306A\u3057"), element("time", localTime(n.createdAt)));
+      return node;
+    }));
+    if (!snapshot.notifications.length) byId("notifications").append(element("p", !freshConnection || snapshot.notificationsAvailable === false ? "\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u901A\u77E5\u30DA\u30FC\u30B8\u3067\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002" : "\u6700\u8FD1\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002", "muted"));
+  }
+  function unavailable(message) {
+    connected = false;
+    byId("connection").textContent = message;
+    if (!snapshot) {
+      byId("monitors").replaceChildren(element("p", "\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002", "empty"));
+      byId("notifications").replaceChildren(element("p", "\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u307E\u305F\u306F\u8A8D\u8A3C\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002", "muted"));
+    }
+    byId("counts").textContent = "\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D";
+    render();
+  }
+  async function refresh() {
+    if (document.hidden || controller) return;
+    if (navigator.onLine === false) {
+      unavailable("\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
+      return;
+    }
+    const current = new AbortController();
+    controller = current;
+    const timeout = setTimeout(() => current.abort(), 1e4);
+    try {
+      const response = await fetch("/v2/dashboard/overview", { credentials: "same-origin", cache: "no-store", signal: current.signal });
+      if (!response.ok) {
+        unavailable(response.status === 401 || response.status === 403 ? "\u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059 \xB7 \u30DB\u30FC\u30E0\u3092\u958B\u304D\u76F4\u3057\u3066\u304F\u3060\u3055\u3044" : "\u63A5\u7D9A\u3092\u78BA\u8A8D\u3067\u304D\u307E\u305B\u3093 \xB7 \u518D\u8A66\u884C\u3057\u307E\u3059");
+        return;
+      }
+      const data = await response.json();
+      if (!Array.isArray(data.monitors) || data.monitors.length > 100 || !Array.isArray(data.notifications) || !Number.isFinite(Date.parse(data.serverTime))) throw new Error("invalid overview");
+      if (current.signal.aborted || navigator.onLine === false) throw new Error("request cancelled");
+      snapshot = data;
+      loadedWallTime = Date.now();
+      serverTime = Date.parse(data.serverTime);
+      loadedAt = performance.now();
+      connected = true;
+      byId("connection").textContent = "\u63A5\u7D9A\u4E2D \xB7 " + localTime(data.serverTime) + " \u66F4\u65B0";
+      render();
+    } catch {
+      unavailable(navigator.onLine === false ? "\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D" : "\u66F4\u65B0\u3067\u304D\u307E\u305B\u3093 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
+    } finally {
+      clearTimeout(timeout);
+      controller = null;
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+  window.addEventListener("pageshow", refresh);
+  window.addEventListener("online", refresh);
+  window.addEventListener("offline", () => {
+    controller?.abort();
+    unavailable("\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
+  });
+  const polling = setInterval(refresh, 3e4);
+  const freshness = setInterval(() => {
+    if (!document.hidden) render();
+  }, 5e3);
+  window.addEventListener("pagehide", (event) => {
+    controller?.abort();
+    if (!event.persisted) {
+      clearInterval(polling);
+      clearInterval(freshness);
+    }
+  });
+  if (navigator.serviceWorker) navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard/" }).catch(() => {
+  });
+  render();
+  refresh();
+}
+function renderDashboardMonitorHome() {
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#faf8f4"><title>Butler \u2014 \u30DB\u30FC\u30E0</title><link rel="manifest" href="/dashboard.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>
+:root{color-scheme:light dark;--bg:#faf8f4;--card:#fffefa;--ink:#282725;--muted:#68645f;--line:#e5e0d9;--accent:#9f3935;--green-bg:#e6f1e9;--green:#285c3d;--amber-bg:#fbefd5;--amber:#795514;--red-bg:#f9e5e1;--red:#94352f}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-wrap:anywhere}
+main{max-width:760px;margin:auto;padding:40px 20px calc(110px + env(safe-area-inset-bottom))}
+header{margin-bottom:32px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--accent);font-weight:750;letter-spacing:.19em;font-size:14px}
+.brand img{width:36px;height:36px;border-radius:10px}
+h1{font-size:clamp(23px,6vw,32px);letter-spacing:.02em;line-height:1.4;margin:20px 0 12px}
+h2{font-size:18px;margin:30px 0 14px}
+h3{font-size:16px;margin:0}
+p{margin:8px 0}
+.muted,time,#today,#connection{color:var(--muted);font-size:13px}
+#connection{min-height:24px}
+#counts{margin-top:20px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:16px}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.card-head h3{min-width:0}
+.chip{flex-shrink:0;font-size:12px;font-weight:650;border-radius:20px;padding:3px 10px}
+.green{background:var(--green-bg);color:var(--green)}
+.neutral{background:var(--line);color:var(--ink)}
+.amber{background:var(--amber-bg);color:var(--amber)}
+.red{background:var(--red-bg);color:var(--red)}
+.result{font-size:15px;margin:18px 0}
+dl{display:grid;grid-template-columns:100px minmax(0,1fr);font-size:13px;gap:8px;margin:18px 0}
+dt{color:var(--muted)}
+dd{margin:0}
+details{border-top:1px solid var(--line);font-size:13px}
+summary{min-height:44px;cursor:pointer;padding:12px 0;color:var(--muted)}
+details p{color:var(--muted)}
+a{color:var(--accent)}
+a.action{display:inline-flex;align-items:center;min-height:44px}
+#attention{border-left:3px solid var(--accent);padding-left:16px}
+.attention-item{font-size:14px;margin:12px 0}
+.history{padding:16px 0;border-bottom:1px solid var(--line)}
+.history p{font-size:14px;white-space:pre-wrap}
+.empty{padding:24px 0;color:var(--muted)}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:8px 12px calc(8px + env(safe-area-inset-bottom));gap:12px}
+nav a{display:flex;align-items:center;justify-content:center;min-height:48px;max-width:200px;flex:1;text-decoration:none;font-size:14px;color:var(--muted);border-radius:12px}
+nav a[aria-current]{background:var(--red-bg);color:var(--accent);font-weight:700}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+[hidden]{display:none!important}
+@media(prefers-color-scheme:dark){:root{--bg:#1d1c1b;--card:#282624;--ink:#f4efe8;--muted:#bdb5ab;--line:#45403b;--accent:#eeaaa1;--green-bg:#243e2e;--green:#afe0bc;--amber-bg:#463a22;--amber:#efcf91;--red-bg:#4a2c29;--red:#f2b0a8}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+
+</style></head><body><main><header><div class="brand"><img src="/dashboard-icon.png" alt="">BUTLER</div><h1>\u4EFB\u305B\u305F\u3053\u3068\u3092\u3001\u3072\u3068\u76EE\u3067\u3002</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p><p id="counts">\u72B6\u614B\u3092\u53D6\u5F97\u3057\u3066\u3044\u307E\u3059\u2026</p></header><section id="attention-section" hidden><h2>\u5BFE\u5FDC\u304C\u5FC5\u8981</h2><div id="attention"></div></section><section><h2>\u76E3\u8996\u30FB\u5B9F\u884C\u4E2D</h2><div id="monitors" aria-label="\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B"></div></section><section><h2>\u6700\u8FD1\u306E\u901A\u77E5</h2><p class="muted">\u5C4A\u3044\u305F\u901A\u77E5\u306E\u5C65\u6B74\u3067\u3059\u3002\u73FE\u5728\u306E\u72B6\u614B\u306F\u4E0A\u306E\u30AB\u30FC\u30C9\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</p><div id="notifications"></div></section><noscript>\u73FE\u5728\u306E\u72B6\u614B\u3092\u8868\u793A\u3059\u308B\u306B\u306F JavaScript \u3092\u6709\u52B9\u306B\u3057\u3066\u304F\u3060\u3055\u3044\u3002</noscript></main><nav aria-label="\u30E1\u30A4\u30F3\u30CA\u30D3\u30B2\u30FC\u30B7\u30E7\u30F3"><a href="/dashboard" aria-current="page">\u30DB\u30FC\u30E0</a><a href="/dashboard/notifications">\u901A\u77E5</a><a href="/dashboard/chat">\u30C1\u30E3\u30C3\u30C8</a></nav><script>(${mountMonitorHome.toString()})(${computeMonitorView.toString()});<\/script></body></html>`;
+}
 
 // src/core/types.js
 var ActionType = Object.freeze({
@@ -11392,7 +11744,7 @@ var ProtectionSignalStatus = Object.freeze({
   UNKNOWN: "unknown"
 });
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoBase64URL.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoBase64URL.js
 var isoBase64URL_exports = {};
 __export(isoBase64URL_exports, {
   fromBuffer: () => fromBuffer,
@@ -11405,7 +11757,7 @@ __export(isoBase64URL_exports, {
   trimPadding: () => trimPadding
 });
 
-// node_modules/@hexagon/base64/src/base64.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@hexagon/base64/src/base64.js
 var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 var charsUrl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 var genLookup = (target) => {
@@ -11479,7 +11831,7 @@ base64.validate = (encoded, urlMode) => {
 base64.base64 = base64;
 var base64_default = base64;
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoBase64URL.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoBase64URL.js
 function toBuffer(base64urlString, from = "base64url") {
   const _buffer = base64_default.toArrayBuffer(base64urlString, from === "base64url");
   return new Uint8Array(_buffer);
@@ -11510,14 +11862,14 @@ function trimPadding(input) {
   return input.replace(/=/g, "");
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCBOR.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCBOR.js
 var isoCBOR_exports = {};
 __export(isoCBOR_exports, {
   decodeFirst: () => decodeFirst,
   encode: () => encode
 });
 
-// node_modules/@levischuck/tiny-cbor/esm/cbor/cbor_internal.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@levischuck/tiny-cbor/esm/cbor/cbor_internal.js
 function decodeLength(data, argument, index) {
   if (argument < 24) {
     return [argument, 1];
@@ -11616,7 +11968,7 @@ function encodeLength(major, argument) {
   }
 }
 
-// node_modules/@levischuck/tiny-cbor/esm/cbor/cbor.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@levischuck/tiny-cbor/esm/cbor/cbor.js
 var CBORTag = class {
   /**
    * Wrap a value with a tag number.
@@ -11943,7 +12295,7 @@ function encodeCBOR(data) {
   return output;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCBOR.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCBOR.js
 function decodeFirst(input) {
   const _input = new Uint8Array(input);
   const decoded = decodePartialCBOR(_input, 0);
@@ -11954,7 +12306,7 @@ function encode(input) {
   return encodeCBOR(input);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/index.js
 var isoCrypto_exports = {};
 __export(isoCrypto_exports, {
   digest: () => digest,
@@ -11962,7 +12314,7 @@ __export(isoCrypto_exports, {
   verify: () => verify
 });
 
-// node_modules/@simplewebauthn/server/esm/helpers/cose.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/cose.js
 function isCOSEPublicKeyOKP(cosePublicKey) {
   const kty = cosePublicKey.get(COSEKEYS.kty);
   return isCOSEKty(kty) && kty === COSEKTY.OKP;
@@ -12024,7 +12376,7 @@ function isCOSEAlg(alg) {
   return Object.values(COSEALG).indexOf(alg) >= 0;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/mapCoseAlgToWebCryptoAlg.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/mapCoseAlgToWebCryptoAlg.js
 function mapCoseAlgToWebCryptoAlg(alg) {
   if ([COSEALG.RS1].indexOf(alg) >= 0) {
     return "SHA-1";
@@ -12038,7 +12390,7 @@ function mapCoseAlgToWebCryptoAlg(alg) {
   throw new Error(`Could not map COSE alg value of ${alg} to a WebCrypto alg`);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getWebCrypto.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getWebCrypto.js
 var webCrypto = void 0;
 function getWebCrypto() {
   const toResolve = new Promise((resolve, reject) => {
@@ -12069,7 +12421,7 @@ var _getWebCryptoInternals = {
   }
 };
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/digest.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/digest.js
 async function digest(data, algorithm) {
   const WebCrypto = await getWebCrypto();
   const subtleAlgorithm = mapCoseAlgToWebCryptoAlg(algorithm);
@@ -12077,14 +12429,14 @@ async function digest(data, algorithm) {
   return new Uint8Array(hashed);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getRandomValues.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getRandomValues.js
 async function getRandomValues(array2) {
   const WebCrypto = await getWebCrypto();
   WebCrypto.getRandomValues(array2);
   return array2;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/importKey.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/importKey.js
 async function importKey(opts) {
   const WebCrypto = await getWebCrypto();
   const { keyData, algorithm } = opts;
@@ -12093,7 +12445,7 @@ async function importKey(opts) {
   ]);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyEC2.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyEC2.js
 async function verifyEC2(opts) {
   const { cosePublicKey, signature, data, shaHashOverride } = opts;
   const WebCrypto = await getWebCrypto();
@@ -12155,7 +12507,7 @@ async function verifyEC2(opts) {
   return WebCrypto.subtle.verify(verifyAlgorithm, key, signature, data);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/mapCoseAlgToWebCryptoKeyAlgName.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/mapCoseAlgToWebCryptoKeyAlgName.js
 function mapCoseAlgToWebCryptoKeyAlgName(alg) {
   if ([COSEALG.EdDSA].indexOf(alg) >= 0) {
     return "Ed25519";
@@ -12169,7 +12521,7 @@ function mapCoseAlgToWebCryptoKeyAlgName(alg) {
   throw new Error(`Could not map COSE alg value of ${alg} to a WebCrypto key alg name`);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyRSA.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyRSA.js
 async function verifyRSA(opts) {
   const { cosePublicKey, signature, data, shaHashOverride } = opts;
   const WebCrypto = await getWebCrypto();
@@ -12238,7 +12590,7 @@ async function verifyRSA(opts) {
   return WebCrypto.subtle.verify(verifyAlgorithm, key, signature, data);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/convertAAGUIDToString.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertAAGUIDToString.js
 function convertAAGUIDToString(aaguid) {
   const hex = isoUint8Array_exports.toHex(aaguid);
   const segments = [
@@ -12256,7 +12608,7 @@ function convertAAGUIDToString(aaguid) {
   return segments.join("-");
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/convertCertBufferToPEM.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertCertBufferToPEM.js
 function convertCertBufferToPEM(certBuffer) {
   let b64cert;
   if (typeof certBuffer === "string") {
@@ -12282,7 +12634,7 @@ ${PEMKey}-----END CERTIFICATE-----
   return PEMKey;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/convertCOSEtoPKCS.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertCOSEtoPKCS.js
 function convertCOSEtoPKCS(cosePublicKey) {
   const struct = isoCBOR_exports.decodeFirst(cosePublicKey);
   const tag = Uint8Array.from([4]);
@@ -12297,7 +12649,7 @@ function convertCOSEtoPKCS(cosePublicKey) {
   return isoUint8Array_exports.concat([tag, x]);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/decodeAttestationObject.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/decodeAttestationObject.js
 function decodeAttestationObject(attestationObject) {
   return _decodeAttestationObjectInternals.stubThis(isoCBOR_exports.decodeFirst(attestationObject));
 }
@@ -12305,7 +12657,7 @@ var _decodeAttestationObjectInternals = {
   stubThis: (value) => value
 };
 
-// node_modules/@simplewebauthn/server/esm/helpers/decodeClientDataJSON.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/decodeClientDataJSON.js
 function decodeClientDataJSON(data) {
   const toString = isoBase64URL_exports.toUTF8String(data);
   const clientData = JSON.parse(toString);
@@ -12315,7 +12667,7 @@ var _decodeClientDataJSONInternals = {
   stubThis: (value) => value
 };
 
-// node_modules/@simplewebauthn/server/esm/helpers/decodeCredentialPublicKey.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/decodeCredentialPublicKey.js
 function decodeCredentialPublicKey(publicKey) {
   return _decodeCredentialPublicKeyInternals.stubThis(isoCBOR_exports.decodeFirst(publicKey));
 }
@@ -12323,7 +12675,7 @@ var _decodeCredentialPublicKeyInternals = {
   stubThis: (value) => value
 };
 
-// node_modules/@simplewebauthn/server/esm/helpers/generateUserID.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/generateUserID.js
 async function generateUserID() {
   const newUserID = new Uint8Array(32);
   await isoCrypto_exports.getRandomValues(newUserID);
@@ -12333,7 +12685,7 @@ var _generateUserIDInternals = {
   stubThis: (value) => value
 };
 
-// node_modules/asn1js/build/index.es.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/asn1js/build/index.es.js
 var index_es_exports = {};
 __export(index_es_exports, {
   Any: () => Any,
@@ -12386,7 +12738,7 @@ __export(index_es_exports, {
 });
 var pvtsutils = __toESM(require_build());
 
-// node_modules/pvutils/build/utils.es.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/pvutils/build/utils.es.js
 function utilFromBase(inputBuffer, inputBase) {
   let result = 0;
   if (inputBuffer.length === 1) {
@@ -12524,7 +12876,7 @@ function padNumber(inputNumber, fullLength) {
 }
 var log2 = Math.log(2);
 
-// node_modules/asn1js/build/index.es.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/asn1js/build/index.es.js
 function assertBigInt() {
   if (typeof BigInt === "undefined") {
     throw new Error("BigInt is not defined. Your environment doesn't implement BigInt.");
@@ -15565,7 +15917,7 @@ function verifySchema(inputBuffer, inputSchema) {
   return compareSchema(asn1.result, asn1.result, inputSchema);
 }
 
-// node_modules/@peculiar/asn1-schema/build/es2015/enums.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/enums.js
 var AsnTypeTypes;
 (function(AsnTypeTypes2) {
   AsnTypeTypes2[AsnTypeTypes2["Sequence"] = 0] = "Sequence";
@@ -15603,7 +15955,7 @@ var AsnPropTypes;
   AsnPropTypes2[AsnPropTypes2["Null"] = 27] = "Null";
 })(AsnPropTypes || (AsnPropTypes = {}));
 
-// node_modules/@peculiar/asn1-schema/build/es2015/types/bit_string.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/types/bit_string.js
 var import_pvtsutils = __toESM(require_build());
 var BitString2 = class {
   constructor(params, unusedBits = 0) {
@@ -15661,7 +16013,7 @@ var BitString2 = class {
   }
 };
 
-// node_modules/@peculiar/asn1-schema/build/es2015/types/octet_string.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/types/octet_string.js
 var import_pvtsutils2 = __toESM(require_build());
 var OctetString2 = class {
   get byteLength() {
@@ -15698,7 +16050,7 @@ var OctetString2 = class {
   }
 };
 
-// node_modules/@peculiar/asn1-schema/build/es2015/converters.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/converters.js
 var AsnAnyConverter = {
   fromASN: (value) => value instanceof Null ? null : value.valueBeforeDecodeView,
   toASN: (value) => {
@@ -15827,7 +16179,7 @@ function defaultConverter(type) {
   }
 }
 
-// node_modules/@peculiar/asn1-schema/build/es2015/helper.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/helper.js
 function isConvertible(target) {
   if (typeof target === "function" && target.prototype) {
     if (target.prototype.toASN && target.prototype.fromASN) {
@@ -15867,7 +16219,7 @@ function isArrayEqual(bytes1, bytes2) {
   return true;
 }
 
-// node_modules/@peculiar/asn1-schema/build/es2015/schema.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/schema.js
 var AsnSchemaStorage = class {
   constructor() {
     this.items = /* @__PURE__ */ new WeakMap();
@@ -15991,10 +16343,10 @@ var AsnSchemaStorage = class {
   }
 };
 
-// node_modules/@peculiar/asn1-schema/build/es2015/storage.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/storage.js
 var schemaStorage = new AsnSchemaStorage();
 
-// node_modules/@peculiar/asn1-schema/build/es2015/decorators.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/decorators.js
 var AsnType = (options) => (target) => {
   let schema;
   if (!schemaStorage.has(target)) {
@@ -16025,7 +16377,7 @@ var AsnProp = (options) => (target, propertyKey) => {
   schema.items[propertyKey] = copyOptions;
 };
 
-// node_modules/@peculiar/asn1-schema/build/es2015/errors/schema_validation.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/errors/schema_validation.js
 var AsnSchemaValidationError = class extends Error {
   constructor() {
     super(...arguments);
@@ -16033,7 +16385,7 @@ var AsnSchemaValidationError = class extends Error {
   }
 };
 
-// node_modules/@peculiar/asn1-schema/build/es2015/parser.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/parser.js
 var AsnParser = class {
   static parse(data, target) {
     const asn1Parsed = fromBER(data);
@@ -16308,7 +16660,7 @@ var AsnParser = class {
   }
 };
 
-// node_modules/@peculiar/asn1-schema/build/es2015/serializer.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/serializer.js
 var AsnSerializer = class _AsnSerializer {
   static serialize(obj) {
     if (obj instanceof BaseBlock) {
@@ -16442,7 +16794,7 @@ var AsnSerializer = class _AsnSerializer {
   }
 };
 
-// node_modules/@peculiar/asn1-schema/build/es2015/objects.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/objects.js
 var AsnArray = class extends Array {
   constructor(items = []) {
     if (typeof items === "number") {
@@ -16456,7 +16808,7 @@ var AsnArray = class extends Array {
   }
 };
 
-// node_modules/@peculiar/asn1-schema/build/es2015/convert.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-schema/build/es2015/convert.js
 var import_pvtsutils3 = __toESM(require_build());
 var AsnConvert = class _AsnConvert {
   static serialize(obj) {
@@ -16475,7 +16827,7 @@ var AsnConvert = class _AsnConvert {
   }
 };
 
-// node_modules/tslib/tslib.es6.mjs
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tslib/tslib.es6.mjs
 function __decorate(decorators, target, key, desc) {
   var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
   if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -16494,7 +16846,7 @@ function __classPrivateFieldSet(receiver, state, value, kind, f) {
   return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
 }
 
-// node_modules/@peculiar/asn1-x509/build/es2015/ip_converter.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/ip_converter.js
 var import_pvtsutils4 = __toESM(require_build());
 var IpConverter = class {
   static isIPv4(ip) {
@@ -16662,7 +17014,7 @@ var IpConverter = class {
   }
 };
 
-// node_modules/@peculiar/asn1-x509/build/es2015/name.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/name.js
 var import_pvtsutils5 = __toESM(require_build());
 var RelativeDistinguishedName_1;
 var RDNSequence_1;
@@ -16752,7 +17104,7 @@ Name = Name_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], Name);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/general_name.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/general_name.js
 var AsnIpConverter = {
   fromASN: (value) => IpConverter.toString(AsnOctetStringConverter.fromASN(value)),
   toASN: (value) => AsnOctetStringConverter.toASN(IpConverter.fromString(value))
@@ -16823,7 +17175,7 @@ GeneralName = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], GeneralName);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/object_identifiers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/object_identifiers.js
 var id_pkix = "1.3.6.1.5.5.7";
 var id_pe = `${id_pkix}.1`;
 var id_qt = `${id_pkix}.2`;
@@ -16837,7 +17189,7 @@ var id_ad_timeStamping = `${id_ad}.3`;
 var id_ad_caRepository = `${id_ad}.5`;
 var id_ce = "2.5.29";
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/authority_information_access.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/authority_information_access.js
 var AuthorityInfoAccessSyntax_1;
 var id_pe_authorityInfoAccess = `${id_pe}.1`;
 var AccessDescription = class {
@@ -16863,7 +17215,7 @@ AuthorityInfoAccessSyntax = AuthorityInfoAccessSyntax_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: AccessDescription })
 ], AuthorityInfoAccessSyntax);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/authority_key_identifier.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/authority_key_identifier.js
 var id_ce_authorityKeyIdentifier = `${id_ce}.35`;
 var KeyIdentifier = class extends OctetString2 {
 };
@@ -16890,7 +17242,7 @@ __decorate([
   })
 ], AuthorityKeyIdentifier.prototype, "authorityCertSerialNumber", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/basic_constraints.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/basic_constraints.js
 var id_ce_basicConstraints = `${id_ce}.19`;
 var BasicConstraints = class {
   constructor(params = {}) {
@@ -16905,7 +17257,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, optional: true })
 ], BasicConstraints.prototype, "pathLenConstraint", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/general_names.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/general_names.js
 var GeneralNames_1;
 var GeneralNames = GeneralNames_1 = class GeneralNames2 extends AsnArray {
   constructor(items) {
@@ -16917,7 +17269,7 @@ GeneralNames = GeneralNames_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: GeneralName })
 ], GeneralNames);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/certificate_issuer.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/certificate_issuer.js
 var CertificateIssuer_1;
 var id_ce_certificateIssuer = `${id_ce}.29`;
 var CertificateIssuer = CertificateIssuer_1 = class CertificateIssuer2 extends GeneralNames {
@@ -16930,7 +17282,7 @@ CertificateIssuer = CertificateIssuer_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], CertificateIssuer);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/certificate_policies.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/certificate_policies.js
 var CertificatePolicies_1;
 var id_ce_certificatePolicies = `${id_ce}.32`;
 var id_ce_certificatePolicies_anyPolicy = `${id_ce_certificatePolicies}.0`;
@@ -17030,7 +17382,7 @@ CertificatePolicies = CertificatePolicies_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: PolicyInformation })
 ], CertificatePolicies);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_number.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_number.js
 var id_ce_cRLNumber = `${id_ce}.20`;
 var CRLNumber = class CRLNumber2 {
   constructor(value = 0) {
@@ -17044,7 +17396,7 @@ CRLNumber = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], CRLNumber);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_delta_indicator.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_delta_indicator.js
 var id_ce_deltaCRLIndicator = `${id_ce}.27`;
 var BaseCRLNumber = class BaseCRLNumber2 extends CRLNumber {
 };
@@ -17052,7 +17404,7 @@ BaseCRLNumber = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], BaseCRLNumber);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_distribution_points.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_distribution_points.js
 var CRLDistributionPoints_1;
 var id_ce_cRLDistributionPoints = `${id_ce}.31`;
 var ReasonFlags;
@@ -17142,7 +17494,7 @@ CRLDistributionPoints = CRLDistributionPoints_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: DistributionPoint })
 ], CRLDistributionPoints);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_freshest.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_freshest.js
 var FreshestCRL_1;
 var id_ce_freshestCRL = `${id_ce}.46`;
 var FreshestCRL = FreshestCRL_1 = class FreshestCRL2 extends CRLDistributionPoints {
@@ -17155,7 +17507,7 @@ FreshestCRL = FreshestCRL_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: DistributionPoint })
 ], FreshestCRL);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_issuing_distribution_point.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_issuing_distribution_point.js
 var id_ce_issuingDistributionPoint = `${id_ce}.28`;
 var IssuingDistributionPoint = class _IssuingDistributionPoint {
   constructor(params = {}) {
@@ -17206,7 +17558,7 @@ __decorate([
   })
 ], IssuingDistributionPoint.prototype, "onlyContainsAttributeCerts", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_reason.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/crl_reason.js
 var id_ce_cRLReasons = `${id_ce}.21`;
 var CRLReasons;
 (function(CRLReasons2) {
@@ -17240,7 +17592,7 @@ CRLReason = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], CRLReason);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/extended_key_usage.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/extended_key_usage.js
 var ExtendedKeyUsage_1;
 var id_ce_extKeyUsage = `${id_ce}.37`;
 var ExtendedKeyUsage = ExtendedKeyUsage_1 = class ExtendedKeyUsage2 extends AsnArray {
@@ -17260,7 +17612,7 @@ var id_kp_emailProtection = `${id_kp}.4`;
 var id_kp_timeStamping = `${id_kp}.8`;
 var id_kp_OCSPSigning = `${id_kp}.9`;
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/inhibit_any_policy.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/inhibit_any_policy.js
 var id_ce_inhibitAnyPolicy = `${id_ce}.54`;
 var InhibitAnyPolicy = class InhibitAnyPolicy2 {
   constructor(value = new ArrayBuffer(0)) {
@@ -17274,7 +17626,7 @@ InhibitAnyPolicy = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], InhibitAnyPolicy);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/invalidity_date.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/invalidity_date.js
 var id_ce_invalidityDate = `${id_ce}.24`;
 var InvalidityDate = class InvalidityDate2 {
   constructor(value) {
@@ -17291,7 +17643,7 @@ InvalidityDate = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], InvalidityDate);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/issuer_alternative_name.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/issuer_alternative_name.js
 var IssueAlternativeName_1;
 var id_ce_issuerAltName = `${id_ce}.18`;
 var IssueAlternativeName = IssueAlternativeName_1 = class IssueAlternativeName2 extends GeneralNames {
@@ -17304,7 +17656,7 @@ IssueAlternativeName = IssueAlternativeName_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], IssueAlternativeName);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/key_usage.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/key_usage.js
 var id_ce_keyUsage = `${id_ce}.15`;
 var KeyUsageFlags;
 (function(KeyUsageFlags3) {
@@ -17356,7 +17708,7 @@ var KeyUsage = class extends BitString2 {
   }
 };
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/name_constraints.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/name_constraints.js
 var GeneralSubtrees_1;
 var id_ce_nameConstraints = `${id_ce}.30`;
 var GeneralSubtree = class {
@@ -17396,7 +17748,7 @@ __decorate([
   AsnProp({ type: GeneralSubtrees, context: 1, optional: true, implicit: true })
 ], NameConstraints.prototype, "excludedSubtrees", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/policy_constraints.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/policy_constraints.js
 var id_ce_policyConstraints = `${id_ce}.36`;
 var PolicyConstraints = class {
   constructor(params = {}) {
@@ -17422,7 +17774,7 @@ __decorate([
   })
 ], PolicyConstraints.prototype, "inhibitPolicyMapping", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/policy_mappings.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/policy_mappings.js
 var PolicyMappings_1;
 var id_ce_policyMappings = `${id_ce}.33`;
 var PolicyMapping = class {
@@ -17448,7 +17800,7 @@ PolicyMappings = PolicyMappings_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: PolicyMapping })
 ], PolicyMappings);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_alternative_name.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_alternative_name.js
 var SubjectAlternativeName_1;
 var id_ce_subjectAltName = `${id_ce}.17`;
 var SubjectAlternativeName = SubjectAlternativeName_1 = class SubjectAlternativeName2 extends GeneralNames {
@@ -17461,7 +17813,7 @@ SubjectAlternativeName = SubjectAlternativeName_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], SubjectAlternativeName);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/attribute.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/attribute.js
 var Attribute = class {
   constructor(params = {}) {
     this.type = "";
@@ -17476,7 +17828,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, repeated: "set" })
 ], Attribute.prototype, "values", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_directory_attributes.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_directory_attributes.js
 var SubjectDirectoryAttributes_1;
 var id_ce_subjectDirectoryAttributes = `${id_ce}.9`;
 var SubjectDirectoryAttributes = SubjectDirectoryAttributes_1 = class SubjectDirectoryAttributes2 extends AsnArray {
@@ -17489,12 +17841,12 @@ SubjectDirectoryAttributes = SubjectDirectoryAttributes_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Attribute })
 ], SubjectDirectoryAttributes);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_key_identifier.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_key_identifier.js
 var id_ce_subjectKeyIdentifier = `${id_ce}.14`;
 var SubjectKeyIdentifier = class extends KeyIdentifier {
 };
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/private_key_usage_period.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/private_key_usage_period.js
 var id_ce_privateKeyUsagePeriod = `${id_ce}.16`;
 var PrivateKeyUsagePeriod = class {
   constructor(params = {}) {
@@ -17508,7 +17860,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.GeneralizedTime, context: 1, implicit: true, optional: true })
 ], PrivateKeyUsagePeriod.prototype, "notAfter", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/entrust_version_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/entrust_version_info.js
 var EntrustInfoFlags;
 (function(EntrustInfoFlags2) {
   EntrustInfoFlags2[EntrustInfoFlags2["keyUpdateAllowed"] = 1] = "keyUpdateAllowed";
@@ -17548,7 +17900,7 @@ __decorate([
   AsnProp({ type: EntrustInfo })
 ], EntrustVersionInfo.prototype, "entrustInfoFlags", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_info_access.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extensions/subject_info_access.js
 var SubjectInfoAccessSyntax_1;
 var id_pe_subjectInfoAccess = `${id_pe}.11`;
 var SubjectInfoAccessSyntax = SubjectInfoAccessSyntax_1 = class SubjectInfoAccessSyntax2 extends AsnArray {
@@ -17561,7 +17913,7 @@ SubjectInfoAccessSyntax = SubjectInfoAccessSyntax_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: AccessDescription })
 ], SubjectInfoAccessSyntax);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/algorithm_identifier.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/algorithm_identifier.js
 var pvtsutils2 = __toESM(require_build());
 var AlgorithmIdentifier = class _AlgorithmIdentifier {
   constructor(params = {}) {
@@ -17584,7 +17936,7 @@ __decorate([
   })
 ], AlgorithmIdentifier.prototype, "parameters", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/subject_public_key_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/subject_public_key_info.js
 var SubjectPublicKeyInfo = class {
   constructor(params = {}) {
     this.algorithm = new AlgorithmIdentifier();
@@ -17599,7 +17951,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], SubjectPublicKeyInfo.prototype, "subjectPublicKey", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/time.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/time.js
 var Time = class Time2 {
   constructor(time3) {
     if (time3) {
@@ -17638,7 +17990,7 @@ Time = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], Time);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/validity.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/validity.js
 var Validity = class {
   constructor(params) {
     this.notBefore = new Time(/* @__PURE__ */ new Date());
@@ -17656,7 +18008,7 @@ __decorate([
   AsnProp({ type: Time })
 ], Validity.prototype, "notAfter", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/extension.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/extension.js
 var Extensions_1;
 var Extension = class _Extension {
   constructor(params = {}) {
@@ -17689,7 +18041,7 @@ Extensions = Extensions_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Extension })
 ], Extensions);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/types.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/types.js
 var Version;
 (function(Version4) {
   Version4[Version4["v1"] = 0] = "v1";
@@ -17697,7 +18049,7 @@ var Version;
   Version4[Version4["v3"] = 2] = "v3";
 })(Version || (Version = {}));
 
-// node_modules/@peculiar/asn1-x509/build/es2015/tbs_certificate.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/tbs_certificate.js
 var TBSCertificate = class {
   constructor(params = {}) {
     this.version = Version.v1;
@@ -17753,7 +18105,7 @@ __decorate([
   AsnProp({ type: Extensions, context: 3, optional: true })
 ], TBSCertificate.prototype, "extensions", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/certificate.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/certificate.js
 var Certificate = class {
   constructor(params = {}) {
     this.tbsCertificate = new TBSCertificate();
@@ -17772,7 +18124,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], Certificate.prototype, "signatureValue", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/tbs_cert_list.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/tbs_cert_list.js
 var RevokedCertificate = class {
   constructor(params = {}) {
     this.userCertificate = new ArrayBuffer(0);
@@ -17819,7 +18171,7 @@ __decorate([
   AsnProp({ type: Extension, optional: true, context: 0, repeated: "sequence" })
 ], TBSCertList.prototype, "crlExtensions", void 0);
 
-// node_modules/@peculiar/asn1-x509/build/es2015/certificate_list.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509/build/es2015/certificate_list.js
 var CertificateList = class {
   constructor(params = {}) {
     this.tbsCertList = new TBSCertList();
@@ -17838,7 +18190,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], CertificateList.prototype, "signature", void 0);
 
-// node_modules/@simplewebauthn/server/esm/helpers/getCertificateInfo.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/getCertificateInfo.js
 var issuerSubjectIDKey = {
   "2.5.4.6": "C",
   "2.5.4.10": "O",
@@ -17900,11 +18252,11 @@ function issuerSubjectToString(input) {
   return parts.join(" : ");
 }
 
-// node_modules/@peculiar/x509/build/x509.es.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/x509/build/x509.es.js
 var import_reflect_metadata = __toESM(require_Reflect());
 var import_pvtsutils6 = __toESM(require_build());
 
-// node_modules/@peculiar/asn1-cms/build/es2015/issuer_and_serial_number.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/issuer_and_serial_number.js
 var IssuerAndSerialNumber = class {
   constructor(params = {}) {
     this.issuer = new Name();
@@ -17919,7 +18271,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter })
 ], IssuerAndSerialNumber.prototype, "serialNumber", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/signer_identifier.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/signer_identifier.js
 var SignerIdentifier = class SignerIdentifier2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -17935,7 +18287,7 @@ SignerIdentifier = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], SignerIdentifier);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/types.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/types.js
 var CMSVersion;
 (function(CMSVersion2) {
   CMSVersion2[CMSVersion2["v0"] = 0] = "v0";
@@ -17976,7 +18328,7 @@ KeyDerivationAlgorithmIdentifier = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], KeyDerivationAlgorithmIdentifier);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/attribute.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/attribute.js
 var Attribute2 = class {
   constructor(params = {}) {
     this.attrType = "";
@@ -17991,7 +18343,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, repeated: "set" })
 ], Attribute2.prototype, "attrValues", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/signer_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/signer_info.js
 var SignerInfos_1;
 var SignerInfo = class {
   constructor(params = {}) {
@@ -18041,21 +18393,21 @@ SignerInfos = SignerInfos_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Set, itemType: SignerInfo })
 ], SignerInfos);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/attributes/counter_signature.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/attributes/counter_signature.js
 var CounterSignature = class CounterSignature2 extends SignerInfo {
 };
 CounterSignature = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], CounterSignature);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/attributes/signing_time.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/attributes/signing_time.js
 var SigningTime = class SigningTime2 extends Time {
 };
 SigningTime = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], SigningTime);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/aa_clear_attrs.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/aa_clear_attrs.js
 var ACClearAttrs = class {
   constructor(params = {}) {
     this.acIssuer = new GeneralName();
@@ -18074,7 +18426,7 @@ __decorate([
   AsnProp({ type: Attribute, repeated: "sequence" })
 ], ACClearAttrs.prototype, "attrs", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_spec.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_spec.js
 var AttrSpec_1;
 var AttrSpec = AttrSpec_1 = class AttrSpec2 extends AsnArray {
   constructor(items) {
@@ -18086,7 +18438,7 @@ AttrSpec = AttrSpec_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: AsnPropTypes.ObjectIdentifier })
 ], AttrSpec);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/aa_controls.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/aa_controls.js
 var AAControls = class {
   constructor(params = {}) {
     this.permitUnSpecified = true;
@@ -18106,7 +18458,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Boolean, defaultValue: true })
 ], AAControls.prototype, "permitUnSpecified", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/issuer_serial.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/issuer_serial.js
 var IssuerSerial = class {
   constructor(params = {}) {
     this.issuer = new GeneralNames();
@@ -18125,7 +18477,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString, optional: true })
 ], IssuerSerial.prototype, "issuerUID", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/object_digest_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/object_digest_info.js
 var DigestedObjectType;
 (function(DigestedObjectType2) {
   DigestedObjectType2[DigestedObjectType2["publicKey"] = 0] = "publicKey";
@@ -18153,7 +18505,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], ObjectDigestInfo.prototype, "objectDigest", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/v2_form.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/v2_form.js
 var V2Form = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18169,7 +18521,7 @@ __decorate([
   AsnProp({ type: ObjectDigestInfo, context: 1, implicit: true, optional: true })
 ], V2Form.prototype, "objectDigestInfo", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_cert_issuer.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_cert_issuer.js
 var AttCertIssuer = class AttCertIssuer2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18185,7 +18537,7 @@ AttCertIssuer = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], AttCertIssuer);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_cert_validity_period.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attr_cert_validity_period.js
 var AttCertValidityPeriod = class {
   constructor(params = {}) {
     this.notBeforeTime = /* @__PURE__ */ new Date();
@@ -18200,7 +18552,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.GeneralizedTime })
 ], AttCertValidityPeriod.prototype, "notAfterTime", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/holder.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/holder.js
 var Holder = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18216,7 +18568,7 @@ __decorate([
   AsnProp({ type: ObjectDigestInfo, implicit: true, context: 2, optional: true })
 ], Holder.prototype, "objectDigestInfo", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/attribute_certificate_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attribute_certificate_info.js
 var AttCertVersion;
 (function(AttCertVersion2) {
   AttCertVersion2[AttCertVersion2["v2"] = 1] = "v2";
@@ -18261,7 +18613,7 @@ __decorate([
   AsnProp({ type: Extensions, optional: true })
 ], AttributeCertificateInfo.prototype, "extensions", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/attribute_certificate.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/attribute_certificate.js
 var AttributeCertificate = class {
   constructor(params = {}) {
     this.acinfo = new AttributeCertificateInfo();
@@ -18280,7 +18632,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], AttributeCertificate.prototype, "signatureValue", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/class_list.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/class_list.js
 var ClassListFlags;
 (function(ClassListFlags2) {
   ClassListFlags2[ClassListFlags2["unmarked"] = 1] = "unmarked";
@@ -18293,7 +18645,7 @@ var ClassListFlags;
 var ClassList = class extends BitString2 {
 };
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/security_category.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/security_category.js
 var SecurityCategory = class {
   constructor(params = {}) {
     this.type = "";
@@ -18308,7 +18660,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, implicit: true, context: 1 })
 ], SecurityCategory.prototype, "value", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/clearance.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/clearance.js
 var Clearance = class {
   constructor(params = {}) {
     this.policyId = "";
@@ -18326,7 +18678,7 @@ __decorate([
   AsnProp({ type: SecurityCategory, repeated: "set" })
 ], Clearance.prototype, "securityCategories", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/ietf_attr_syntax.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/ietf_attr_syntax.js
 var IetfAttrSyntaxValueChoices = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18354,7 +18706,7 @@ __decorate([
   AsnProp({ type: IetfAttrSyntaxValueChoices, repeated: "sequence" })
 ], IetfAttrSyntax.prototype, "values", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/object_identifiers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/object_identifiers.js
 var id_pe_ac_auditIdentity = `${id_pe}.4`;
 var id_pe_aaControls = `${id_pe}.6`;
 var id_pe_ac_proxying = `${id_pe}.10`;
@@ -18368,7 +18720,7 @@ var id_aca_encAttrs = `${id_aca}.6`;
 var id_at = "2.5.4";
 var id_at_role = `${id_at}.72`;
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/target.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/target.js
 var Targets_1;
 var TargetCert = class {
   constructor(params = {}) {
@@ -18412,7 +18764,7 @@ Targets = Targets_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Target })
 ], Targets);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/proxy_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/proxy_info.js
 var ProxyInfo_1;
 var ProxyInfo = ProxyInfo_1 = class ProxyInfo2 extends AsnArray {
   constructor(items) {
@@ -18424,7 +18776,7 @@ ProxyInfo = ProxyInfo_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Targets })
 ], ProxyInfo);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/role_syntax.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/role_syntax.js
 var RoleSyntax = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18437,7 +18789,7 @@ __decorate([
   AsnProp({ type: GeneralName, implicit: true, context: 1 })
 ], RoleSyntax.prototype, "roleName", void 0);
 
-// node_modules/@peculiar/asn1-x509-attr/build/es2015/svce_auth_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-x509-attr/build/es2015/svce_auth_info.js
 var SvceAuthInfo = class {
   constructor(params = {}) {
     this.service = new GeneralName();
@@ -18455,7 +18807,7 @@ __decorate([
   AsnProp({ type: OctetString2, optional: true })
 ], SvceAuthInfo.prototype, "authInfo", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/certificate_choices.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/certificate_choices.js
 var CertificateSet_1;
 var OtherCertificateFormat = class {
   constructor(params = {}) {
@@ -18497,7 +18849,7 @@ CertificateSet = CertificateSet_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Set, itemType: CertificateChoices })
 ], CertificateSet);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/content_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/content_info.js
 var ContentInfo = class {
   constructor(params = {}) {
     this.contentType = "";
@@ -18512,7 +18864,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, context: 0 })
 ], ContentInfo.prototype, "content", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/encapsulated_content_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/encapsulated_content_info.js
 var EncapsulatedContent = class EncapsulatedContent2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18540,7 +18892,7 @@ __decorate([
   AsnProp({ type: EncapsulatedContent, context: 0, optional: true })
 ], EncapsulatedContentInfo.prototype, "eContent", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/encrypted_content_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/encrypted_content_info.js
 var EncryptedContent = class EncryptedContent2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18579,7 +18931,7 @@ __decorate([
   AsnProp({ type: EncryptedContent, optional: true })
 ], EncryptedContentInfo.prototype, "encryptedContent", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/other_key_attribute.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/other_key_attribute.js
 var OtherKeyAttribute = class {
   constructor(params = {}) {
     this.keyAttrId = "";
@@ -18593,7 +18945,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, optional: true })
 ], OtherKeyAttribute.prototype, "keyAttr", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/key_agree_recipient_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/key_agree_recipient_info.js
 var RecipientEncryptedKeys_1;
 var RecipientKeyIdentifier = class {
   constructor(params = {}) {
@@ -18701,7 +19053,7 @@ __decorate([
   AsnProp({ type: RecipientEncryptedKeys })
 ], KeyAgreeRecipientInfo.prototype, "recipientEncryptedKeys", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/key_trans_recipient_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/key_trans_recipient_info.js
 var RecipientIdentifier = class RecipientIdentifier2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18738,7 +19090,7 @@ __decorate([
   AsnProp({ type: OctetString2 })
 ], KeyTransRecipientInfo.prototype, "encryptedKey", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/kek_recipient_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/kek_recipient_info.js
 var KEKIdentifier = class {
   constructor(params = {}) {
     this.keyIdentifier = new OctetString2();
@@ -18776,7 +19128,7 @@ __decorate([
   AsnProp({ type: OctetString2 })
 ], KEKRecipientInfo.prototype, "encryptedKey", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/password_recipient_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/password_recipient_info.js
 var PasswordRecipientInfo = class {
   constructor(params = {}) {
     this.version = CMSVersion.v0;
@@ -18798,7 +19150,7 @@ __decorate([
   AsnProp({ type: OctetString2 })
 ], PasswordRecipientInfo.prototype, "encryptedKey", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/recipient_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/recipient_info.js
 var OtherRecipientInfo = class {
   constructor(params = {}) {
     this.oriType = "";
@@ -18836,7 +19188,7 @@ RecipientInfo = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], RecipientInfo);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/recipient_infos.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/recipient_infos.js
 var RecipientInfos_1;
 var RecipientInfos = RecipientInfos_1 = class RecipientInfos2 extends AsnArray {
   constructor(items) {
@@ -18848,7 +19200,7 @@ RecipientInfos = RecipientInfos_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Set, itemType: RecipientInfo })
 ], RecipientInfos);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/revocation_info_choice.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/revocation_info_choice.js
 var RevocationInfoChoices_1;
 var id_ri = `${id_pkix}.16`;
 var id_ri_ocsp_response = `${id_ri}.2`;
@@ -18888,7 +19240,7 @@ RevocationInfoChoices = RevocationInfoChoices_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Set, itemType: RevocationInfoChoice })
 ], RevocationInfoChoices);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/originator_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/originator_info.js
 var OriginatorInfo = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -18901,7 +19253,7 @@ __decorate([
   AsnProp({ type: RevocationInfoChoices, context: 1, implicit: true, optional: true })
 ], OriginatorInfo.prototype, "crls", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/enveloped_data.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/enveloped_data.js
 var UnprotectedAttributes_1;
 var UnprotectedAttributes = UnprotectedAttributes_1 = class UnprotectedAttributes2 extends AsnArray {
   constructor(items) {
@@ -18936,10 +19288,10 @@ __decorate([
   AsnProp({ type: UnprotectedAttributes, context: 1, implicit: true, optional: true })
 ], EnvelopedData.prototype, "unprotectedAttrs", void 0);
 
-// node_modules/@peculiar/asn1-cms/build/es2015/object_identifiers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/object_identifiers.js
 var id_signedData = "1.2.840.113549.1.7.2";
 
-// node_modules/@peculiar/asn1-cms/build/es2015/signed_data.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-cms/build/es2015/signed_data.js
 var DigestAlgorithmIdentifiers_1;
 var DigestAlgorithmIdentifiers = DigestAlgorithmIdentifiers_1 = class DigestAlgorithmIdentifiers2 extends AsnArray {
   constructor(items) {
@@ -18978,7 +19330,7 @@ __decorate([
   AsnProp({ type: SignerInfos })
 ], SignedData.prototype, "signerInfos", void 0);
 
-// node_modules/@peculiar/asn1-ecc/build/es2015/object_identifiers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/object_identifiers.js
 var id_ecPublicKey = "1.2.840.10045.2.1";
 var id_ecdsaWithSHA1 = "1.2.840.10045.4.1";
 var id_ecdsaWithSHA224 = "1.2.840.10045.4.3.1";
@@ -18989,7 +19341,7 @@ var id_secp256r1 = "1.2.840.10045.3.1.7";
 var id_secp384r1 = "1.3.132.0.34";
 var id_secp521r1 = "1.3.132.0.35";
 
-// node_modules/@peculiar/asn1-ecc/build/es2015/algorithms.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/algorithms.js
 function create(algorithm) {
   return new AlgorithmIdentifier({ algorithm });
 }
@@ -18999,7 +19351,7 @@ var ecdsaWithSHA256 = create(id_ecdsaWithSHA256);
 var ecdsaWithSHA384 = create(id_ecdsaWithSHA384);
 var ecdsaWithSHA512 = create(id_ecdsaWithSHA512);
 
-// node_modules/@peculiar/asn1-ecc/build/es2015/rfc3279.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/rfc3279.js
 var FieldID = class FieldID2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -19065,7 +19417,7 @@ SpecifiedECDomain = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], SpecifiedECDomain);
 
-// node_modules/@peculiar/asn1-ecc/build/es2015/ec_parameters.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/ec_parameters.js
 var ECParameters = class ECParameters2 {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -19084,7 +19436,7 @@ ECParameters = __decorate([
   AsnType({ type: AsnTypeTypes.Choice })
 ], ECParameters);
 
-// node_modules/@peculiar/asn1-ecc/build/es2015/ec_private_key.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/ec_private_key.js
 var ECPrivateKey = class {
   constructor(params = {}) {
     this.version = 1;
@@ -19105,7 +19457,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString, context: 1, optional: true })
 ], ECPrivateKey.prototype, "publicKey", void 0);
 
-// node_modules/@peculiar/asn1-ecc/build/es2015/ec_signature_value.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-ecc/build/es2015/ec_signature_value.js
 var ECDSASigValue = class {
   constructor(params = {}) {
     this.r = new ArrayBuffer(0);
@@ -19120,7 +19472,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter })
 ], ECDSASigValue.prototype, "s", void 0);
 
-// node_modules/@peculiar/asn1-rsa/build/es2015/object_identifiers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/object_identifiers.js
 var id_pkcs_1 = "1.2.840.113549.1.1";
 var id_rsaEncryption = `${id_pkcs_1}.1`;
 var id_RSAES_OAEP = `${id_pkcs_1}.7`;
@@ -19146,7 +19498,7 @@ var id_md2 = "1.2.840.113549.2.2";
 var id_md5 = "1.2.840.113549.2.5";
 var id_mgf1 = `${id_pkcs_1}.8`;
 
-// node_modules/@peculiar/asn1-rsa/build/es2015/algorithms.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/algorithms.js
 function create2(algorithm) {
   return new AlgorithmIdentifier({ algorithm, parameters: null });
 }
@@ -19199,7 +19551,7 @@ var sha512WithRSAEncryption = create2(id_sha512WithRSAEncryption);
 var sha512_224WithRSAEncryption = create2(id_sha512_224WithRSAEncryption);
 var sha512_256WithRSAEncryption = create2(id_sha512_256WithRSAEncryption);
 
-// node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsaes_oaep.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsaes_oaep.js
 var RsaEsOaepParams = class {
   constructor(params = {}) {
     this.hashAlgorithm = new AlgorithmIdentifier(sha1);
@@ -19225,7 +19577,7 @@ var RSAES_OAEP = new AlgorithmIdentifier({
   parameters: AsnConvert.serialize(new RsaEsOaepParams())
 });
 
-// node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsassa_pss.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsassa_pss.js
 var RsaSaPssParams = class {
   constructor(params = {}) {
     this.hashAlgorithm = new AlgorithmIdentifier(sha1);
@@ -19255,7 +19607,7 @@ var RSASSA_PSS = new AlgorithmIdentifier({
   parameters: AsnConvert.serialize(new RsaSaPssParams())
 });
 
-// node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsassa_pkcs1_v1_5.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/parameters/rsassa_pkcs1_v1_5.js
 var DigestInfo = class {
   constructor(params = {}) {
     this.digestAlgorithm = new AlgorithmIdentifier();
@@ -19270,7 +19622,7 @@ __decorate([
   AsnProp({ type: OctetString2 })
 ], DigestInfo.prototype, "digest", void 0);
 
-// node_modules/@peculiar/asn1-rsa/build/es2015/other_prime_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/other_prime_info.js
 var OtherPrimeInfos_1;
 var OtherPrimeInfo = class {
   constructor(params = {}) {
@@ -19299,7 +19651,7 @@ OtherPrimeInfos = OtherPrimeInfos_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: OtherPrimeInfo })
 ], OtherPrimeInfos);
 
-// node_modules/@peculiar/asn1-rsa/build/es2015/rsa_private_key.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/rsa_private_key.js
 var RSAPrivateKey = class {
   constructor(params = {}) {
     this.version = 0;
@@ -19345,7 +19697,7 @@ __decorate([
   AsnProp({ type: OtherPrimeInfos, optional: true })
 ], RSAPrivateKey.prototype, "otherPrimeInfos", void 0);
 
-// node_modules/@peculiar/asn1-rsa/build/es2015/rsa_public_key.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-rsa/build/es2015/rsa_public_key.js
 var RSAPublicKey = class {
   constructor(params = {}) {
     this.modulus = new ArrayBuffer(0);
@@ -19360,7 +19712,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter })
 ], RSAPublicKey.prototype, "publicExponent", void 0);
 
-// node_modules/tsyringe/dist/esm5/types/lifecycle.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/types/lifecycle.js
 var Lifecycle;
 (function(Lifecycle2) {
   Lifecycle2[Lifecycle2["Transient"] = 0] = "Transient";
@@ -19370,7 +19722,7 @@ var Lifecycle;
 })(Lifecycle || (Lifecycle = {}));
 var lifecycle_default = Lifecycle;
 
-// node_modules/tsyringe/node_modules/tslib/tslib.es6.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/node_modules/tslib/tslib.es6.js
 var extendStatics = function(d, b) {
   extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
     d2.__proto__ = b2;
@@ -19516,7 +19868,7 @@ function __spread() {
   return ar;
 }
 
-// node_modules/tsyringe/dist/esm5/reflection-helpers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/reflection-helpers.js
 var INJECTION_TOKEN_METADATA_KEY = "injectionTokens";
 function getParamInfo(target) {
   var params = Reflect.getMetadata("design:paramtypes", target) || [];
@@ -19527,17 +19879,17 @@ function getParamInfo(target) {
   return params;
 }
 
-// node_modules/tsyringe/dist/esm5/providers/class-provider.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/class-provider.js
 function isClassProvider(provider) {
   return !!provider.useClass;
 }
 
-// node_modules/tsyringe/dist/esm5/providers/factory-provider.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/factory-provider.js
 function isFactoryProvider(provider) {
   return !!provider.useFactory;
 }
 
-// node_modules/tsyringe/dist/esm5/lazy-helpers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/lazy-helpers.js
 var DelayedConstructor = (function() {
   function DelayedConstructor2(wrap) {
     this.wrap = wrap;
@@ -19588,7 +19940,7 @@ var DelayedConstructor = (function() {
   return DelayedConstructor2;
 })();
 
-// node_modules/tsyringe/dist/esm5/providers/injection-token.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/injection-token.js
 function isNormalToken(token) {
   return typeof token === "string" || typeof token === "symbol";
 }
@@ -19602,22 +19954,22 @@ function isConstructorToken(token) {
   return typeof token === "function" || token instanceof DelayedConstructor;
 }
 
-// node_modules/tsyringe/dist/esm5/providers/token-provider.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/token-provider.js
 function isTokenProvider(provider) {
   return !!provider.useToken;
 }
 
-// node_modules/tsyringe/dist/esm5/providers/value-provider.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/value-provider.js
 function isValueProvider(provider) {
   return provider.useValue != void 0;
 }
 
-// node_modules/tsyringe/dist/esm5/providers/provider.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/providers/provider.js
 function isProvider(provider) {
   return isClassProvider(provider) || isValueProvider(provider) || isTokenProvider(provider) || isFactoryProvider(provider);
 }
 
-// node_modules/tsyringe/dist/esm5/registry-base.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/registry-base.js
 var RegistryBase = (function() {
   function RegistryBase2() {
     this._registryMap = /* @__PURE__ */ new Map();
@@ -19657,7 +20009,7 @@ var RegistryBase = (function() {
 })();
 var registry_base_default = RegistryBase;
 
-// node_modules/tsyringe/dist/esm5/registry.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/registry.js
 var Registry = (function(_super) {
   __extends(Registry2, _super);
   function Registry2() {
@@ -19667,7 +20019,7 @@ var Registry = (function(_super) {
 })(registry_base_default);
 var registry_default = Registry;
 
-// node_modules/tsyringe/dist/esm5/resolution-context.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/resolution-context.js
 var ResolutionContext = /* @__PURE__ */ (function() {
   function ResolutionContext2() {
     this.scopedResolutions = /* @__PURE__ */ new Map();
@@ -19676,7 +20028,7 @@ var ResolutionContext = /* @__PURE__ */ (function() {
 })();
 var resolution_context_default = ResolutionContext;
 
-// node_modules/tsyringe/dist/esm5/error-helpers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/error-helpers.js
 function formatDependency(params, idx) {
   if (params === null) {
     return "at position #" + idx;
@@ -19698,7 +20050,7 @@ function formatErrorCtor(ctor, paramIdx, error2) {
   return composeErrorMessage("Cannot inject the dependency " + dep + ' of "' + ctor.name + '" constructor. Reason:', error2);
 }
 
-// node_modules/tsyringe/dist/esm5/types/disposable.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/types/disposable.js
 function isDisposable(value) {
   if (typeof value.dispose !== "function")
     return false;
@@ -19709,7 +20061,7 @@ function isDisposable(value) {
   return true;
 }
 
-// node_modules/tsyringe/dist/esm5/interceptors.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/interceptors.js
 var PreResolutionInterceptors = (function(_super) {
   __extends(PreResolutionInterceptors2, _super);
   function PreResolutionInterceptors2() {
@@ -19733,7 +20085,7 @@ var Interceptors = /* @__PURE__ */ (function() {
 })();
 var interceptors_default = Interceptors;
 
-// node_modules/tsyringe/dist/esm5/dependency-container.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/dependency-container.js
 var typeInfo = /* @__PURE__ */ new Map();
 var InternalDependencyContainer = (function() {
   function InternalDependencyContainer2(parent) {
@@ -20127,7 +20479,7 @@ var InternalDependencyContainer = (function() {
 })();
 var instance = new InternalDependencyContainer();
 
-// node_modules/tsyringe/dist/esm5/decorators/injectable.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/decorators/injectable.js
 function injectable(options) {
   return function(target) {
     typeInfo.set(target, getParamInfo(target));
@@ -20144,12 +20496,12 @@ function injectable(options) {
 }
 var injectable_default = injectable;
 
-// node_modules/tsyringe/dist/esm5/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/tsyringe/dist/esm5/index.js
 if (typeof Reflect === "undefined" || !Reflect.getMetadata) {
   throw new Error(`tsyringe requires a reflect polyfill. Please add 'import "reflect-metadata"' to the top of your entry point.`);
 }
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/attribute.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/attribute.js
 var PKCS12AttrSet_1;
 var PKCS12Attribute = class {
   constructor(params = {}) {
@@ -20174,7 +20526,7 @@ PKCS12AttrSet = PKCS12AttrSet_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: PKCS12Attribute })
 ], PKCS12AttrSet);
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/authenticated_safe.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/authenticated_safe.js
 var AuthenticatedSafe_1;
 var AuthenticatedSafe = AuthenticatedSafe_1 = class AuthenticatedSafe2 extends AsnArray {
   constructor(items) {
@@ -20186,7 +20538,7 @@ AuthenticatedSafe = AuthenticatedSafe_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: ContentInfo })
 ], AuthenticatedSafe);
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/object_identifiers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/object_identifiers.js
 var id_rsadsi = "1.2.840.113549";
 var id_pkcs = `${id_rsadsi}.1`;
 var id_pkcs_12 = `${id_pkcs}.12`;
@@ -20199,7 +20551,7 @@ var id_pbeWithSHAAnd128BitRC2_CBC = `${id_pkcs_12PbeIds}.5`;
 var id_pbewithSHAAnd40BitRC2_CBC = `${id_pkcs_12PbeIds}.6`;
 var id_bagtypes = `${id_pkcs_12}.10.1`;
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/bags/types.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/types.js
 var id_keyBag = `${id_bagtypes}.1`;
 var id_pkcs8ShroudedKeyBag = `${id_bagtypes}.2`;
 var id_certBag = `${id_bagtypes}.3`;
@@ -20208,7 +20560,7 @@ var id_SecretBag = `${id_bagtypes}.5`;
 var id_SafeContents = `${id_bagtypes}.6`;
 var id_pkcs_9 = "1.2.840.113549.1.9";
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/bags/cert_bag.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/cert_bag.js
 var CertBag = class {
   constructor(params = {}) {
     this.certId = "";
@@ -20226,7 +20578,7 @@ var id_certTypes = `${id_pkcs_9}.22`;
 var id_x509Certificate = `${id_certTypes}.1`;
 var id_sdsiCertificate = `${id_certTypes}.2`;
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/bags/crl_bag.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/crl_bag.js
 var CRLBag = class {
   constructor(params = {}) {
     this.crlId = "";
@@ -20243,7 +20595,7 @@ __decorate([
 var id_crlTypes = `${id_pkcs_9}.23`;
 var id_x509CRL = `${id_crlTypes}.1`;
 
-// node_modules/@peculiar/asn1-pkcs8/build/es2015/encrypted_private_key_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pkcs8/build/es2015/encrypted_private_key_info.js
 var EncryptedData = class extends OctetString2 {
 };
 var EncryptedPrivateKeyInfo = class {
@@ -20260,7 +20612,7 @@ __decorate([
   AsnProp({ type: EncryptedData })
 ], EncryptedPrivateKeyInfo.prototype, "encryptedData", void 0);
 
-// node_modules/@peculiar/asn1-pkcs8/build/es2015/private_key_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pkcs8/build/es2015/private_key_info.js
 var Attributes_1;
 var Version2;
 (function(Version4) {
@@ -20298,21 +20650,21 @@ __decorate([
   AsnProp({ type: Attributes, implicit: true, context: 0, optional: true })
 ], PrivateKeyInfo.prototype, "attributes", void 0);
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/bags/key_bag.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/key_bag.js
 var KeyBag = class KeyBag2 extends PrivateKeyInfo {
 };
 KeyBag = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], KeyBag);
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/bags/pkcs8_shrouded_key_bag.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/pkcs8_shrouded_key_bag.js
 var PKCS8ShroudedKeyBag = class PKCS8ShroudedKeyBag2 extends EncryptedPrivateKeyInfo {
 };
 PKCS8ShroudedKeyBag = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], PKCS8ShroudedKeyBag);
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/bags/secret_bag.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/bags/secret_bag.js
 var SecretBag = class {
   constructor(params = {}) {
     this.secretTypeId = "";
@@ -20327,7 +20679,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Any, context: 0 })
 ], SecretBag.prototype, "secretValue", void 0);
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/mac_data.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/mac_data.js
 var MacData = class {
   constructor(params = {}) {
     this.mac = new DigestInfo();
@@ -20346,7 +20698,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.Integer, defaultValue: 1 })
 ], MacData.prototype, "iterations", void 0);
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/pfx.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/pfx.js
 var PFX = class {
   constructor(params = {}) {
     this.version = 3;
@@ -20365,7 +20717,7 @@ __decorate([
   AsnProp({ type: MacData, optional: true })
 ], PFX.prototype, "macData", void 0);
 
-// node_modules/@peculiar/asn1-pfx/build/es2015/safe_bag.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pfx/build/es2015/safe_bag.js
 var SafeContents_1;
 var SafeBag = class {
   constructor(params = {}) {
@@ -20393,7 +20745,7 @@ SafeContents = SafeContents_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: SafeBag })
 ], SafeContents);
 
-// node_modules/@peculiar/asn1-pkcs9/build/es2015/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-pkcs9/build/es2015/index.js
 var ExtensionRequest_1;
 var ExtendedCertificateAttributes_1;
 var SMIMECapabilities_1;
@@ -20637,7 +20989,7 @@ SMIMECapabilities = SMIMECapabilities_1 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: SMIMECapability })
 ], SMIMECapabilities);
 
-// node_modules/@peculiar/asn1-csr/build/es2015/attributes.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-csr/build/es2015/attributes.js
 var Attributes_12;
 var Attributes3 = Attributes_12 = class Attributes4 extends AsnArray {
   constructor(items) {
@@ -20649,7 +21001,7 @@ Attributes3 = Attributes_12 = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence, itemType: Attribute })
 ], Attributes3);
 
-// node_modules/@peculiar/asn1-csr/build/es2015/certification_request_info.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-csr/build/es2015/certification_request_info.js
 var CertificationRequestInfo = class {
   constructor(params = {}) {
     this.version = 0;
@@ -20672,7 +21024,7 @@ __decorate([
   AsnProp({ type: Attributes3, implicit: true, context: 0, optional: true })
 ], CertificationRequestInfo.prototype, "attributes", void 0);
 
-// node_modules/@peculiar/asn1-csr/build/es2015/certification_request.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-csr/build/es2015/certification_request.js
 var CertificationRequest = class {
   constructor(params = {}) {
     this.certificationRequestInfo = new CertificationRequestInfo();
@@ -20691,7 +21043,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.BitString })
 ], CertificationRequest.prototype, "signature", void 0);
 
-// node_modules/@peculiar/x509/build/x509.es.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/x509/build/x509.es.js
 var diAlgorithm = "crypto.algorithm";
 var AlgorithmProvider = class {
   getAlgorithms() {
@@ -23509,7 +23861,7 @@ AsnEcSignatureFormatter.namedCurveSize.set("K-256", 32);
 AsnEcSignatureFormatter.namedCurveSize.set("P-384", 48);
 AsnEcSignatureFormatter.namedCurveSize.set("P-521", 66);
 
-// node_modules/@simplewebauthn/server/esm/helpers/fetch.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/fetch.js
 function fetch2(url) {
   return _fetchInternals.stubThis(url);
 }
@@ -23517,7 +23869,7 @@ var _fetchInternals = {
   stubThis: (url) => globalThis.fetch(url)
 };
 
-// node_modules/@simplewebauthn/server/esm/helpers/isCertRevoked.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/isCertRevoked.js
 var cacheRevokedCerts = {};
 async function isCertRevoked(cert) {
   const { extensions } = cert;
@@ -23589,7 +23941,7 @@ async function isCertRevoked(cert) {
   return false;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/decodeAuthenticatorExtensions.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/decodeAuthenticatorExtensions.js
 function decodeAuthenticatorExtensions(extensionData) {
   let toCBOR;
   try {
@@ -23612,7 +23964,7 @@ function convertMapToObjectDeep(input) {
   return mapped;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/parseAuthenticatorData.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/parseAuthenticatorData.js
 function parseAuthenticatorData(authData) {
   if (authData.byteLength < 37) {
     throw new Error(`Authenticator data was ${authData.byteLength} bytes, expected at least 37 bytes`);
@@ -23701,7 +24053,7 @@ var _parseAuthenticatorDataInternals = {
   stubThis: (value) => value
 };
 
-// node_modules/@simplewebauthn/server/esm/helpers/toHash.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/toHash.js
 function toHash(data, algorithm = -7) {
   if (typeof data === "string") {
     data = isoUint8Array_exports.fromUTF8String(data);
@@ -23710,7 +24062,7 @@ function toHash(data, algorithm = -7) {
   return digest2;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/validateCertificatePath.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/validateCertificatePath.js
 async function validateCertificatePath(x5cCertsPEM, trustAnchorsPEM = []) {
   if (trustAnchorsPEM.length === 0) {
     return true;
@@ -23817,7 +24169,7 @@ var InvalidSubjectAndIssuer = class extends Error {
   }
 };
 
-// node_modules/@simplewebauthn/server/esm/helpers/mapX509SignatureAlgToCOSEAlg.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/mapX509SignatureAlgToCOSEAlg.js
 function mapX509SignatureAlgToCOSEAlg(signatureAlgorithm) {
   let alg;
   if (signatureAlgorithm === "1.2.840.10045.4.3.2") {
@@ -23840,7 +24192,7 @@ function mapX509SignatureAlgToCOSEAlg(signatureAlgorithm) {
   return alg;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/convertX509PublicKeyToCOSE.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertX509PublicKeyToCOSE.js
 function convertX509PublicKeyToCOSE(x509Certificate) {
   let cosePublicKey = /* @__PURE__ */ new Map();
   const x509 = AsnParser.parse(x509Certificate, Certificate);
@@ -23894,7 +24246,7 @@ function convertX509PublicKeyToCOSE(x509Certificate) {
   return cosePublicKey;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/verifySignature.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/verifySignature.js
 function verifySignature(opts) {
   const { signature, data, credentialPublicKey, x509Certificate, hashAlgorithm } = opts;
   if (!x509Certificate && !credentialPublicKey) {
@@ -23920,7 +24272,7 @@ var _verifySignatureInternals = {
   stubThis: (value) => value
 };
 
-// node_modules/@simplewebauthn/server/esm/metadata/parseJWT.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/metadata/parseJWT.js
 function parseJWT(jwt) {
   const parts = jwt.split(".");
   return [
@@ -23930,7 +24282,7 @@ function parseJWT(jwt) {
   ];
 }
 
-// node_modules/@simplewebauthn/server/esm/metadata/verifyJWT.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/metadata/verifyJWT.js
 function verifyJWT(jwt, leafCert) {
   const [header, payload, signature] = jwt.split(".");
   const certCOSE = convertX509PublicKeyToCOSE(leafCert);
@@ -23954,13 +24306,13 @@ function verifyJWT(jwt, leafCert) {
   throw new Error(`JWT verification with public key of kty ${kty} is not supported by this method`);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/convertPEMToBytes.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/convertPEMToBytes.js
 function convertPEMToBytes(pem) {
   const certBase64 = pem.replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").replace(/[\n ]/g, "");
   return isoBase64URL_exports.toBuffer(certBase64, "base64");
 }
 
-// node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/android-safetynet.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/android-safetynet.js
 var GlobalSign_Root_CA = `-----BEGIN CERTIFICATE-----
 MIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkG
 A1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNVBAsTB1Jv
@@ -23984,7 +24336,7 @@ HMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==
 -----END CERTIFICATE-----
 `;
 
-// node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/android-key.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/android-key.js
 var Google_Hardware_Attestation_Root_1 = `-----BEGIN CERTIFICATE-----
 MIIFYDCCA0igAwIBAgIJAOj6GWMU0voYMA0GCSqGSIb3DQEBCwUAMBsxGTAXBgNV
 BAUTEGY5MjAwOWU4NTNiNmIwNDUwHhcNMTYwNTI2MTYyODUyWhcNMjYwNTI0MTYy
@@ -24113,7 +24465,7 @@ w1IdYIg2Wxg7yHcQZemFQg==
 -----END CERTIFICATE-----
 `;
 
-// node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/apple.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/apple.js
 var Apple_WebAuthn_Root_CA = `-----BEGIN CERTIFICATE-----
 MIICEjCCAZmgAwIBAgIQaB0BbHo84wIlpQGUKEdXcTAKBggqhkjOPQQDAzBLMR8w
 HQYDVQQDDBZBcHBsZSBXZWJBdXRobiBSb290IENBMRMwEQYDVQQKDApBcHBsZSBJ
@@ -24130,7 +24482,7 @@ jAGGiQIwHFj+dJZYUJR786osByBelJYsVZd2GbHQu209b5RCmGQ21gpSAk9QZW4B
 -----END CERTIFICATE-----
 `;
 
-// node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/mds.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/defaultRootCerts/mds.js
 var GlobalSign_Root_CA_R3 = `-----BEGIN CERTIFICATE-----
 MIIDXzCCAkegAwIBAgILBAAAAAABIVhTCKIwDQYJKoZIhvcNAQELBQAwTDEgMB4G
 A1UECxMXR2xvYmFsU2lnbiBSb290IENBIC0gUjMxEzARBgNVBAoTCkdsb2JhbFNp
@@ -24154,7 +24506,7 @@ WD9f
 -----END CERTIFICATE-----
  `;
 
-// node_modules/@simplewebauthn/server/esm/services/settingsService.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/settingsService.js
 var BaseSettingsService = class {
   constructor() {
     Object.defineProperty(this, "pemCertificates", {
@@ -24205,7 +24557,7 @@ SettingsService.setRootCertificates({
   certificates: [GlobalSign_Root_CA_R3]
 });
 
-// node_modules/@simplewebauthn/server/esm/metadata/verifyMDSBlob.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/metadata/verifyMDSBlob.js
 async function verifyMDSBlob(blob) {
   const parsedJWT = parseJWT(blob);
   const header = parsedJWT[0];
@@ -24245,7 +24597,7 @@ async function verifyMDSBlob(blob) {
   };
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyOKP.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verifyOKP.js
 async function verifyOKP(opts) {
   const { cosePublicKey, signature, data } = opts;
   const WebCrypto = await getWebCrypto();
@@ -24291,7 +24643,7 @@ async function verifyOKP(opts) {
   return WebCrypto.subtle.verify(verifyAlgorithm, key, signature, data);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/unwrapEC2Signature.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/unwrapEC2Signature.js
 function unwrapEC2Signature(signature, crv) {
   const parsedSignature = AsnParser.parse(signature, ECDSASigValue);
   const rBytes = new Uint8Array(parsedSignature.r);
@@ -24332,7 +24684,7 @@ function toNormalizedBytes(bytes, componentLength) {
   return normalizedBytes;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verify.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/verify.js
 function verify(opts) {
   const { cosePublicKey, signature, data, shaHashOverride } = opts;
   if (isCOSEPublicKeyEC2(cosePublicKey)) {
@@ -24356,7 +24708,7 @@ function verify(opts) {
   throw new Error(`Signature verification with public key of kty ${kty} is not supported by this method`);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/iso/isoUint8Array.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/iso/isoUint8Array.js
 var isoUint8Array_exports = {};
 __export(isoUint8Array_exports, {
   areEqual: () => areEqual,
@@ -24414,7 +24766,7 @@ function toDataView(array2) {
   return new DataView(array2.buffer, array2.byteOffset, array2.length);
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/generateChallenge.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/generateChallenge.js
 async function generateChallenge() {
   const challenge = new Uint8Array(32);
   await isoCrypto_exports.getRandomValues(challenge);
@@ -24424,7 +24776,7 @@ var _generateChallengeInternals = {
   stubThis: (value) => value
 };
 
-// node_modules/@simplewebauthn/server/esm/registration/generateRegistrationOptions.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/generateRegistrationOptions.js
 var supportedCOSEAlgorithmIdentifiers = [
   // EdDSA (In first position to encourage authenticators to use this over ES256)
   -8,
@@ -24523,7 +24875,7 @@ async function generateRegistrationOptions(options) {
   };
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/parseBackupFlags.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/parseBackupFlags.js
 function parseBackupFlags({ be, bs }) {
   const credentialBackedUp = bs;
   let credentialDeviceType = "singleDevice";
@@ -24542,7 +24894,7 @@ var InvalidBackupFlags = class extends Error {
   }
 };
 
-// node_modules/@simplewebauthn/server/esm/helpers/matchExpectedRPID.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/matchExpectedRPID.js
 async function matchExpectedRPID(rpIDHash, expectedRPIDs) {
   try {
     const matchedRPID = await Promise.any(expectedRPIDs.map((expected) => {
@@ -24573,7 +24925,7 @@ var UnexpectedRPIDHash = class extends Error {
   }
 };
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationFIDOU2F.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationFIDOU2F.js
 async function verifyAttestationFIDOU2F(options) {
   const { attStmt, clientDataHash, rpIdHash, credentialID, credentialPublicKey, aaguid, rootCertificates } = options;
   const reservedByte = Uint8Array.from([0]);
@@ -24611,7 +24963,7 @@ async function verifyAttestationFIDOU2F(options) {
   });
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/validateExtFIDOGenCEAAGUID.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/validateExtFIDOGenCEAAGUID.js
 var id_fido_gen_ce_aaguid = "1.3.6.1.4.1.45724.1.1.4";
 function validateExtFIDOGenCEAAGUID(certExtensions, aaguid) {
   if (!certExtensions) {
@@ -24632,13 +24984,13 @@ function validateExtFIDOGenCEAAGUID(certExtensions, aaguid) {
   return true;
 }
 
-// node_modules/@simplewebauthn/server/esm/helpers/logging.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/helpers/logging.js
 function getLogger(_name) {
   return (_message, ..._rest) => {
   };
 }
 
-// node_modules/@simplewebauthn/server/esm/services/metadataService.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/services/metadataService.js
 var NonRefreshingMDS = {
   url: "",
   no: 0,
@@ -24845,7 +25197,7 @@ var BaseMetadataService = class {
 };
 var MetadataService = new BaseMetadataService();
 
-// node_modules/@simplewebauthn/server/esm/metadata/verifyAttestationWithMetadata.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/metadata/verifyAttestationWithMetadata.js
 async function verifyAttestationWithMetadata({ statement, credentialPublicKey, x5c, attestationStatementAlg }) {
   const { authenticationAlgorithms, authenticatorGetInfo, attestationRootCertificates } = statement;
   const keypairCOSEAlgs = /* @__PURE__ */ new Set();
@@ -24941,7 +25293,7 @@ function stringifyCOSEInfo(info) {
   return toReturn;
 }
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationPacked.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationPacked.js
 async function verifyAttestationPacked(options) {
   const { attStmt, clientDataHash, authData, credentialPublicKey, aaguid, rootCertificates } = options;
   const sig = attStmt.get("sig");
@@ -25033,7 +25385,7 @@ async function verifyAttestationPacked(options) {
   return verified;
 }
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationAndroidSafetyNet.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationAndroidSafetyNet.js
 async function verifyAttestationAndroidSafetyNet(options) {
   const { attStmt, clientDataHash, authData, aaguid, rootCertificates, verifyTimestampMS = true, credentialPublicKey, attestationSafetyNetEnforceCTSCheck } = options;
   const alg = attStmt.get("alg");
@@ -25108,7 +25460,7 @@ async function verifyAttestationAndroidSafetyNet(options) {
   return verified;
 }
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/constants.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/constants.js
 var TPM_ST = {
   196: "TPM_ST_RSP_COMMAND",
   32768: "TPM_ST_NULL",
@@ -25226,7 +25578,7 @@ var TPM_ECC_CURVE_COSE_CRV_MAP = {
   // p256
 };
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/parseCertInfo.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/parseCertInfo.js
 function parseCertInfo(certInfo) {
   let pointer = 0;
   const dataView = isoUint8Array_exports.toDataView(certInfo);
@@ -25273,7 +25625,7 @@ function parseCertInfo(certInfo) {
   };
 }
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/parsePubArea.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/parsePubArea.js
 function parsePubArea(pubArea) {
   let pointer = 0;
   const dataView = isoUint8Array_exports.toDataView(pubArea);
@@ -25344,7 +25696,7 @@ function parsePubArea(pubArea) {
   };
 }
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/verifyAttestationTPM.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/tpm/verifyAttestationTPM.js
 async function verifyAttestationTPM(options) {
   const { aaguid, attStmt, authData, credentialPublicKey, clientDataHash, rootCertificates } = options;
   const ver = attStmt.get("ver");
@@ -25575,7 +25927,7 @@ function attestedNameAlgToCOSEAlg(alg) {
   throw new Error(`Unexpected TPM attested name alg ${alg}`);
 }
 
-// node_modules/@peculiar/asn1-android/build/es2015/key_description.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-android/build/es2015/key_description.js
 var IntegerSet_1;
 var id_ce_keyDescription = "1.3.6.1.4.1.11129.2.1.17";
 var VerifiedBootState;
@@ -25864,7 +26216,7 @@ __decorate([
   AsnProp({ type: AuthorizationList })
 ], KeyMintKeyDescription.prototype, "hardwareEnforced", void 0);
 
-// node_modules/@peculiar/asn1-android/build/es2015/nonstandard.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-android/build/es2015/nonstandard.js
 var NonStandardAuthorizationList_1;
 var NonStandardAuthorization = class NonStandardAuthorization2 extends AuthorizationList {
 };
@@ -25960,7 +26312,7 @@ NonStandardKeyMintKeyDescription = __decorate([
   AsnType({ type: AsnTypeTypes.Sequence })
 ], NonStandardKeyMintKeyDescription);
 
-// node_modules/@peculiar/asn1-android/build/es2015/attestation.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@peculiar/asn1-android/build/es2015/attestation.js
 var AttestationPackageInfo = class {
   constructor(params = {}) {
     Object.assign(this, params);
@@ -25984,7 +26336,7 @@ __decorate([
   AsnProp({ type: AsnPropTypes.OctetString, repeated: "set" })
 ], AttestationApplicationId.prototype, "signatureDigests", void 0);
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationAndroidKey.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationAndroidKey.js
 async function verifyAttestationAndroidKey(options) {
   const { authData, clientDataHash, attStmt, credentialPublicKey, aaguid, rootCertificates } = options;
   const x5c = attStmt.get("x5c");
@@ -26058,7 +26410,7 @@ async function verifyAttestationAndroidKey(options) {
   });
 }
 
-// node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationApple.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifications/verifyAttestationApple.js
 async function verifyAttestationApple(options) {
   const { attStmt, authData, clientDataHash, credentialPublicKey, rootCertificates } = options;
   const x5c = attStmt.get("x5c");
@@ -26094,7 +26446,7 @@ async function verifyAttestationApple(options) {
   return true;
 }
 
-// node_modules/@simplewebauthn/server/esm/registration/verifyRegistrationResponse.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/registration/verifyRegistrationResponse.js
 async function verifyRegistrationResponse(options) {
   const { response, expectedChallenge, expectedOrigin, expectedRPID, expectedType, requireUserPresence = true, requireUserVerification = true, supportedAlgorithmIDs = supportedCOSEAlgorithmIdentifiers, attestationSafetyNetEnforceCTSCheck = true } = options;
   const { id, rawId, type: credentialType, response: attestationResponse } = response;
@@ -26249,7 +26601,7 @@ async function verifyRegistrationResponse(options) {
   };
 }
 
-// node_modules/@simplewebauthn/server/esm/authentication/generateAuthenticationOptions.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/authentication/generateAuthenticationOptions.js
 async function generateAuthenticationOptions(options) {
   const { allowCredentials, challenge = await generateChallenge(), timeout = 6e4, userVerification = "preferred", extensions, rpID } = options;
   let _challenge = challenge;
@@ -26275,7 +26627,7 @@ async function generateAuthenticationOptions(options) {
   };
 }
 
-// node_modules/@simplewebauthn/server/esm/authentication/verifyAuthenticationResponse.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@simplewebauthn/server/esm/authentication/verifyAuthenticationResponse.js
 async function verifyAuthenticationResponse(options) {
   const { response, expectedChallenge, expectedOrigin, expectedRPID, expectedType, credential, requireUserVerification = true, advancedFIDOConfig } = options;
   const { id, rawId, type: credentialType, response: assertionResponse } = response;
@@ -32576,8 +32928,8 @@ function normalizeProposalEntry(content) {
   }
   return null;
 }
-function makeRecordId2({ issuePart, timestamp }) {
-  const timestampPart = normalizeTag2(String(timestamp).replaceAll(":", "").replaceAll("-", ""));
+function makeRecordId2({ issuePart, timestamp: timestamp2 }) {
+  const timestampPart = normalizeTag2(String(timestamp2).replaceAll(":", "").replaceAll("-", ""));
   const randomPart = Math.random().toString(36).slice(2, 8);
   return `proposal_${issuePart}_${timestampPart}_${randomPart}`;
 }
@@ -43404,7 +43756,7 @@ function extractBusinessGoalAnchors(value) {
   return [...new Set(tokens.filter((token) => !generic.has(token)))];
 }
 
-// node_modules/zod/v3/helpers/util.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
   util2.assertEqual = (_) => {
@@ -43538,7 +43890,7 @@ var getParsedType = (data) => {
   }
 };
 
-// node_modules/zod/v3/ZodError.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v3/ZodError.js
 var ZodIssueCode = util.arrayToEnum([
   "invalid_type",
   "invalid_literal",
@@ -43652,7 +44004,7 @@ ZodError.create = (issues) => {
   return error2;
 };
 
-// node_modules/zod/v3/locales/en.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v3/locales/en.js
 var errorMap = (issue2, _ctx) => {
   let message;
   switch (issue2.code) {
@@ -43755,13 +44107,13 @@ var errorMap = (issue2, _ctx) => {
 };
 var en_default = errorMap;
 
-// node_modules/zod/v3/errors.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v3/errors.js
 var overrideErrorMap = en_default;
 function getErrorMap() {
   return overrideErrorMap;
 }
 
-// node_modules/zod/v3/helpers/parseUtil.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
   const { data, path, errorMaps, issueData } = params;
   const fullPath = [...path, ...issueData.path || []];
@@ -43870,14 +44222,14 @@ var isDirty = (x) => x.status === "dirty";
 var isValid = (x) => x.status === "valid";
 var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
 
-// node_modules/zod/v3/helpers/errorUtil.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v3/helpers/errorUtil.js
 var errorUtil;
 (function(errorUtil2) {
   errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
   errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
 })(errorUtil || (errorUtil = {}));
 
-// node_modules/zod/v3/types.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
   constructor(parent, value, path, key) {
     this._cachedPath = [];
@@ -47281,7 +47633,7 @@ var nullableType = ZodNullable.create;
 var preprocessType = ZodEffects.createWithPreprocess;
 var pipelineType = ZodPipeline.create;
 
-// node_modules/zod/v4/core/core.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/core.js
 var _a3;
 // @__NO_SIDE_EFFECTS__
 function $constructor(name, initializer3, params) {
@@ -47355,7 +47707,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// node_modules/zod/v4/core/util.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -48051,7 +48403,7 @@ var Class = class {
   }
 };
 
-// node_modules/zod/v4/core/errors.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/errors.js
 var initializer = (inst, def) => {
   inst.name = "$ZodError";
   Object.defineProperty(inst, "_zod", {
@@ -48120,7 +48472,7 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
   return fieldErrors;
 }
 
-// node_modules/zod/v4/core/parse.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/parse.js
 var _parse = (_Err) => (schema, value, _ctx, _params) => {
   const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
   const result = schema._zod.run({ value, issues: [] }, ctx);
@@ -48200,7 +48552,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
   return _safeParseAsync(_Err)(schema, value, _ctx);
 };
 
-// node_modules/zod/v4/core/regexes.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/regexes.js
 var cuid = /^[cC][0-9a-z]{6,}$/;
 var cuid2 = /^[0-9a-z]+$/;
 var ulid = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
@@ -48258,7 +48610,7 @@ var _null = /^null$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
 
-// node_modules/zod/v4/core/checks.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a5;
   inst._zod ?? (inst._zod = {});
@@ -48648,7 +49000,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// node_modules/zod/v4/core/doc.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = []) {
     this.content = [];
@@ -48684,14 +49036,14 @@ var Doc = class {
   }
 };
 
-// node_modules/zod/v4/core/versions.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 4,
   patch: 3
 };
 
-// node_modules/zod/v4/core/schemas.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a5;
   inst ?? (inst = {});
@@ -50171,7 +50523,7 @@ function handleRefineResult(result, payload, input, inst) {
   }
 }
 
-// node_modules/zod/v4/locales/en.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/locales/en.js
 var error = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -50284,7 +50636,7 @@ function en_default2() {
   };
 }
 
-// node_modules/zod/v4/core/registries.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/registries.js
 var _a4;
 var $output = Symbol("ZodOutput");
 var $input = Symbol("ZodInput");
@@ -50334,7 +50686,7 @@ function registry() {
 (_a4 = globalThis).__zod_globalRegistry ?? (_a4.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// node_modules/zod/v4/core/api.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/api.js
 // @__NO_SIDE_EFFECTS__
 function _string(Class2, params) {
   return new Class2({
@@ -50862,7 +51214,7 @@ function _check(fn, params) {
   return ch;
 }
 
-// node_modules/zod/v4/core/to-json-schema.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/to-json-schema.js
 function initializeContext(params) {
   let target = params?.target ?? "draft-2020-12";
   if (target === "draft-4")
@@ -51221,7 +51573,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// node_modules/zod/v4/core/json-schema-processors.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/core/json-schema-processors.js
 var formatMap = {
   guid: "uuid",
   url: "uri",
@@ -51765,7 +52117,7 @@ function toJSONSchema(input, params) {
   return finalize(ctx, input);
 }
 
-// node_modules/zod/v4/mini/schemas.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/mini/schemas.js
 var ZodMiniType = /* @__PURE__ */ $constructor("ZodMiniType", (inst, def) => {
   if (!inst._zod)
     throw new Error("Uninitialized schema in ZodMiniType.");
@@ -51811,7 +52163,7 @@ function object(shape, params) {
   return new ZodMiniObject(def);
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s) {
   const schema = s;
   return !!schema._zod;
@@ -51955,7 +52307,7 @@ function getLiteralValue(schema) {
   return void 0;
 }
 
-// node_modules/zod/v4/classic/iso.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/classic/iso.js
 var iso_exports2 = {};
 __export(iso_exports2, {
   ZodISODate: () => ZodISODate,
@@ -51996,7 +52348,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// node_modules/zod/v4/classic/errors.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/classic/errors.js
 var initializer2 = (inst, issues) => {
   $ZodError.init(inst, issues);
   inst.name = "ZodError";
@@ -52035,7 +52387,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, {
   Parent: Error
 });
 
-// node_modules/zod/v4/classic/parse.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/classic/parse.js
 var parse2 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse4 = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -52049,7 +52401,7 @@ var safeDecode2 = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync2 = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync2 = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// node_modules/zod/v4/classic/schemas.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/classic/schemas.js
 var _installedGroups = /* @__PURE__ */ new WeakMap();
 function _installLazyMethods(inst, group, methods) {
   const proto = Object.getPrototypeOf(inst);
@@ -52891,10 +53243,10 @@ function preprocess(fn, schema) {
   });
 }
 
-// node_modules/zod/v4/classic/external.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod/v4/classic/external.js
 config(en_default2());
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var DEFAULT_NEGOTIATED_PROTOCOL_VERSION = "2025-03-26";
 var SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
@@ -54427,12 +54779,12 @@ var UrlElicitationRequiredError = class extends McpError {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
 function isTerminal(status) {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
-// node_modules/zod-to-json-schema/dist/esm/Options.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
 var defaultOptions = {
   name: void 0,
@@ -54466,7 +54818,7 @@ var getDefaultOptions = (options) => typeof options === "string" ? {
   ...options
 };
 
-// node_modules/zod-to-json-schema/dist/esm/Refs.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/Refs.js
 var getRefs = (options) => {
   const _options = getDefaultOptions(options);
   const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
@@ -54487,7 +54839,7 @@ var getRefs = (options) => {
   };
 };
 
-// node_modules/zod-to-json-schema/dist/esm/errorMessages.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/errorMessages.js
 function addErrorMessage(res, key, errorMessage2, refs) {
   if (!refs?.errorMessages)
     return;
@@ -54503,7 +54855,7 @@ function setResponseValueAndErrors(res, key, value, errorMessage2, refs) {
   addErrorMessage(res, key, errorMessage2, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
 var getRelativePath = (pathA, pathB) => {
   let i = 0;
   for (; i < pathA.length && i < pathB.length; i++) {
@@ -54513,7 +54865,7 @@ var getRelativePath = (pathA, pathB) => {
   return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/any.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/any.js
 function parseAnyDef(refs) {
   if (refs.target !== "openAi") {
     return {};
@@ -54529,7 +54881,7 @@ function parseAnyDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/array.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/array.js
 function parseArrayDef(def, refs) {
   const res = {
     type: "array"
@@ -54553,7 +54905,7 @@ function parseArrayDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
 function parseBigintDef(def, refs) {
   const res = {
     type: "integer",
@@ -54599,24 +54951,24 @@ function parseBigintDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
 function parseBooleanDef() {
   return {
     type: "boolean"
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
 function parseBrandedDef(_def, refs) {
   return parseDef(_def.type._def, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
 var parseCatchDef = (def, refs) => {
   return parseDef(def.innerType._def, refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/date.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/date.js
 function parseDateDef(def, refs, overrideDateStrategy) {
   const strategy = overrideDateStrategy ?? refs.dateStrategy;
   if (Array.isArray(strategy)) {
@@ -54675,7 +55027,7 @@ var integerDateParser = (def, refs) => {
   return res;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/default.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/default.js
 function parseDefaultDef(_def, refs) {
   return {
     ...parseDef(_def.innerType._def, refs),
@@ -54683,12 +55035,12 @@ function parseDefaultDef(_def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
 function parseEffectsDef(_def, refs) {
   return refs.effectStrategy === "input" ? parseDef(_def.schema._def, refs) : parseAnyDef(refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
 function parseEnumDef(def) {
   return {
     type: "string",
@@ -54696,7 +55048,7 @@ function parseEnumDef(def) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
 var isJsonSchema7AllOfType = (type) => {
   if ("type" in type && type.type === "string")
     return false;
@@ -54738,7 +55090,7 @@ function parseIntersectionDef(def, refs) {
   } : void 0;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
 function parseLiteralDef(def, refs) {
   const parsedType2 = typeof def.value;
   if (parsedType2 !== "bigint" && parsedType2 !== "number" && parsedType2 !== "boolean" && parsedType2 !== "string") {
@@ -54758,7 +55110,7 @@ function parseLiteralDef(def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/string.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/string.js
 var emojiRegex2 = void 0;
 var zodPatterns = {
   /**
@@ -55083,7 +55435,7 @@ function stringifyRegExpWithFlags(regex, refs) {
   return pattern;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/record.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/record.js
 function parseRecordDef(def, refs) {
   if (refs.target === "openAi") {
     console.warn("Warning: OpenAI may not support records in schemas! Try an array of key-value pairs instead.");
@@ -55135,7 +55487,7 @@ function parseRecordDef(def, refs) {
   return schema;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/map.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/map.js
 function parseMapDef(def, refs) {
   if (refs.mapStrategy === "record") {
     return parseRecordDef(def, refs);
@@ -55160,7 +55512,7 @@ function parseMapDef(def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
 function parseNativeEnumDef(def) {
   const object3 = def.values;
   const actualKeys = Object.keys(def.values).filter((key) => {
@@ -55174,7 +55526,7 @@ function parseNativeEnumDef(def) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/never.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/never.js
 function parseNeverDef(refs) {
   return refs.target === "openAi" ? void 0 : {
     not: parseAnyDef({
@@ -55184,7 +55536,7 @@ function parseNeverDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/null.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/null.js
 function parseNullDef(refs) {
   return refs.target === "openApi3" ? {
     enum: ["null"],
@@ -55194,7 +55546,7 @@ function parseNullDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/union.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/union.js
 var primitiveMappings = {
   ZodString: "string",
   ZodNumber: "number",
@@ -55262,7 +55614,7 @@ var asAnyOf = (def, refs) => {
   return anyOf.length ? { anyOf } : void 0;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
 function parseNullableDef(def, refs) {
   if (["ZodString", "ZodNumber", "ZodBigInt", "ZodBoolean", "ZodNull"].includes(def.innerType._def.typeName) && (!def.innerType._def.checks || !def.innerType._def.checks.length)) {
     if (refs.target === "openApi3") {
@@ -55294,7 +55646,7 @@ function parseNullableDef(def, refs) {
   return base && { anyOf: [base, { type: "null" }] };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/number.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/number.js
 function parseNumberDef(def, refs) {
   const res = {
     type: "number"
@@ -55343,7 +55695,7 @@ function parseNumberDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/object.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/object.js
 function parseObjectDef(def, refs) {
   const forceOptionalIntoNullable = refs.target === "openAi";
   const result = {
@@ -55413,7 +55765,7 @@ function safeIsOptional(schema) {
   }
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
 var parseOptionalDef = (def, refs) => {
   if (refs.currentPath.toString() === refs.propertyPath?.toString()) {
     return parseDef(def.innerType._def, refs);
@@ -55432,7 +55784,7 @@ var parseOptionalDef = (def, refs) => {
   } : parseAnyDef(refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
 var parsePipelineDef = (def, refs) => {
   if (refs.pipeStrategy === "input") {
     return parseDef(def.in._def, refs);
@@ -55452,12 +55804,12 @@ var parsePipelineDef = (def, refs) => {
   };
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
 function parsePromiseDef(def, refs) {
   return parseDef(def.type._def, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/set.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/set.js
 function parseSetDef(def, refs) {
   const items = parseDef(def.valueType._def, {
     ...refs,
@@ -55477,7 +55829,7 @@ function parseSetDef(def, refs) {
   return schema;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
 function parseTupleDef(def, refs) {
   if (def.rest) {
     return {
@@ -55505,24 +55857,24 @@ function parseTupleDef(def, refs) {
   }
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
 function parseUndefinedDef(refs) {
   return {
     not: parseAnyDef(refs)
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
 function parseUnknownDef(refs) {
   return parseAnyDef(refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
 var parseReadonlyDef = (def, refs) => {
   return parseDef(def.innerType._def, refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/selectParser.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/selectParser.js
 var selectParser = (def, typeName, refs) => {
   switch (typeName) {
     case ZodFirstPartyTypeKind.ZodString:
@@ -55598,7 +55950,7 @@ var selectParser = (def, typeName, refs) => {
   }
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parseDef.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/parseDef.js
 function parseDef(def, refs, forceResolution = false) {
   const seenItem = refs.seen.get(def);
   if (refs.override) {
@@ -55654,7 +56006,7 @@ var addMeta = (def, refs, jsonSchema) => {
   return jsonSchema;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
 var zodToJsonSchema = (schema, options) => {
   const refs = getRefs(options);
   let definitions = typeof options === "object" && options.definitions ? Object.entries(options.definitions).reduce((acc, [name2, schema2]) => ({
@@ -55716,7 +56068,7 @@ var zodToJsonSchema = (schema, options) => {
   return combined;
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
 function mapMiniTarget(t) {
   if (!t)
     return "draft-7";
@@ -55758,7 +56110,7 @@ function parseWithCompat(schema, data) {
   return result.data;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 6e4;
 var Protocol = class {
   constructor(_options) {
@@ -56712,7 +57064,7 @@ function mergeCapabilities(base, additional) {
   return result;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = __toESM(require_ajv(), 1);
 var import_ajv_formats = __toESM(require_dist(), 1);
 function createDefaultAjvInstance() {
@@ -56780,7 +57132,7 @@ var AjvJsonSchemaValidator = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 var ExperimentalServerTasks = class {
   constructor(_server) {
     this._server = _server;
@@ -56993,7 +57345,7 @@ var ExperimentalServerTasks = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
 function assertToolsCallTaskCapability(requests, method, entityName) {
   if (!requests) {
     throw new Error(`${entityName} does not support task creation (required for ${method})`);
@@ -57028,7 +57380,7 @@ function assertClientRequestTaskCapability(requests, method, entityName) {
   }
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
 var Server = class extends Protocol {
   /**
    * Initializes this server with the given name and version information.
@@ -57408,7 +57760,7 @@ var Server = class extends Protocol {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
 var COMPLETABLE_SYMBOL = Symbol.for("mcp.completable");
 function isCompletable(schema) {
   return !!schema && typeof schema === "object" && COMPLETABLE_SYMBOL in schema;
@@ -57422,7 +57774,7 @@ var McpZodTypeKind;
   McpZodTypeKind2["Completable"] = "McpCompletable";
 })(McpZodTypeKind || (McpZodTypeKind = {}));
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
 var TOOL_NAME_REGEX = /^[A-Za-z0-9._-]{1,128}$/;
 function validateToolName(name) {
   const warnings = [];
@@ -57480,7 +57832,7 @@ function validateAndWarnToolName(name) {
   return result.isValid;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
 var ExperimentalMcpServerTasks = class {
   constructor(_mcpServer) {
     this._mcpServer = _mcpServer;
@@ -57495,7 +57847,7 @@ var ExperimentalMcpServerTasks = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
 var McpServer = class {
   constructor(serverInfo, options) {
     this._registeredResources = {};
@@ -58287,7 +58639,7 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js
+// ../../../../hibou_works/vtdd-v2-p/node_modules/@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js
 var WebStandardStreamableHTTPServerTransport = class {
   constructor(options = {}) {
     this._started = false;
@@ -60174,6 +60526,43 @@ var runtime_default = {
     if (request.method === "GET" && (url.pathname === "/dashboard-icon.png" || url.pathname === DASHBOARD_ICON_PNG_PATH || url.pathname === "/apple-touch-icon.png" || url.pathname === "/apple-touch-icon-precomposed.png")) {
       return png(200, dashboard_butler_icon_512_default);
     }
+    if (request.method === "POST" && url.pathname === "/v2/dashboard/monitors" || request.method === "GET" && url.pathname === "/v2/dashboard/overview") {
+      const writing = request.method === "POST";
+      const auth = writing ? authorizeGatewayRequest({ request, env, apiSuffix: "/dashboard/monitors" }) : await authorizeDashboardRequest({ request, env, apiSuffix: "/dashboard/overview" });
+      const headers = { "cache-control": "no-store" };
+      if (!auth.ok) return json(auth.status, { error: "unauthorized" }, headers);
+      const store = resolveDashboardMonitorStore(env);
+      if (!store) return json(503, { error: "monitor_store_unavailable" }, headers);
+      try {
+        if (writing) {
+          const snapshot = normalizeMonitorSnapshot(await readMonitorBody(request));
+          await store.put(snapshot);
+          return json(200, { ok: true, receivedAt: snapshot.receivedAt }, headers);
+        }
+        const now = Date.now();
+        const monitors = (await store.list()).slice(0, 100).map((m) => computeMonitorView(m, now));
+        const events = resolveDashboardEventStore(env);
+        let notifications = [], notificationsAvailable = false;
+        if (events?.listRecent) {
+          try {
+            notifications = (await events.listRecent({ limit: 100 })).filter((event) => event.kind !== "dashboard_push_received").slice(0, 12).map((event) => ({
+              title: String((event.kind === "owner_action_required" ? event.changeSummary : event.title) || "\u901A\u77E5").slice(0, 200),
+              message: String(event.kind === "owner_action_required" ? event.title || event.message || "" : event.message || event.changeSummary || "").slice(0, 1e3),
+              createdAt: event.createdAt || event.updatedAt || null
+            }));
+            notificationsAvailable = true;
+          } catch {
+          }
+        }
+        return json(200, { serverTime: new Date(now).toISOString(), monitors, notifications, notificationsAvailable }, headers);
+      } catch (error2) {
+        return json(
+          error2 instanceof MonitorInputError ? error2.status : 503,
+          { error: error2 instanceof MonitorInputError ? error2.message : "monitor_store_unavailable" },
+          headers
+        );
+      }
+    }
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
@@ -60188,7 +60577,7 @@ var runtime_default = {
         );
       }
     }
-    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
+    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/dashboard/chat" || url.pathname === "/orchestrator")) {
       const dashboardAuth = await authorizeDashboardRequest({
         request,
         env,
@@ -60201,12 +60590,12 @@ var runtime_default = {
       });
       return html(
         200,
-        await renderV2DashboardPage({
+        url.pathname === "/dashboard" && !["threadId", "thread_id", "repository", "repositoryInput", "issueNumber"].some((key) => url.searchParams.has(key)) ? renderDashboardMonitorHome() : await renderV2DashboardPage({
           runtimeOrigin: url.origin,
           url,
           dashboardEventStore: resolveDashboardEventStore(env)
         }),
-        dashboardSessionHeaders
+        { ...dashboardSessionHeaders, "cache-control": "no-store" }
       );
     }
     if (request.method === "GET" && url.pathname === "/dashboard/github") {
@@ -62301,7 +62690,7 @@ function buildMemoryWriteRecord(payload = {}) {
   }
   const relatedIssue = normalizeIssue6(payload.relatedIssue);
   const repository = normalizeText34(payload.repository) || null;
-  const timestamp = normalizeText34(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
+  const timestamp2 = normalizeText34(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
   const metadata = {
     ...normalizeObject12(payload.metadata),
     relatedIssue,
@@ -62320,11 +62709,11 @@ function buildMemoryWriteRecord(payload = {}) {
           rationale: normalizeText34(payload.rationale),
           relatedIssue,
           decidedBy: normalizeText34(payload.decidedBy) || "butler_with_owner_go",
-          timestamp,
+          timestamp: timestamp2,
           supersededBy: normalizeText34(payload.supersededBy) || null
         },
         metadata,
-        timestamp,
+        timestamp: timestamp2,
         priority: normalizeMemoryPriority(payload.priority, 90),
         tags: buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repository, extraTags: payload.tags })
       }
@@ -62344,10 +62733,10 @@ function buildMemoryWriteRecord(payload = {}) {
           unresolvedQuestions: normalizeStringArray4(payload.unresolvedQuestions),
           relatedIssue,
           proposedBy: normalizeText34(payload.proposedBy) || "butler_with_owner_go",
-          timestamp
+          timestamp: timestamp2
         },
         metadata,
-        timestamp,
+        timestamp: timestamp2,
         priority: normalizeMemoryPriority(payload.priority, 80),
         tags: buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repository, extraTags: payload.tags })
       }
@@ -62395,10 +62784,10 @@ function buildMemoryWriteRecord(payload = {}) {
         captureBoundary: normalizeText34(payload.captureBoundary) || (normalizeText34(payload.checkpointReason) ? "judgment_log_not_chain_of_thought" : null),
         relatedIssue,
         repository,
-        timestamp
+        timestamp: timestamp2
       },
       metadata,
-      timestamp,
+      timestamp: timestamp2,
       priority: normalizeMemoryPriority(payload.priority, recordType2 === MemoryRecordType.REPAIR_CASE ? 85 : 60),
       tags: buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repository, extraTags: payload.tags })
     }
@@ -71687,10 +72076,10 @@ function attachGatewayWarning(gatewayOutcome, warning) {
     }
   };
 }
-function buildGuardedAbsenceExecutionLogId({ actionType, timestamp }) {
+function buildGuardedAbsenceExecutionLogId({ actionType, timestamp: timestamp2 }) {
   const actionPart = normalizeTag3(actionType || "unknown");
   const timestampPart = normalizeTag3(
-    String(timestamp || "").replaceAll(":", "").replaceAll("-", "").replaceAll(".", "")
+    String(timestamp2 || "").replaceAll(":", "").replaceAll("-", "").replaceAll(".", "")
   );
   const randomPart = Math.random().toString(36).slice(2, 8);
   return `guarded_absence_${actionPart}_${timestampPart}_${randomPart}`;
@@ -72829,11 +73218,11 @@ function normalizeIsoTimestamp(value) {
   if (!text) {
     return "";
   }
-  const timestamp = new Date(text);
-  if (Number.isNaN(timestamp.getTime())) {
+  const timestamp2 = new Date(text);
+  if (Number.isNaN(timestamp2.getTime())) {
     return "";
   }
-  return timestamp.toISOString();
+  return timestamp2.toISOString();
 }
 async function retrieveLatestDashboardEvent({ store, kind, repository, workflowName } = {}) {
   if (!store || typeof store.latest !== "function") {
@@ -73081,12 +73470,12 @@ function buildDashboardEventSubject(event, { limit = 80 } = {}) {
   );
 }
 function formatDashboardRelativeTime(value, now = /* @__PURE__ */ new Date()) {
-  const timestamp = new Date(normalizeText34(value));
+  const timestamp2 = new Date(normalizeText34(value));
   const nowTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
-  if (Number.isNaN(timestamp.getTime()) || Number.isNaN(nowTime)) {
+  if (Number.isNaN(timestamp2.getTime()) || Number.isNaN(nowTime)) {
     return "";
   }
-  const diffMs = Math.max(0, nowTime - timestamp.getTime());
+  const diffMs = Math.max(0, nowTime - timestamp2.getTime());
   const seconds = Math.floor(diffMs / 1e3);
   if (seconds < 60) {
     return "\u305F\u3063\u305F\u4ECA";
@@ -73827,10 +74216,11 @@ function summarizeObjectValue(value) {
 }
 function renderDashboardUtilityNavLinks() {
   const items = [
-    ["Dashboard", "/dashboard"],
+    ["\u30DB\u30FC\u30E0", "/dashboard"],
+    ["\u30C1\u30E3\u30C3\u30C8", "/dashboard/chat"],
     ["\u901A\u77E5\u30BB\u30F3\u30BF\u30FC", "/dashboard/notifications"],
     ["AI news", "/dashboard/news"],
-    ["GitHub truth", "/dashboard/github-truth"],
+    ["GitHub truth", "/dashboard/github"],
     ["Startup preflight", "/dashboard/preflight"],
     ["Execution progress", "/dashboard/progress"],
     ["VPS runner", "/dashboard/vps-runner"],
@@ -74007,7 +74397,7 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
               <p class="muted">${escapeDashboardHtml(subtitle || "")}</p>
             </div>
           </div>
-          <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">Dashboard</a>
+          <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">\u30DB\u30FC\u30E0</a>
         </header>
         ${body}
       </section>
@@ -74774,7 +75164,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <span class="eyebrow">Dashboard</span>
         <div class="surface-list">
           ${renderDashboardActionList([
-    { label: "Dashboard", href: `${origin}/dashboard` },
+    { label: "\u30DB\u30FC\u30E0", href: `${origin}/dashboard` },
     { label: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC", href: `${origin}/dashboard/notifications` },
     { label: "AI news", href: `${origin}/dashboard/news` },
     { label: "Execution progress", href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "", disabledReason: "repo \u8A2D\u5B9A\u5F8C" },
@@ -78078,7 +78468,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
         <h1>Runtime Status</h1>
         <p>\u30D6\u30E9\u30A6\u30B6\u3067\u898B\u308B\u305F\u3081\u306E health summary \u3067\u3059\u3002</p>
       </div>
-      <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">Dashboard</a>
+      <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">\u30DB\u30FC\u30E0</a>
     </header>
 
     <section class="panel notice">
