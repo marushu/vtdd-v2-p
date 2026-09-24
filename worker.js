@@ -11355,161 +11355,10 @@ function resolveDashboardMonitorStore(env) {
   return stores.get(d1);
 }
 
+// src/worker/dashboard-monitor-client.generated.js
+var dashboardMonitorClientScript = "(function mountMonitorHome(computeView) {\n  const byId = id => document.getElementById(id);\n  const labels = { unknown: '\u672A\u78BA\u8A8D', checking: '\u76E3\u8996\u4E2D', no_slots: '\u7A7A\u304D\u306A\u3057', available: '\u5019\u88DC\u3042\u308A', error: '\u78BA\u8A8D\u30A8\u30E9\u30FC', action_required: '\u5BFE\u5FDC\u304C\u5FC5\u8981', stopped: '\u505C\u6B62', sync_stale: '\u540C\u671F\u304C\u53E4\u3044', checking_unverified: '\u78BA\u8A8D\u7D50\u679C\u304C\u53E4\u3044', completed: '\u5B8C\u4E86\uFF08\u8A18\u9332\uFF09' };\n  const cards = new Map();\n  let notificationSignature = null;\n  let lastRender = '';\n  let snapshot = null, connected = false, controller = null, serverTime = 0, loadedAt = 0, loadedWallTime = 0;\n  const localTime = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u672A\u78BA\u8A8D';\n  const element = (tag, text, className) => {\n    const node = document.createElement(tag);\n    if (text != null) node.textContent = text;\n    if (className) node.className = className;\n    return node;\n  };\n  const interval = seconds => seconds % 3600 === 0 ? `${seconds / 3600}\u6642\u9593` : seconds % 60 === 0 ? `${seconds / 60}\u5206` : `${Math.floor(seconds / 60) ? Math.floor(seconds / 60) + '\u5206' : ''}${seconds % 60}\u79D2`;\n  function card(m) {\n    const node = element('article', null, 'card');\n    const head = element('div', null, 'card-head');\n    head.append(element('h3', m.title), element('span', labels[m.currentState] || '\u672A\u78BA\u8A8D', 'chip ' + (m.documentedCompletion ? 'neutral' : m.healthy ? 'green' : ['error', 'stopped', 'action_required'].includes(m.currentState) ? 'red' : 'amber')));\n    node.append(head);\n    if (m.description) node.append(element('p', m.description, 'muted'));\n    node.append(element('p', (m.documentedCompletion ? '\u5B8C\u4E86\u306E\u8A18\u9332\uFF1A' : m.healthy ? '\u78BA\u8A8D\u7D50\u679C\uFF1A' : '\u524D\u56DE\u306E\u8A18\u9332\uFF08\u73FE\u5728\u306E\u6B63\u5E38\u6027\u306F\u672A\u78BA\u8A8D\uFF09\uFF1A') + (m.resultSummary || '\u307E\u3060\u78BA\u8A8D\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093'), 'result'));\n    const facts = element('dl');\n    for (const [label, value] of [\n      ['\u6700\u7D42\u6210\u529F', localTime(m.lastSuccessAt)],\n      ...(m.documentedCompletion ? [['\u5B8C\u4E86\u65E5\u6642', localTime(m.completedAt)]] : [['\u6B21\u306E\u78BA\u8A8D', localTime(m.nextCheckAt) + (m.intervalSeconds ? ` \xB7 ${interval(m.intervalSeconds)}\u3054\u3068` : ' \xB7 \u9593\u9694\u672A\u78BA\u8A8D')]]),\n      ['\u4EFB\u305B\u3066\u3044\u308B\u7BC4\u56F2', m.automationScope || '\u672A\u8A2D\u5B9A'],\n      ...(m.type !== 'task' && typeof m.automaticBookingEnabled === 'boolean' ? [['\u81EA\u52D5\u4E88\u7D04', m.automaticBookingEnabled ? '\u8A2D\u5B9A\u3042\u308A\uFF08\u8868\u793A\u306E\u307F\uFF09' : '\u8A2D\u5B9A\u306A\u3057']] : []),\n      ['\u3042\u306A\u305F\u306E\u5BFE\u5FDC', m.needsAction ? (m.requiredAction || '\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044') : '\u73FE\u5728\u306E\u5BFE\u5FDC\u4F9D\u983C\u306F\u3042\u308A\u307E\u305B\u3093']\n    ]) facts.append(element('dt', label), element('dd', value));\n    node.append(facts);\n    const details = element('details');\n    const key = m.source + ':' + m.id;\n    const previous = cards.get(key);\n    details.open = previous?.details.open || false;\n    const summary = element('summary', '\u78BA\u8A8D\u306E\u8A18\u9332');\n    const focus = previous && (document.activeElement === previous.summary ? 'summary' : previous.link && document.activeElement === previous.link ? 'link' : null);\n    details.append(summary, element('p', '\u6700\u7D42\u8A66\u884C\uFF1A' + localTime(m.lastAttemptAt)), element('p', '\u89B3\u6E2C\uFF1A' + localTime(m.observedAt)), element('p', '\u53D7\u4FE1\uFF1A' + localTime(m.receivedAt)), element('p', `\u9023\u7D9A\u5931\u6557\uFF1A${m.consecutiveFailures}\u56DE`));\n    if (m.evidenceSummary) details.append(element('p', '\u5B8C\u4E86\u306E\u6839\u62E0\uFF1A' + m.evidenceSummary));\n    node.append(details);\n    let link;\n    if (m.needsAction && ['/dashboard/chat', '/dashboard/notifications', '/dashboard'].includes(m.actionURL)) {\n      link = element('a', '\u5BFE\u5FDC\u3092\u78BA\u8A8D', 'action'); link.href = m.actionURL; node.append(link);\n    }\n    cards.set(key, { node, details, summary, link, focus });\n    return node;\n  }\n  function render() {\n    byId('today').textContent = new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'long' });\n    if (!snapshot) return;\n    const now = serverTime + Math.max(0, performance.now() - loadedAt, Date.now() - loadedWallTime);\n    const freshConnection = connected && now - serverTime <= 120000;\n    if (connected && !freshConnection) byId('connection').textContent = '\u66F4\u65B0\u304C\u9014\u7D76\u3048\u3066\u3044\u307E\u3059 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D';\n    const views = snapshot.monitors.map(m => computeView(m, now, freshConnection));\n    const signature = JSON.stringify([snapshot, freshConnection, views.map(m => m.currentState)]);\n    if (signature === lastRender) return;\n    lastRender = signature;\n    const problems = views.filter(m => m.needsAction);\n    byId('attention-section').hidden = problems.length === 0;\n    byId('attention').replaceChildren(...problems.map(m => {\n      const node = element('p', null, 'attention-item');\n      node.append(element('strong', m.title), element('span', ' \u2014 ' + (labels[m.currentState] || '\u672A\u78BA\u8A8D')));\n      return node;\n    }));\n    byId('counts').textContent = !freshConnection ? '\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D' : `${views.filter(m => m.processAlive && m.currentState !== 'completed' && m.currentState !== 'unknown' && m.currentState !== 'sync_stale' && m.currentState !== 'stopped').length}\u4EF6 \u76E3\u8996\u30FB\u5B9F\u884C\u4E2D\u3000 /\u3000${problems.length}\u4EF6 \u8981\u78BA\u8A8D${views.some(m => m.currentState === 'unknown') ? ' \xB7 \u672A\u78BA\u8A8D\u306E\u9805\u76EE\u3042\u308A' : ''}`;\n    byId('monitors').replaceChildren(...views.map(card));\n    const keys = new Set(views.map(m => m.source + ':' + m.id));\n    for (const [key, entry] of cards) {\n      if (!keys.has(key)) { cards.delete(key); continue; }\n      if (entry.focus) (entry[entry.focus] || entry.summary).focus({ preventScroll: true });\n    }\n    if (!views.length) byId('monitors').append(element('p', freshConnection ? '\u63A5\u7D9A\u3055\u308C\u305F\u76E3\u8996\u306F\u307E\u3060\u3042\u308A\u307E\u305B\u3093\u3002\u63A5\u7D9A\u3059\u308B\u3068\u3001\u3053\u3053\u306B\u73FE\u5728\u306E\u72B6\u614B\u304C\u5C4A\u304D\u307E\u3059\u3002' : '\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u306E\u56DE\u5FA9\u3092\u304A\u5F85\u3061\u304F\u3060\u3055\u3044\u3002', 'empty'));\n    const historySignature = JSON.stringify([snapshot.notifications, snapshot.notificationsAvailable, freshConnection]);\n    if (historySignature === notificationSignature) return;\n    notificationSignature = historySignature;\n    byId('notifications').replaceChildren(...snapshot.notifications.map(n => {\n      const node = element('article', null, 'history');\n      node.append(element('h3', n.title || '\u901A\u77E5'), element('p', n.message || '\u672C\u6587\u306A\u3057'), element('time', localTime(n.createdAt)));\n      return node;\n    }));\n    if (!snapshot.notifications.length) byId('notifications').append(element('p', !freshConnection || snapshot.notificationsAvailable === false ? '\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u901A\u77E5\u30DA\u30FC\u30B8\u3067\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002' : '\u6700\u8FD1\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002', 'muted'));\n  }\n  function unavailable(message) {\n    connected = false;\n    byId('connection').textContent = message;\n    if (!snapshot) {\n      byId('monitors').replaceChildren(element('p', '\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002', 'empty'));\n      byId('notifications').replaceChildren(element('p', '\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u307E\u305F\u306F\u8A8D\u8A3C\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002', 'muted'));\n    }\n    byId('counts').textContent = '\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D';\n    render();\n  }\n  async function refresh() {\n    if (document.hidden || controller) return;\n    if (navigator.onLine === false) { unavailable('\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); return; }\n    const current = new AbortController(); controller = current;\n    const timeout = setTimeout(() => current.abort(), 10000);\n    try {\n      const response = await fetch('/v2/dashboard/overview', { credentials: 'same-origin', cache: 'no-store', signal: current.signal });\n      if (!response.ok) {\n        unavailable(response.status === 401 || response.status === 403 ? '\u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059 \xB7 \u30DB\u30FC\u30E0\u3092\u958B\u304D\u76F4\u3057\u3066\u304F\u3060\u3055\u3044' : '\u63A5\u7D9A\u3092\u78BA\u8A8D\u3067\u304D\u307E\u305B\u3093 \xB7 \u518D\u8A66\u884C\u3057\u307E\u3059');\n        return;\n      }\n      const data = await response.json();\n      if (!Array.isArray(data.monitors) || data.monitors.length > 100 || !Array.isArray(data.notifications) || !Number.isFinite(Date.parse(data.serverTime))) throw new Error('invalid overview');\n      if (current.signal.aborted || navigator.onLine === false) throw new Error('request cancelled');\n      snapshot = data; loadedWallTime = Date.now(); serverTime = Date.parse(data.serverTime); loadedAt = performance.now(); connected = true;\n      byId('connection').textContent = '\u63A5\u7D9A\u4E2D \xB7 ' + localTime(data.serverTime) + ' \u66F4\u65B0';\n      render();\n    } catch { unavailable(navigator.onLine === false ? '\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D' : '\u66F4\u65B0\u3067\u304D\u307E\u305B\u3093 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); }\n    finally { clearTimeout(timeout); controller = null; }\n  }\n  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });\n  window.addEventListener('pageshow', refresh);\n  window.addEventListener('online', refresh);\n  window.addEventListener('offline', () => { controller?.abort(); unavailable('\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); });\n  const polling = setInterval(refresh, 30000);\n  const freshness = setInterval(() => { if (!document.hidden) render(); }, 5000);\n  window.addEventListener('pagehide', event => { controller?.abort(); if (!event.persisted) { clearInterval(polling); clearInterval(freshness); } });\n  if (navigator.serviceWorker) navigator.serviceWorker.register('/dashboard-sw.js', { scope: '/dashboard/' }).catch(() => {});\n  render(); refresh();\n})(function computeMonitorView(snapshot, now = Date.now(), connected = true) {\n  const m = snapshot;\n  const age = value => value && Number.isFinite(Date.parse(value)) ? (now - Date.parse(value)) / 1000 : Infinity;\n  let state = m.status;\n  const documentedCompletion = m.status === 'completed' && Boolean(m.observedAt && m.completedAt && m.evidenceSummary) && !m.consecutiveFailures;\n  const reporterState = !connected ? 'unknown' : age(m.receivedAt) > 120 || age(m.observedAt) > 120 ? 'sync_stale' : 'connected';\n  if (documentedCompletion) state = 'completed';\n  else if (!connected) state = 'unknown';\n  else if (!m.observedAt || !m.receivedAt || m.processAlive == null || !m.intervalSeconds) state = 'unknown';\n  else if (age(m.receivedAt) > 120 || age(m.observedAt) > 120) state = 'sync_stale';\n  else if (m.processAlive === false || m.mode === 'paused' || m.status === 'stopped') state = 'stopped';\n  else if (m.status === 'error' || m.consecutiveFailures > 0) state = 'error';\n  else if (m.status === 'action_required') state = 'action_required';\n  else if (!m.lastAttemptAt || !m.lastSuccessAt) state = 'unknown';\n  else if (age(m.lastSuccessAt) > Math.max(2 * m.intervalSeconds + 60, 180)) state = 'checking_unverified';\n  else if (m.status === 'completed') state = 'unknown';\n  const needsAction = ['error', 'action_required', 'stopped', 'sync_stale', 'checking_unverified'].includes(state);\n  return { ...m, currentState: state, reporterState, documentedCompletion, needsAction, healthy: ['no_slots', 'available', 'checking'].includes(state) };\n});";
+
 // src/worker/dashboard-monitor-home.js
-function mountMonitorHome(computeView) {
-  const byId = (id) => document.getElementById(id);
-  const labels = { unknown: "\u672A\u78BA\u8A8D", checking: "\u76E3\u8996\u4E2D", no_slots: "\u7A7A\u304D\u306A\u3057", available: "\u5019\u88DC\u3042\u308A", error: "\u78BA\u8A8D\u30A8\u30E9\u30FC", action_required: "\u5BFE\u5FDC\u304C\u5FC5\u8981", stopped: "\u505C\u6B62", sync_stale: "\u540C\u671F\u304C\u53E4\u3044", checking_unverified: "\u78BA\u8A8D\u7D50\u679C\u304C\u53E4\u3044", completed: "\u5B8C\u4E86\uFF08\u8A18\u9332\uFF09" };
-  const cards = /* @__PURE__ */ new Map();
-  let notificationSignature = null;
-  let lastRender = "";
-  let snapshot = null, connected = false, controller = null, serverTime = 0, loadedAt = 0, loadedWallTime = 0;
-  const localTime = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "\u672A\u78BA\u8A8D";
-  const element = (tag, text, className) => {
-    const node = document.createElement(tag);
-    if (text != null) node.textContent = text;
-    if (className) node.className = className;
-    return node;
-  };
-  const interval = (seconds) => seconds % 3600 === 0 ? `${seconds / 3600}\u6642\u9593` : seconds % 60 === 0 ? `${seconds / 60}\u5206` : `${Math.floor(seconds / 60) ? Math.floor(seconds / 60) + "\u5206" : ""}${seconds % 60}\u79D2`;
-  function card(m) {
-    const node = element("article", null, "card");
-    const head = element("div", null, "card-head");
-    head.append(element("h3", m.title), element("span", labels[m.currentState] || "\u672A\u78BA\u8A8D", "chip " + (m.documentedCompletion ? "neutral" : m.healthy ? "green" : ["error", "stopped", "action_required"].includes(m.currentState) ? "red" : "amber")));
-    node.append(head);
-    if (m.description) node.append(element("p", m.description, "muted"));
-    node.append(element("p", (m.documentedCompletion ? "\u5B8C\u4E86\u306E\u8A18\u9332\uFF1A" : m.healthy ? "\u78BA\u8A8D\u7D50\u679C\uFF1A" : "\u524D\u56DE\u306E\u8A18\u9332\uFF08\u73FE\u5728\u306E\u6B63\u5E38\u6027\u306F\u672A\u78BA\u8A8D\uFF09\uFF1A") + (m.resultSummary || "\u307E\u3060\u78BA\u8A8D\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093"), "result"));
-    const facts = element("dl");
-    for (const [label, value] of [
-      ["\u6700\u7D42\u6210\u529F", localTime(m.lastSuccessAt)],
-      ...m.documentedCompletion ? [["\u5B8C\u4E86\u65E5\u6642", localTime(m.completedAt)]] : [["\u6B21\u306E\u78BA\u8A8D", localTime(m.nextCheckAt) + (m.intervalSeconds ? ` \xB7 ${interval(m.intervalSeconds)}\u3054\u3068` : " \xB7 \u9593\u9694\u672A\u78BA\u8A8D")]],
-      ["\u4EFB\u305B\u3066\u3044\u308B\u7BC4\u56F2", m.automationScope || "\u672A\u8A2D\u5B9A"],
-      ...m.type !== "task" && typeof m.automaticBookingEnabled === "boolean" ? [["\u81EA\u52D5\u4E88\u7D04", m.automaticBookingEnabled ? "\u8A2D\u5B9A\u3042\u308A\uFF08\u8868\u793A\u306E\u307F\uFF09" : "\u8A2D\u5B9A\u306A\u3057"]] : [],
-      ["\u3042\u306A\u305F\u306E\u5BFE\u5FDC", m.needsAction ? m.requiredAction || "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044" : "\u73FE\u5728\u306E\u5BFE\u5FDC\u4F9D\u983C\u306F\u3042\u308A\u307E\u305B\u3093"]
-    ]) facts.append(element("dt", label), element("dd", value));
-    node.append(facts);
-    const details = element("details");
-    const key = m.source + ":" + m.id;
-    const previous = cards.get(key);
-    details.open = previous?.details.open || false;
-    const summary = element("summary", "\u78BA\u8A8D\u306E\u8A18\u9332");
-    const focus = previous && (document.activeElement === previous.summary ? "summary" : previous.link && document.activeElement === previous.link ? "link" : null);
-    details.append(summary, element("p", "\u6700\u7D42\u8A66\u884C\uFF1A" + localTime(m.lastAttemptAt)), element("p", "\u89B3\u6E2C\uFF1A" + localTime(m.observedAt)), element("p", "\u53D7\u4FE1\uFF1A" + localTime(m.receivedAt)), element("p", `\u9023\u7D9A\u5931\u6557\uFF1A${m.consecutiveFailures}\u56DE`));
-    if (m.evidenceSummary) details.append(element("p", "\u5B8C\u4E86\u306E\u6839\u62E0\uFF1A" + m.evidenceSummary));
-    node.append(details);
-    let link;
-    if (m.needsAction && ["/dashboard/chat", "/dashboard/notifications", "/dashboard"].includes(m.actionURL)) {
-      link = element("a", "\u5BFE\u5FDC\u3092\u78BA\u8A8D", "action");
-      link.href = m.actionURL;
-      node.append(link);
-    }
-    cards.set(key, { node, details, summary, link, focus });
-    return node;
-  }
-  function render() {
-    byId("today").textContent = (/* @__PURE__ */ new Date()).toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "long" });
-    if (!snapshot) return;
-    const now = serverTime + Math.max(0, performance.now() - loadedAt, Date.now() - loadedWallTime);
-    const freshConnection = connected && now - serverTime <= 12e4;
-    if (connected && !freshConnection) byId("connection").textContent = "\u66F4\u65B0\u304C\u9014\u7D76\u3048\u3066\u3044\u307E\u3059 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D";
-    const views = snapshot.monitors.map((m) => computeView(m, now, freshConnection));
-    const signature = JSON.stringify([snapshot, freshConnection, views.map((m) => m.currentState)]);
-    if (signature === lastRender) return;
-    lastRender = signature;
-    const problems = views.filter((m) => m.needsAction);
-    byId("attention-section").hidden = problems.length === 0;
-    byId("attention").replaceChildren(...problems.map((m) => {
-      const node = element("p", null, "attention-item");
-      node.append(element("strong", m.title), element("span", " \u2014 " + (labels[m.currentState] || "\u672A\u78BA\u8A8D")));
-      return node;
-    }));
-    byId("counts").textContent = !freshConnection ? "\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D" : `${views.filter((m) => m.processAlive && m.currentState !== "completed" && m.currentState !== "unknown" && m.currentState !== "sync_stale" && m.currentState !== "stopped").length}\u4EF6 \u76E3\u8996\u30FB\u5B9F\u884C\u4E2D\u3000 /\u3000${problems.length}\u4EF6 \u8981\u78BA\u8A8D${views.some((m) => m.currentState === "unknown") ? " \xB7 \u672A\u78BA\u8A8D\u306E\u9805\u76EE\u3042\u308A" : ""}`;
-    byId("monitors").replaceChildren(...views.map(card));
-    const keys = new Set(views.map((m) => m.source + ":" + m.id));
-    for (const [key, entry] of cards) {
-      if (!keys.has(key)) {
-        cards.delete(key);
-        continue;
-      }
-      if (entry.focus) (entry[entry.focus] || entry.summary).focus({ preventScroll: true });
-    }
-    if (!views.length) byId("monitors").append(element("p", freshConnection ? "\u63A5\u7D9A\u3055\u308C\u305F\u76E3\u8996\u306F\u307E\u3060\u3042\u308A\u307E\u305B\u3093\u3002\u63A5\u7D9A\u3059\u308B\u3068\u3001\u3053\u3053\u306B\u73FE\u5728\u306E\u72B6\u614B\u304C\u5C4A\u304D\u307E\u3059\u3002" : "\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u306E\u56DE\u5FA9\u3092\u304A\u5F85\u3061\u304F\u3060\u3055\u3044\u3002", "empty"));
-    const historySignature = JSON.stringify([snapshot.notifications, snapshot.notificationsAvailable, freshConnection]);
-    if (historySignature === notificationSignature) return;
-    notificationSignature = historySignature;
-    byId("notifications").replaceChildren(...snapshot.notifications.map((n) => {
-      const node = element("article", null, "history");
-      node.append(element("h3", n.title || "\u901A\u77E5"), element("p", n.message || "\u672C\u6587\u306A\u3057"), element("time", localTime(n.createdAt)));
-      return node;
-    }));
-    if (!snapshot.notifications.length) byId("notifications").append(element("p", !freshConnection || snapshot.notificationsAvailable === false ? "\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u901A\u77E5\u30DA\u30FC\u30B8\u3067\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002" : "\u6700\u8FD1\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002", "muted"));
-  }
-  function unavailable(message) {
-    connected = false;
-    byId("connection").textContent = message;
-    if (!snapshot) {
-      byId("monitors").replaceChildren(element("p", "\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002", "empty"));
-      byId("notifications").replaceChildren(element("p", "\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u307E\u305F\u306F\u8A8D\u8A3C\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002", "muted"));
-    }
-    byId("counts").textContent = "\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D";
-    render();
-  }
-  async function refresh() {
-    if (document.hidden || controller) return;
-    if (navigator.onLine === false) {
-      unavailable("\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
-      return;
-    }
-    const current = new AbortController();
-    controller = current;
-    const timeout = setTimeout(() => current.abort(), 1e4);
-    try {
-      const response = await fetch("/v2/dashboard/overview", { credentials: "same-origin", cache: "no-store", signal: current.signal });
-      if (!response.ok) {
-        unavailable(response.status === 401 || response.status === 403 ? "\u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059 \xB7 \u30DB\u30FC\u30E0\u3092\u958B\u304D\u76F4\u3057\u3066\u304F\u3060\u3055\u3044" : "\u63A5\u7D9A\u3092\u78BA\u8A8D\u3067\u304D\u307E\u305B\u3093 \xB7 \u518D\u8A66\u884C\u3057\u307E\u3059");
-        return;
-      }
-      const data = await response.json();
-      if (!Array.isArray(data.monitors) || data.monitors.length > 100 || !Array.isArray(data.notifications) || !Number.isFinite(Date.parse(data.serverTime))) throw new Error("invalid overview");
-      if (current.signal.aborted || navigator.onLine === false) throw new Error("request cancelled");
-      snapshot = data;
-      loadedWallTime = Date.now();
-      serverTime = Date.parse(data.serverTime);
-      loadedAt = performance.now();
-      connected = true;
-      byId("connection").textContent = "\u63A5\u7D9A\u4E2D \xB7 " + localTime(data.serverTime) + " \u66F4\u65B0";
-      render();
-    } catch {
-      unavailable(navigator.onLine === false ? "\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D" : "\u66F4\u65B0\u3067\u304D\u307E\u305B\u3093 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
-    } finally {
-      clearTimeout(timeout);
-      controller = null;
-    }
-  }
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refresh();
-  });
-  window.addEventListener("pageshow", refresh);
-  window.addEventListener("online", refresh);
-  window.addEventListener("offline", () => {
-    controller?.abort();
-    unavailable("\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
-  });
-  const polling = setInterval(refresh, 3e4);
-  const freshness = setInterval(() => {
-    if (!document.hidden) render();
-  }, 5e3);
-  window.addEventListener("pagehide", (event) => {
-    controller?.abort();
-    if (!event.persisted) {
-      clearInterval(polling);
-      clearInterval(freshness);
-    }
-  });
-  if (navigator.serviceWorker) navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard/" }).catch(() => {
-  });
-  render();
-  refresh();
-}
 function renderDashboardMonitorHome() {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#faf8f4"><title>Butler \u2014 \u30DB\u30FC\u30E0</title><link rel="manifest" href="/dashboard.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>
 :root{color-scheme:light dark;--bg:#faf8f4;--card:#fffefa;--ink:#282725;--muted:#68645f;--line:#e5e0d9;--accent:#9f3935;--green-bg:#e6f1e9;--green:#285c3d;--amber-bg:#fbefd5;--amber:#795514;--red-bg:#f9e5e1;--red:#94352f}
@@ -11559,7 +11408,7 @@ nav a[aria-current]{background:var(--red-bg);color:var(--accent);font-weight:700
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
 
-</style></head><body><main><header><div class="brand"><img src="/dashboard-icon.png" alt="">BUTLER</div><h1>\u4EFB\u305B\u305F\u3053\u3068\u3092\u3001\u3072\u3068\u76EE\u3067\u3002</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p><p id="counts">\u72B6\u614B\u3092\u53D6\u5F97\u3057\u3066\u3044\u307E\u3059\u2026</p></header><section id="attention-section" hidden><h2>\u5BFE\u5FDC\u304C\u5FC5\u8981</h2><div id="attention"></div></section><section><h2>\u76E3\u8996\u30FB\u5B9F\u884C\u4E2D</h2><div id="monitors" aria-label="\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B"></div></section><section><h2>\u6700\u8FD1\u306E\u901A\u77E5</h2><p class="muted">\u5C4A\u3044\u305F\u901A\u77E5\u306E\u5C65\u6B74\u3067\u3059\u3002\u73FE\u5728\u306E\u72B6\u614B\u306F\u4E0A\u306E\u30AB\u30FC\u30C9\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</p><div id="notifications"></div></section><noscript>\u73FE\u5728\u306E\u72B6\u614B\u3092\u8868\u793A\u3059\u308B\u306B\u306F JavaScript \u3092\u6709\u52B9\u306B\u3057\u3066\u304F\u3060\u3055\u3044\u3002</noscript></main><nav aria-label="\u30E1\u30A4\u30F3\u30CA\u30D3\u30B2\u30FC\u30B7\u30E7\u30F3"><a href="/dashboard" aria-current="page">\u30DB\u30FC\u30E0</a><a href="/dashboard/notifications">\u901A\u77E5</a><a href="/dashboard/chat">\u30C1\u30E3\u30C3\u30C8</a></nav><script>(${mountMonitorHome.toString()})(${computeMonitorView.toString()});<\/script></body></html>`;
+</style></head><body><main><header><div class="brand"><img src="/dashboard-icon.png" alt="">BUTLER</div><h1>\u4EFB\u305B\u305F\u3053\u3068\u3092\u3001\u3072\u3068\u76EE\u3067\u3002</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p><p id="counts">\u72B6\u614B\u3092\u53D6\u5F97\u3057\u3066\u3044\u307E\u3059\u2026</p></header><section id="attention-section" hidden><h2>\u5BFE\u5FDC\u304C\u5FC5\u8981</h2><div id="attention"></div></section><section><h2>\u76E3\u8996\u30FB\u5B9F\u884C\u4E2D</h2><div id="monitors" aria-label="\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B"></div></section><section><h2>\u6700\u8FD1\u306E\u901A\u77E5</h2><p class="muted">\u5C4A\u3044\u305F\u901A\u77E5\u306E\u5C65\u6B74\u3067\u3059\u3002\u73FE\u5728\u306E\u72B6\u614B\u306F\u4E0A\u306E\u30AB\u30FC\u30C9\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</p><div id="notifications"></div></section><noscript>\u73FE\u5728\u306E\u72B6\u614B\u3092\u8868\u793A\u3059\u308B\u306B\u306F JavaScript \u3092\u6709\u52B9\u306B\u3057\u3066\u304F\u3060\u3055\u3044\u3002</noscript></main><nav aria-label="\u30E1\u30A4\u30F3\u30CA\u30D3\u30B2\u30FC\u30B7\u30E7\u30F3"><a href="/dashboard" aria-current="page">\u30DB\u30FC\u30E0</a><a href="/dashboard/notifications">\u901A\u77E5</a><a href="/dashboard/chat">\u30C1\u30E3\u30C3\u30C8</a></nav><script>${dashboardMonitorClientScript}<\/script></body></html>`;
 }
 
 // src/core/types.js

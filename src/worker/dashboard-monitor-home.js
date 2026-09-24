@@ -1,4 +1,4 @@
-import { computeMonitorView } from '../core/dashboard-monitor-state.js';
+import { dashboardMonitorClientScript } from './dashboard-monitor-client.generated.js';
 
 // All remote strings enter the DOM through textContent, including notification history.
 export function mountMonitorHome(computeView) {
@@ -172,5 +172,5 @@ nav a[aria-current]{background:var(--red-bg);color:var(--accent);font-weight:700
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
 
-</style></head><body><main><header><div class="brand"><img src="/dashboard-icon.png" alt="">BUTLER</div><h1>任せたことを、ひと目で。</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">接続を確認しています…</p><p id="counts">状態を取得しています…</p></header><section id="attention-section" hidden><h2>対応が必要</h2><div id="attention"></div></section><section><h2>監視・実行中</h2><div id="monitors" aria-label="現在の監視状態"></div></section><section><h2>最近の通知</h2><p class="muted">届いた通知の履歴です。現在の状態は上のカードで確認できます。</p><div id="notifications"></div></section><noscript>現在の状態を表示するには JavaScript を有効にしてください。</noscript></main><nav aria-label="メインナビゲーション"><a href="/dashboard" aria-current="page">ホーム</a><a href="/dashboard/notifications">通知</a><a href="/dashboard/chat">チャット</a></nav><script>(${mountMonitorHome.toString()})(${computeMonitorView.toString()});</script></body></html>`;
+</style></head><body><main><header><div class="brand"><img src="/dashboard-icon.png" alt="">BUTLER</div><h1>任せたことを、ひと目で。</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">接続を確認しています…</p><p id="counts">状態を取得しています…</p></header><section id="attention-section" hidden><h2>対応が必要</h2><div id="attention"></div></section><section><h2>監視・実行中</h2><div id="monitors" aria-label="現在の監視状態"></div></section><section><h2>最近の通知</h2><p class="muted">届いた通知の履歴です。現在の状態は上のカードで確認できます。</p><div id="notifications"></div></section><noscript>現在の状態を表示するには JavaScript を有効にしてください。</noscript></main><nav aria-label="メインナビゲーション"><a href="/dashboard" aria-current="page">ホーム</a><a href="/dashboard/notifications">通知</a><a href="/dashboard/chat">チャット</a></nav><script>${dashboardMonitorClientScript}</script></body></html>`;
 }

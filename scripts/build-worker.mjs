@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import { build } from "esbuild";
+import { buildDashboardMonitorClient } from "./build-dashboard-monitor-client.mjs";
+
+await buildDashboardMonitorClient();
 
 await build({
   entryPoints: ["src/worker.js"],
