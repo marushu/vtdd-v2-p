@@ -11210,6 +11210,44 @@ var require_dist = __commonJS({
   }
 });
 
+// src/core/executor-node-identity.js
+var reject = (message) => {
+  throw new ExecutorInputError(message, 403);
+};
+var encode = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+var decode = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+var identityMessage = (route, payload, proof) => JSON.stringify(["vtdd-executor-ed25519-v1", route, payload.executorId, payload.generation, proof.timestamp, proof.nonce, proof.digest]);
+async function bodyDigest(payload) {
+  return encode(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(payload))));
+}
+function enrollmentScope(p) {
+  if (!["mac", "vps"].includes(p.executorId) || !Number.isSafeInteger(p.issueNumber) || p.issueNumber < 1 || p.targetConfirmed !== true || !/^[A-Za-z0-9+/]{43}=$/.test(p.publicKey || "") || p.previousPublicKey !== "" && !/^[A-Za-z0-9+/]{43}=$/.test(p.previousPublicKey || "")) reject("invalid_node_enrollment");
+  return { actionType: "destructive", highRiskKind: "executor_node_enroll", issueNumber: String(p.issueNumber), executorId: p.executorId, executorPublicKey: p.publicKey, executorPreviousPublicKey: p.previousPublicKey };
+}
+async function verifyNodeRequest(envelope, route, input, now) {
+  strictObject(input, ["payload", "identity"]);
+  const { payload, identity: proof } = input;
+  if (!payload || !["mac", "vps"].includes(payload.executorId) || !Number.isSafeInteger(payload.generation) || payload.generation < 1 || !proof) reject("node_signature_required");
+  strictObject(proof, ["timestamp", "nonce", "digest", "signature"]);
+  const timestamp2 = Date.parse(proof.timestamp);
+  if (!Number.isFinite(timestamp2) || Math.abs(now - timestamp2) > 12e4 || !/^[a-f0-9-]{36}$/.test(proof.nonce || "")) reject("node_signature_stale_or_invalid");
+  const publicKey = envelope.identities?.[payload.executorId];
+  if (!publicKey) reject("node_not_enrolled");
+  const replayKey = payload.executorId + ":" + proof.nonce;
+  const replays = Object.fromEntries(Object.entries(envelope.replays || {}).filter(([, expiry]) => expiry >= now));
+  if (replays[replayKey]) reject("node_signature_replay");
+  if (Object.keys(replays).length >= 4096) reject("node_replay_capacity");
+  try {
+    if (proof.digest !== await bodyDigest(payload)) reject("node_body_digest_mismatch");
+    const key = await crypto.subtle.importKey("raw", decode(publicKey), { name: "Ed25519" }, false, ["verify"]);
+    if (!await crypto.subtle.verify("Ed25519", key, decode(proof.signature), new TextEncoder().encode(identityMessage(route, payload, proof)))) reject("node_signature_invalid");
+  } catch {
+    reject("node_signature_invalid");
+  }
+  replays[replayKey] = timestamp2 + 120001;
+  return { ...envelope, replays };
+}
+
 // src/core/executor-failover-state.js
 var ExecutorInputError = class extends Error {
   constructor(message, status = 422) {
@@ -11397,7 +11435,12 @@ function verifyLeaseReceipt(state, receipt, now = Date.now()) {
   if (!state?.activationPending || !expected || Object.keys(receipt).some((k) => receipt[k] !== expected[k]) || now < Date.parse(receipt.issuedAt) - 12e4 || now >= Date.parse(receipt.expiresAt)) fail("lease_receipt_mismatch_or_expired", 409);
   return { valid: true, receipt: structuredClone(expected) };
 }
-async function reduceEnvelope(envelope, kind, p, now) {
+async function reduceEnvelope(envelope, kind, p, now, transportDigest = null) {
+  if (kind === "enrollTransport") {
+    transportEnrollmentScope(p);
+    if ((envelope.transports?.[p.executorId]?.digest || "") !== p.previousDigest) fail("transport_digest_conflict", 409);
+    return { ...envelope, transports: { ...envelope.transports, [p.executorId]: { digest: p.newDigest, issueNumber: p.issueNumber, enrolledAt: new Date(now).toISOString() } } };
+  }
   if (kind === "enroll") {
     enrollmentScope(p);
     if ((envelope.identities?.[p.executorId] || "") !== p.previousPublicKey) fail("node_key_conflict", 409);
@@ -11406,6 +11449,7 @@ async function reduceEnvelope(envelope, kind, p, now) {
     return { ...envelope, control: control2, candidate: envelope.candidate?.executorId === p.executorId ? null : envelope.candidate, identities: { ...envelope.identities, [p.executorId]: p.publicKey } };
   }
   if (kind === "signedReport" || kind === "signedAuthorize") {
+    if (transportDigest !== null) verifyTransportDigest(envelope, p?.payload?.executorId, transportDigest);
     envelope = await verifyNodeRequest(envelope, kind === "signedReport" ? "report" : "authorize", p, now);
     p = p.payload;
     if (envelope.control && p.generation !== envelope.control.generation) fail("node_generation_conflict", 409);
@@ -11442,16 +11486,18 @@ function createD1ExecutorStore(db) {
     if (e.control) validateControlState(e.control);
     return e;
   };
-  async function mutate(kind, p, now = Date.now()) {
+  async function mutate(kind, p, now = Date.now(), transportDigest = null) {
     for (let attempt = 0; attempt < 8; attempt++) {
       const row = await read();
-      const next = await reduceEnvelope(decode4(row), kind, p, now);
+      const next = await reduceEnvelope(decode4(row), kind, p, now, transportDigest);
       const result = row ? await db.prepare("UPDATE vtdd_executor_control SET revision=revision+1,payload=? WHERE id=1 AND revision=?").bind(JSON.stringify(next), row.revision).run() : await db.prepare("INSERT OR IGNORE INTO vtdd_executor_control (id,revision,payload) VALUES (1,1,?)").bind(JSON.stringify(next)).run();
       if (result.meta?.changes === 1) return kind === "signedAuthorize" ? next.decision : next.control;
     }
     fail("generation_conflict", 409);
   }
-  return { enroll: (p, n) => mutate("enroll", p, n), signedReport: (p, n) => mutate("signedReport", p, n), signedAuthorize: (p, n) => mutate("signedAuthorize", p, n), async getIdentities() {
+  return { enrollTransport: (p, n) => mutate("enrollTransport", p, n), async getTransportStatus() {
+    return transportEnrollmentStatus(decode4(await read()));
+  }, enroll: (p, n) => mutate("enroll", p, n), signedReport: (p, n, d) => mutate("signedReport", p, n, d), signedAuthorize: (p, n, d) => mutate("signedAuthorize", p, n, d), async getIdentities() {
     return decode4(await read()).identities || {};
   }, async get() {
     return decode4(await read()).control;
@@ -11468,43 +11514,28 @@ function resolveExecutorStore(env) {
   return stores.get(db);
 }
 
-// src/core/executor-node-identity.js
-var reject = (message) => {
-  throw new ExecutorInputError(message, 403);
-};
-var encode = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
-var decode = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
-var identityMessage = (route, payload, proof) => JSON.stringify(["vtdd-executor-ed25519-v1", route, payload.executorId, payload.generation, proof.timestamp, proof.nonce, proof.digest]);
-async function bodyDigest(payload) {
-  return encode(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(payload))));
+// src/core/executor-transport-credential.js
+var validTransportToken = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+var validTransportDigest = (value) => typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+async function transportTokenDigest(token) {
+  if (!validTransportToken(token)) throw new ExecutorInputError("invalid_executor_transport", 403);
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return "sha256:" + Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
 }
-function enrollmentScope(p) {
-  if (!["mac", "vps"].includes(p.executorId) || !Number.isSafeInteger(p.issueNumber) || p.issueNumber < 1 || p.targetConfirmed !== true || !/^[A-Za-z0-9+/]{43}=$/.test(p.publicKey || "") || p.previousPublicKey !== "" && !/^[A-Za-z0-9+/]{43}=$/.test(p.previousPublicKey || "")) reject("invalid_node_enrollment");
-  return { actionType: "destructive", highRiskKind: "executor_node_enroll", issueNumber: String(p.issueNumber), executorId: p.executorId, executorPublicKey: p.publicKey, executorPreviousPublicKey: p.previousPublicKey };
-}
-async function verifyNodeRequest(envelope, route, input, now) {
-  strictObject(input, ["payload", "identity"]);
-  const { payload, identity: proof } = input;
-  if (!payload || !["mac", "vps"].includes(payload.executorId) || !Number.isSafeInteger(payload.generation) || payload.generation < 1 || !proof) reject("node_signature_required");
-  strictObject(proof, ["timestamp", "nonce", "digest", "signature"]);
-  const timestamp2 = Date.parse(proof.timestamp);
-  if (!Number.isFinite(timestamp2) || Math.abs(now - timestamp2) > 12e4 || !/^[a-f0-9-]{36}$/.test(proof.nonce || "")) reject("node_signature_stale_or_invalid");
-  const publicKey = envelope.identities?.[payload.executorId];
-  if (!publicKey) reject("node_not_enrolled");
-  const replayKey = payload.executorId + ":" + proof.nonce;
-  const replays = Object.fromEntries(Object.entries(envelope.replays || {}).filter(([, expiry]) => expiry >= now));
-  if (replays[replayKey]) reject("node_signature_replay");
-  if (Object.keys(replays).length >= 4096) reject("node_replay_capacity");
-  try {
-    if (proof.digest !== await bodyDigest(payload)) reject("node_body_digest_mismatch");
-    const key = await crypto.subtle.importKey("raw", decode(publicKey), { name: "Ed25519" }, false, ["verify"]);
-    if (!await crypto.subtle.verify("Ed25519", key, decode(proof.signature), new TextEncoder().encode(identityMessage(route, payload, proof)))) reject("node_signature_invalid");
-  } catch {
-    reject("node_signature_invalid");
+function transportEnrollmentScope(p) {
+  strictObject(p, ["executorId", "previousDigest", "newDigest", "issueNumber", "targetConfirmed", "approvalGrantId", "highRiskKind", "policyInput"]);
+  if (p.policyInput !== void 0) {
+    strictObject(p.policyInput, ["actionType", "highRiskKind"]);
+    if (p.policyInput.actionType !== "destructive" || p.policyInput.highRiskKind !== "executor_transport_enroll") throw new ExecutorInputError("invalid_transport_policy");
   }
-  replays[replayKey] = timestamp2 + 120001;
-  return { ...envelope, replays };
+  if (p.highRiskKind !== void 0 && p.highRiskKind !== "executor_transport_enroll") throw new ExecutorInputError("invalid_transport_policy");
+  if (!["mac", "vps"].includes(p.executorId) || !Number.isSafeInteger(p.issueNumber) || p.issueNumber < 1 || p.targetConfirmed !== true || !validTransportDigest(p.newDigest) || !(p.previousDigest === "" || validTransportDigest(p.previousDigest)) || p.newDigest === p.previousDigest) throw new ExecutorInputError("invalid_transport_enrollment");
+  return { actionType: "destructive", highRiskKind: "executor_transport_enroll", issueNumber: String(p.issueNumber), executorId: p.executorId, executorTransportDigest: p.newDigest, executorPreviousTransportDigest: p.previousDigest };
 }
+function verifyTransportDigest(envelope, executorId, digest2) {
+  if (!validTransportDigest(digest2) || !["mac", "vps"].includes(executorId) || envelope.transports?.[executorId]?.digest !== digest2) throw new ExecutorInputError("executor_transport_rejected", 403);
+}
+var transportEnrollmentStatus = (envelope) => Object.fromEntries(["mac", "vps"].map((id) => [id, !!envelope.transports?.[id]?.digest]));
 
 // src/core/butler-ui-client.generated.js
 var butlerUiClientScript = '(() => {\n  // src/core/butler-ui-client.js\n  var menu = document.querySelector("[data-butler-menu]");\n  var summary = menu?.querySelector("summary");\n  function closeMenu(restoreFocus = false) {\n    if (!menu?.open) return;\n    menu.open = false;\n    if (restoreFocus) summary.focus({ preventScroll: true });\n  }\n  document.addEventListener("keydown", (event) => {\n    if (event.key === "Escape" && menu?.open) {\n      event.preventDefault();\n      closeMenu(true);\n    }\n  });\n  document.addEventListener("pointerdown", (event) => {\n    if (menu?.open && !menu.contains(event.target)) closeMenu(menu.contains(document.activeElement));\n  });\n  menu?.addEventListener("focusout", (event) => {\n    if (event.relatedTarget) {\n      if (!menu.contains(event.relatedTarget)) closeMenu();\n      return;\n    }\n    setTimeout(() => {\n      if (!menu.contains(document.activeElement)) closeMenu();\n    }, 0);\n  });\n  function resizeViewport() {\n    const viewport = window.visualViewport;\n    const height = viewport?.height || window.innerHeight;\n    const top = viewport?.offsetTop || 0;\n    const style = document.documentElement.style;\n    style.setProperty("--butler-viewport-height", `${height}px`);\n    style.setProperty("--butler-viewport-top", `${top}px`);\n    const header = document.querySelector("[data-butler-header]");\n    const headerHeight = header?.getBoundingClientRect().height || 64;\n    const nav = document.querySelector("[data-butler-primary-nav]");\n    const navHeight = nav?.getBoundingClientRect().height || 65;\n    style.setProperty("--butler-header-reserve", `${headerHeight}px`);\n    if (document.body.dataset.butlerShell === "chat") {\n      document.body.dataset.butlerCompact = height - headerHeight - navHeight < 230 ? "true" : "false";\n    }\n    if (menu?.open) {\n      const menuTop = summary.getBoundingClientRect().bottom + 8;\n      const available = top + height - navHeight - menuTop - 8;\n      style.setProperty("--butler-menu-max-height", `${Math.max(0, available)}px`);\n    }\n  }\n  menu?.addEventListener("toggle", resizeViewport);\n  window.visualViewport?.addEventListener("resize", resizeViewport);\n  window.visualViewport?.addEventListener("scroll", resizeViewport);\n  window.addEventListener("resize", resizeViewport);\n  resizeViewport();\n})();\n';
@@ -11700,6 +11731,26 @@ button.onclick=async()=>{button.disabled=true;try{
  const v=await post('/v2/approval/passkey/verify',{sessionId:c.sessionId,response:encodeAuthenticationAssertion(assertion)});
  await post('/v2/executors/enroll',{...body,approvalGrantId:v.approvalGrant?.approvalId||v.approvalGrantId});previousPublicKey=publicKey;document.getElementById('previous').textContent='\u73FE\u5728\u306E\u516C\u958B\u9375: '+publicKey;status.textContent='\u516C\u958B\u9375\u3092\u767B\u9332\u3057\u307E\u3057\u305F\u3002\u7F72\u540D\u4ED8\u304D\u306E\u65B0\u3057\u3044\u5831\u544A\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002';
 }catch(e){status.textContent=e.message;}finally{button.disabled=false;}};
+<\/script></body></html>`, { active: "home", layout: "home" });
+}
+function renderExecutorTransportEnrollmentPage(params = {}) {
+  const executorId = ["mac", "vps"].includes(params.executorId) ? params.executorId : null;
+  const issueNumber = /^[1-9]\d{0,9}$/.test(params.issueNumber || "") ? Number(params.issueNumber) : null;
+  return renderButlerDocument(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>\u5B9F\u884C\u30CE\u30FC\u30C9\u901A\u4FE1\u306E\u627F\u8A8D</title><style>.transport-main{max-width:640px;margin:0 auto;padding:20px;box-sizing:border-box}.transport-main h1{font-size:1.5rem}.transport-main label{display:block;margin:18px 0}.transport-main textarea{display:block;width:100%;box-sizing:border-box;padding:12px;margin-top:8px;font:16px monospace;overflow-wrap:anywhere;resize:vertical}.transport-main button{width:100%;min-height:48px}.transport-main p{overflow-wrap:anywhere}</style></head><body><main class="transport-main"><h1>${executorId?.toUpperCase() || "\u30CE\u30FC\u30C9\u672A\u6307\u5B9A"} \u901A\u4FE1\u306E\u767B\u9332\u30FB\u66F4\u65B0</h1><p>Issue #${issueNumber ?? "\u672A\u6307\u5B9A"}\u3002\u7AEF\u672Bhelper\u304C\u51FA\u529B\u3057\u305FSHA-256 digest\u3060\u3051\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\u3002raw token\u306F\u5165\u529B\u30FB\u9001\u4FE1\u3057\u306A\u3044\u3067\u304F\u3060\u3055\u3044\u3002PRIMARY\u30FBgeneration\u30FB\u516C\u958B\u9375\u30FB\u627F\u8A8D\u6E08\u307F\u7248\u30FBmerge/deploy\u6A29\u9650\u306F\u5909\u66F4\u3057\u307E\u305B\u3093\u3002misumi\u3068\u5171\u6709gateway credential\u306B\u306F\u89E6\u308C\u307E\u305B\u3093\u3002</p><p id="enrolled"></p><label>\u65B0\u3057\u3044digest\uFF08sha256:\u2026\uFF09<textarea id="newDigest" rows="3" autocomplete="off" spellcheck="false" autocapitalize="off"></textarea></label><label>\u73FE\u5728\u306Edigest\uFF08\u521D\u56DE\u767B\u9332\u306F\u7A7A\u6B04\uFF09<textarea id="previousDigest" rows="3" autocomplete="off" spellcheck="false" autocapitalize="off"></textarea></label><button id="approve" disabled>\u8868\u793A\u3057\u305Fdigest\u3092\u30D1\u30B9\u30AD\u30FC\u3067\u627F\u8A8D</button><p id="status" role="status"></p><a href="/dashboard">\u30DB\u30FC\u30E0\u3078</a></main><script>
+${passkeyAuthenticationScript}
+const config=${JSON.stringify({ executorId, issueNumber })};
+const button=document.getElementById('approve'), status=document.getElementById('status');let enrolled;
+(async()=>{try{const r=await fetch('/v2/executors/overview',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('\u767B\u9332\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093');const v=await r.json();enrolled=v.transportEnrolled?.[config.executorId]===true;document.getElementById('enrolled').textContent=enrolled?'\u767B\u9332\u6E08\u307F\uFF1A\u73FE\u5728\u3068\u65B0\u3057\u3044digest\u3092\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044':'\u672A\u767B\u9332\uFF1A\u65B0\u3057\u3044digest\u3092\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044';button.disabled=!config.executorId||!config.issueNumber;}catch(e){status.textContent=e.message;}})();
+async function post(path,body){const r=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw Error(v.error||'\u627F\u8A8D\u5931\u6557');return v;}
+button.onclick=async()=>{button.disabled=true;try{
+ const newDigest=document.getElementById('newDigest').value.trim(), previousDigest=document.getElementById('previousDigest').value.trim();
+ if(!/^sha256:[a-f0-9]{64}$/.test(newDigest)||!(enrolled?/^sha256:[a-f0-9]{64}$/.test(previousDigest):previousDigest==='')||newDigest===previousDigest)throw Error('helper\u306Edigest\u3068\u73FE\u5728\u306E\u767B\u9332\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044');
+ const body={...config,newDigest,previousDigest,targetConfirmed:true};
+ const c=await post('/v2/approval/passkey/challenge',{...body,highRiskKind:'executor_transport_enroll',policyInput:{actionType:'destructive',highRiskKind:'executor_transport_enroll'}});
+ const assertion=await navigator.credentials.get({publicKey:decodeAuthenticationOptions(c.optionsJSON)});
+ const v=await post('/v2/approval/passkey/verify',{sessionId:c.sessionId,response:encodeAuthenticationAssertion(assertion)});
+ await post('/v2/executors/transport/enroll',{...body,approvalGrantId:v.approvalGrant?.approvalId||v.approvalGrantId});enrolled=true;document.getElementById('previousDigest').value=newDigest;document.getElementById('newDigest').value='';document.getElementById('enrolled').textContent='\u767B\u9332\u6E08\u307F';status.textContent='\u901A\u4FE1digest\u3092\u767B\u9332\u3057\u307E\u3057\u305F\u3002\u7F72\u540D\u4ED8\u304Dreport\u306E\u78BA\u8A8D\u3078\u9032\u3081\u307E\u3059\u3002';
+}catch(e){status.textContent=e.message;}finally{button.disabled=!config.executorId||!config.issueNumber;}};
 <\/script></body></html>`, { active: "home", layout: "home" });
 }
 
@@ -27723,6 +27774,7 @@ function normalizeScopeSnapshot(scope = {}) {
     vpsCapabilityId: normalizeText3(scope.vpsCapabilityId),
     vpsImpactScope: normalizeText3(scope.vpsImpactScope),
     vpsExpiresAt: normalizeText3(scope.vpsExpiresAt),
+    ...scope.highRiskKind === "executor_transport_enroll" ? { executorId: normalizeText3(scope.executorId), executorTransportDigest: normalizeText3(scope.executorTransportDigest), executorPreviousTransportDigest: normalizeText3(scope.executorPreviousTransportDigest) } : {},
     ...scope.highRiskKind === "executor_node_enroll" ? { executorId: normalizeText3(scope.executorId), executorPublicKey: normalizeText3(scope.executorPublicKey), executorPreviousPublicKey: normalizeText3(scope.executorPreviousPublicKey) } : {},
     ...scope.highRiskKind?.startsWith("executor_failover") ? {
       ...scope.highRiskKind === "executor_failover" ? { transitionMode: normalizeText3(scope.transitionMode), primaryIsolationConfirmed: normalizeText3(scope.primaryIsolationConfirmed) } : {},
@@ -60880,28 +60932,37 @@ var runtime_default = {
     }
     if (url.pathname.startsWith("/v2/executors/")) {
       const route = url.pathname.slice("/v2/executors/".length);
-      if (!(request.method === "GET" && route === "overview" || request.method === "POST" && ["report", "transition", "bootstrap", "activation/verify", "authorize", "version", "enroll"].includes(route))) return json(404, { error: "not_found" });
-      const auth = ["report", "activation/verify", "authorize"].includes(route) ? authorizeGatewayRequest({ request, env, apiSuffix: "/executors/" + route }) : await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/" + route });
+      if (!(request.method === "GET" && route === "overview" || request.method === "POST" && ["report", "transition", "bootstrap", "activation/verify", "authorize", "version", "enroll", "transport/enroll"].includes(route))) return json(404, { error: "not_found" });
+      const nodeTransport = ["report", "authorize"].includes(route) && request.headers.get("authorization")?.startsWith("Executor ");
+      const transportToken = nodeTransport ? request.headers.get("authorization").slice(9) : null;
+      const auth = nodeTransport ? { ok: validTransportToken(transportToken), status: 403, authType: "executor" } : ["report", "activation/verify", "authorize"].includes(route) ? authorizeGatewayRequest({ request, env, apiSuffix: "/executors/" + route }) : await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/" + route });
       const headers = { "cache-control": "no-store" };
       if (!auth.ok) return json(auth.status, { error: "unauthorized" }, headers);
+      if (route === "transport/enroll" && (auth.authType === "machine" || !isSameOriginBrowserRequest(request))) return json(403, { error: "same_origin_dashboard_required" }, headers);
       const store = resolveExecutorStore(env);
       if (!store) return json(503, { error: "executor_store_unavailable" }, headers);
       try {
         if (route === "overview" && auth.authType === "machine") return json(403, { error: "dashboard_owner_required" }, headers);
-        if (route === "overview") return json(200, { ...executorOverview(await store.get()), nodePublicKeys: await store.getIdentities(), bootstrapCandidate: await store.getCandidate?.() ?? null }, headers);
+        if (route === "overview") return json(200, { ...executorOverview(await store.get()), nodePublicKeys: await store.getIdentities(), transportEnrolled: await store.getTransportStatus(), bootstrapCandidate: await store.getCandidate?.() ?? null }, headers);
         const body = await readExecutorBody(request);
+        const transportDigest = nodeTransport ? await transportTokenDigest(transportToken) : null;
         if (route === "report") {
-          const state2 = await store.signedReport(body);
+          const state2 = await store.signedReport(body, void 0, transportDigest);
           return json(state2 ? 200 : 202, { ok: true, initialized: !!state2, bootstrapCandidateStored: !state2 }, headers);
         }
-        if (route === "authorize") return json(200, await store.signedAuthorize(body), headers);
+        if (route === "authorize") return json(200, await store.signedAuthorize(body, void 0, transportDigest), headers);
         if (route === "activation/verify") return json(200, verifyLeaseReceipt(await store.get(), body), headers);
         const bootstrap = route === "bootstrap";
-        strictObject(body, ["approvalGrantId", "expectedGeneration", "executorFrom", "executorTo", "issueNumber", "targetConfirmed", "reason", "transitionMode", "primaryIsolationConfirmed", ...route === "enroll" ? ["executorId", "publicKey", "previousPublicKey"] : [], ...bootstrap ? ["approvedCodexVersion"] : route === "version" ? ["approvedCodexVersion", "previousCodexVersion"] : []]);
-        const scope = route === "enroll" ? enrollmentScope(body) : route === "version" ? executorVersionScope(body) : executorApprovalScope(body, bootstrap);
+        if (route === "transport/enroll") strictObject(body, ["executorId", "previousDigest", "newDigest", "issueNumber", "targetConfirmed", "approvalGrantId"]);
+        else strictObject(body, ["approvalGrantId", "expectedGeneration", "executorFrom", "executorTo", "issueNumber", "targetConfirmed", "reason", "transitionMode", "primaryIsolationConfirmed", ...route === "enroll" ? ["executorId", "publicKey", "previousPublicKey"] : [], ...bootstrap ? ["approvedCodexVersion"] : route === "version" ? ["approvedCodexVersion", "previousCodexVersion"] : []]);
+        const scope = route === "transport/enroll" ? transportEnrollmentScope(body) : route === "enroll" ? enrollmentScope(body) : route === "version" ? executorVersionScope(body) : executorApprovalScope(body, bootstrap);
         const resolved = await resolveApprovalGrant({ payload: {}, policyInput: { approvalGrantId: body.approvalGrantId }, env });
         const grant = resolved.approvalGrant;
         if (!grant || !Number.isFinite(Date.parse(grant.expiresAt)) || !evaluateApprovalGrant({ approvalGrant: grant, scope }).ok) return json(403, { error: "real_scoped_passkey_required" }, headers);
+        if (route === "transport/enroll") {
+          await store.enrollTransport(body);
+          return json(200, { ok: true, authority: "node_transport_only" }, headers);
+        }
         if (route === "enroll") {
           await store.enroll(body);
           return json(200, { ok: true, authority: "node_identity_only" }, headers);
@@ -67553,10 +67614,10 @@ async function handleCustomGptSetupImportArtifactRequest(url, env) {
 }
 async function handlePasskeyOperatorPageRequest(request, env) {
   const url = new URL(request.url);
-  if (["failover", "failover-bootstrap", "executor-version", "executor-enroll"].includes(url.searchParams.get("mode"))) {
+  if (["failover", "failover-bootstrap", "executor-version", "executor-enroll", "executor-transport"].includes(url.searchParams.get("mode"))) {
     const auth = await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/overview" });
-    if (!auth.ok) return new Response("Dashboard \u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059", { status: auth.status });
-    return new Response((url.searchParams.get("mode") === "executor-enroll" ? renderExecutorEnrollmentPage : renderExecutorOperatorPage)(Object.fromEntries(url.searchParams)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+    if (!auth.ok || url.searchParams.get("mode") === "executor-transport" && auth.authType === "machine") return new Response("Dashboard \u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059", { status: auth.status || 403, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+    return new Response((url.searchParams.get("mode") === "executor-transport" ? renderExecutorTransportEnrollmentPage : url.searchParams.get("mode") === "executor-enroll" ? renderExecutorEnrollmentPage : renderExecutorOperatorPage)(Object.fromEntries(url.searchParams)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   }
   const syncApiBase = normalizeOptionalHttpUrl(url.searchParams.get("syncApiBase"));
   const syncEnabled = Boolean(syncApiBase);
@@ -68297,6 +68358,10 @@ async function handlePasskeyApprovalOptionsRequest(request, env) {
     });
   }
   const body = await readJson(request);
+  if (normalizeText34(body?.highRiskKind || body?.policyInput?.highRiskKind) === "executor_transport_enroll") {
+    const auth = await authorizeDashboardRequest({ request, env });
+    if (!auth.ok || auth.authType === "machine" || !isSameOriginBrowserRequest(request)) return json(403, { error: "same_origin_dashboard_required" });
+  }
   const scopeResult = await buildPasskeyApprovalScopeForRequest({ provider, payload: body });
   if (!scopeResult.ok) {
     return json(422, {
@@ -68353,6 +68418,10 @@ async function handlePasskeyApprovalVerifyRequest(request, env) {
       error: "passkey_session_not_found",
       reason: "approval session not found"
     });
+  }
+  if (sessionRecord.content?.scope?.highRiskKind === "executor_transport_enroll") {
+    const auth = await authorizeDashboardRequest({ request, env });
+    if (!auth.ok || auth.authType === "machine" || !isSameOriginBrowserRequest(request)) return json(403, { error: "same_origin_dashboard_required" });
   }
   const verified = await verifyPasskeyApproval({
     adapter: env?.PASSKEY_ADAPTER,
@@ -68467,6 +68536,13 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
 }
 async function buildPasskeyApprovalScopeForRequest({ provider, payload }) {
   const highRiskKind = normalizeText34(payload?.highRiskKind || payload?.policyInput?.highRiskKind);
+  if (highRiskKind === "executor_transport_enroll") {
+    try {
+      return { ok: true, scope: transportEnrollmentScope(payload) };
+    } catch {
+      return { ok: false, issues: ["invalid_transport_enrollment"] };
+    }
+  }
   if (highRiskKind === "executor_node_enroll") {
     try {
       return { ok: true, scope: enrollmentScope(payload) };

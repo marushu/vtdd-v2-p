@@ -30,6 +30,11 @@ reporter はサーバー generation を自動取得・採用しない。共有 b
 登録したノードごとの Ed25519 公開鍵で署名を検証し、nonce と時刻で replay を拒否する。
 秘密鍵は端末の private ファイルだけに保持する。侵害済みノードの停止は保証しない。receipt の期限切れからの再承認/recovery は未接続で、fail closed を維持する。
 
+Issue #860 のtransport分離は [executor transport契約](executor-transport-credential.md) を参照。
+report/authorizeはnode専用 `Executor` token（D1にはdigestのみ）または従来global `Bearer`
+を受け、両方で同じEd25519検証を必須とする。登録・更新は専用real passkey/CASのみ。
+misumiと共有gateway credentialには触れない。live activationは別証拠である。
+
 この隔離実装は control-state と実行前 admission fence を接続した slice である。
 bridge の各turn/selector、VPS runner のqueue pickup/subprocess/GitHub write前にserverを照会する。
 未初期化もbootstrap_requiredで拒否する。live設定・配置、installerのprovider-bound実行契約、
