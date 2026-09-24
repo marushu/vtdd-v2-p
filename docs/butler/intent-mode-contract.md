@@ -9,7 +9,10 @@ iPhone/iPad の Dashboard Butler が主操作面、Mac が通常の実行基盤�
 emergency / break-glass と固定費内の recovery 用待機基盤である。
 active-active、自動 failover、自動 failback は禁止する。heartbeat 喪失は owner action
 だけを生成し、実行権を移さない。手動切替は現在の policy が指定する正の relatedIssue・from/to・generation に
-束縛した real passkey 承認を必要とする。切替 API は durable control state だけを更新し、
+束縛した real passkey 承認を必要とする。planned は freshな停止報告・clean/pushed/fresh checkpoint、emergency は
+最終PRIMARY報告から10分以上とownerの電源/ネットワーク/アクセス隔離確認を必須とする。
+transitionMode と隔離確認は passkey scope に束縛し、heartbeatから隔離を推測しない。
+切替 API は durable control state だけを更新し、
 merge/deploy/root/credential 権限やプロセス操作を含まない。
 
 VPS は Mac で app-server smoke 検証済みかつ owner 承認済みの exact Codex version だけに追従する。
@@ -23,9 +26,9 @@ transition は control-state 更新だけで activationPending=true。対象・�
 relatedIssue・10分の期限を束縛した receipt を、対象側 helper がサーバーと照合して private
 config に明示適用する。対象の新世代/receipt付き fresh heartbeat・running・smoke・承認済み版一致まで
 「切替準備中」と表示する。
-reporter はサーバー generation を自動取得・採用しない。共有 bearer のためノード本人性の
-暗号学的証明はなく、偶発的な旧世代プロセス対策である。adversarial split-brain 防止とは
-主張しない。receipt の期限切れからの再承認/recovery は未接続で、fail closed を維持する。
+reporter はサーバー generation を自動取得・採用しない。共有 bearer は transport 認証のみ。report/authorize は scoped passkey で
+登録したノードごとの Ed25519 公開鍵で署名を検証し、nonce と時刻で replay を拒否する。
+秘密鍵は端末の private ファイルだけに保持する。侵害済みノードの停止は保証しない。receipt の期限切れからの再承認/recovery は未接続で、fail closed を維持する。
 
 この隔離実装は control-state と実行前 admission fence を接続した slice である。
 bridge の各turn/selector、VPS runner のqueue pickup/subprocess/GitHub write前にserverを照会する。

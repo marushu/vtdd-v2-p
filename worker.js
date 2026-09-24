@@ -11260,6 +11260,7 @@ function validateControlState(s) {
 }
 var age = (v, now) => Number.isFinite(Date.parse(v)) ? now - Date.parse(v) : Infinity;
 var fresh = (v, now, limit) => age(v, now) >= -12e4 && age(v, now) <= limit;
+var matchingHandoff = (a, b) => !!a && !!b && ["repository", "branch", "baseRef", "headSha"].every((key) => a[key] === b[key]) && ["issueNumber", "pullNumber"].every((key) => (a[key] ?? null) === (b[key] ?? null));
 function executorOverview(s, now = Date.now()) {
   if (!s) return { initialized: false, ownerAction: "\u5B9F\u884C\u57FA\u76E4\u306F\u672A\u521D\u671F\u5316", nodes: {}, blockers: ["\u672A\u521D\u671F\u5316"], ready: false };
   const nodes = {};
@@ -11286,17 +11287,26 @@ function executorOverview(s, now = Date.now()) {
   if (!["standby", "inactive", "stopped"].includes(target.serviceState)) blockers.push("\u5F85\u6A5F\u5074\u306E\u5B9F\u884C\u7AF6\u5408");
   if (target.checkpoint?.dirty) blockers.push("\u5F85\u6A5F\u5074\u306B\u672A\u30B3\u30DF\u30C3\u30C8\u306E\u5909\u66F4\u3042\u308A");
   if (target.checkpoint?.unpushed) blockers.push("\u5F85\u6A5F\u5074\u306B\u672Apush\u306E\u5909\u66F4\u3042\u308A");
+  const primary = nodes[s.primaryExecutor];
+  const primaryFresh = fresh(primary.heartbeatAt, now, s.primaryExecutor === "mac" ? 12e4 : 3e5) && fresh(primary.receivedAt, now, 3e5) && fresh(primary.observedAt, now, 3e5);
+  const transitionMode = primaryFresh ? "planned" : "emergency";
   const cp = s.checkpoint;
-  if (!cp || !fresh(cp.updatedAt, now, 6e5)) blockers.push("checkpoint\u304C\u53E4\u3044\u30FB\u672A\u78BA\u8A8D");
+  if (!cp || primaryFresh && !fresh(cp.updatedAt, now, 6e5)) blockers.push("checkpoint\u304C\u53E4\u3044\u30FB\u672A\u78BA\u8A8D");
   if (cp?.dirty) blockers.push("\u672A\u30B3\u30DF\u30C3\u30C8\u306E\u5909\u66F4\u3042\u308A");
   if (cp?.unpushed) blockers.push("\u672Apush\u306E\u5909\u66F4\u3042\u308A");
   if (cp?.generation !== s.generation) blockers.push("checkpoint\u306E\u4E16\u4EE3\u304C\u4E0D\u4E00\u81F4");
-  if (fresh(nodes[s.primaryExecutor].heartbeatAt, now, s.primaryExecutor === "mac" ? 12e4 : 3e5) && nodes[s.primaryExecutor].serviceState === "running") blockers.push("PRIMARY\u304C\u5B9F\u884C\u4E2D");
-  if (fresh(nodes[s.primaryExecutor].heartbeatAt, now, s.primaryExecutor === "mac" ? 12e4 : 3e5) && !["running", "standby", "inactive", "stopped"].includes(nodes[s.primaryExecutor].serviceState)) blockers.push("PRIMARY\u306E\u505C\u6B62\u78BA\u8A8D\u304C\u5FC5\u8981");
+  const targetCheckpoint = target.checkpoint;
+  const checkpointSynchronized = !!targetCheckpoint && targetCheckpoint.dirty === false && targetCheckpoint.unpushed === false && targetCheckpoint.generation === s.generation && cp?.generation === s.generation && cp.dirty === false && cp.unpushed === false && matchingHandoff(targetCheckpoint, cp) && (!primaryFresh || fresh(targetCheckpoint.updatedAt, now, 6e5) && fresh(cp.updatedAt, now, 6e5) && matchingHandoff(targetCheckpoint, primary.checkpoint));
+  if (!checkpointSynchronized) blockers.push("\u5F85\u6A5F\u5074checkpoint\u306E\u540C\u671F\u4E0D\u4E00\u81F4\u30FB\u6B20\u843D\uFF08\u8A08\u753B\u5207\u66FF\u3067\u306F\u9BAE\u5EA6\u3082\u5FC5\u8981\uFF09");
+  if (primaryFresh) {
+    if (!["inactive", "stopped", "standby"].includes(primary.serviceState)) blockers.push(primary.serviceState === "running" ? "PRIMARY\u304C\u5B9F\u884C\u4E2D" : "PRIMARY\u306E\u505C\u6B62\u78BA\u8A8D\u304C\u5FC5\u8981");
+    const checkpoint = primary.checkpoint;
+    if (!checkpoint || checkpoint.dirty || checkpoint.unpushed || checkpoint.generation !== s.generation || primary.generation !== s.generation || !fresh(checkpoint.updatedAt, now, 6e5)) blockers.push("PRIMARY\u306Eclean\u30FBpushed\u30FBfresh checkpoint\u304C\u5FC5\u8981");
+  } else if (!primary.heartbeatAt || !primary.receivedAt || age(primary.heartbeatAt, now) < 6e5 || age(primary.receivedAt, now) < 6e5 || age(primary.observedAt, now) < 6e5) blockers.push("\u7DCA\u6025\u5207\u66FF\u306B\u306FPRIMARY\u306E\u6700\u7D42\u5831\u544A\u304B\u308910\u5206\u4EE5\u4E0A\u5FC5\u8981");
   const ready = blockers.length === 0;
   const macHealthy = nodes.mac.healthy;
   const relatedIssue = s.relatedIssue ?? s.checkpoint?.issueNumber;
-  return { ...structuredClone(s), initialized: true, activationPending: !!s.activationPending, versionApprovalPending, versionCandidate, versionActionURL: versionApprovalPending && integer(relatedIssue) ? "/v2/approval/passkey/operator?mode=executor-version&executorFrom=mac&executorGeneration=" + s.generation + "&issueNumber=" + relatedIssue + "&approvedCodexVersion=" + encodeURIComponent(versionCandidate) + "&previousCodexVersion=" + encodeURIComponent(s.approvedCodexVersion) : null, fencingBoundary: "accidental_stale_process_only_shared_bearer", nodes, blockers, ready, standbyReady: !versionApprovalPending && target.healthy && ["standby", "inactive", "stopped"].includes(target.serviceState), checkpointFresh: !!cp && fresh(cp.updatedAt, now, 6e5), ownerAction: s.activationPending ? "\u5207\u66FF\u6E96\u5099\u4E2D / activation pending \xB7 \u5BFE\u8C61\u306Elease\u9069\u7528\u3068heartbeat\u3092\u5F85\u3063\u3066\u3044\u307E\u3059" : !macHealthy ? ready ? "Mac\u672A\u78BA\u8A8D \xB7 \u624B\u52D5\u5207\u66FF\u3092\u627F\u8A8D\u3067\u304D\u307E\u3059" : "Mac\u672A\u78BA\u8A8D \xB7 " + blockers.join("\u3001") : ready ? "\u624B\u52D5\u5207\u66FF\u3092\u627F\u8A8D\u3067\u304D\u307E\u3059" : blockers.length === 1 && blockers[0] === "PRIMARY\u304C\u5B9F\u884C\u4E2D" ? "\u901A\u5E38\u7A3C\u50CD\u4E2D\u3067\u3059\u3002\u8A08\u753B\u5207\u66FF\u306B\u306FPRIMARY\u3092quiesce\uFF08\u4ED5\u4E8B\u3092\u6B62\u3081\u3066\u505C\u6B62\u78BA\u8A8D\uFF09\u3057\u3066\u304F\u3060\u3055\u3044" : blockers.join("\u3001"), actionURL: ready && integer(relatedIssue) ? "/v2/approval/passkey/operator?mode=failover&executorFrom=" + s.primaryExecutor + "&executorTo=" + s.standbyExecutor + "&executorGeneration=" + s.generation + "&issueNumber=" + relatedIssue : null };
+  return { ...structuredClone(s), initialized: true, transitionMode, primaryIsolationRequired: transitionMode === "emergency", activationPending: !!s.activationPending, versionApprovalPending, versionCandidate, versionActionURL: versionApprovalPending && integer(relatedIssue) ? "/v2/approval/passkey/operator?mode=executor-version&executorFrom=mac&executorGeneration=" + s.generation + "&issueNumber=" + relatedIssue + "&approvedCodexVersion=" + encodeURIComponent(versionCandidate) + "&previousCodexVersion=" + encodeURIComponent(s.approvedCodexVersion) : null, fencingBoundary: "ed25519_admission_only_external_effects_not_revocable", nodes, blockers, ready, standbyReady: checkpointSynchronized && !versionApprovalPending && target.healthy && ["standby", "inactive", "stopped"].includes(target.serviceState), checkpointFresh: !!cp && fresh(cp.updatedAt, now, 6e5), ownerAction: s.activationPending ? "\u5207\u66FF\u6E96\u5099\u4E2D / activation pending \xB7 \u5BFE\u8C61\u306Elease\u9069\u7528\u3068heartbeat\u3092\u5F85\u3063\u3066\u3044\u307E\u3059" : !macHealthy ? ready ? "Mac\u672A\u78BA\u8A8D \xB7 \u624B\u52D5\u5207\u66FF\u3092\u627F\u8A8D\u3067\u304D\u307E\u3059" : "Mac\u672A\u78BA\u8A8D \xB7 " + blockers.join("\u3001") : ready ? "\u624B\u52D5\u5207\u66FF\u3092\u627F\u8A8D\u3067\u304D\u307E\u3059" : blockers.length === 1 && blockers[0] === "PRIMARY\u304C\u5B9F\u884C\u4E2D" ? "\u901A\u5E38\u7A3C\u50CD\u4E2D\u3067\u3059\u3002\u8A08\u753B\u5207\u66FF\u306B\u306FPRIMARY\u3092quiesce\uFF08\u4ED5\u4E8B\u3092\u6B62\u3081\u3066\u505C\u6B62\u78BA\u8A8D\uFF09\u3057\u3066\u304F\u3060\u3055\u3044" : blockers.join("\u3001"), actionURL: ready && integer(relatedIssue) ? "/v2/approval/passkey/operator?mode=failover&executorFrom=" + s.primaryExecutor + "&executorTo=" + s.standbyExecutor + "&executorGeneration=" + s.generation + "&issueNumber=" + relatedIssue + "&transitionMode=" + transitionMode : null };
 }
 function executorMayWrite(state, executorId, generation, now = Date.now()) {
   return !!state && state.primaryExecutor === executorId && state.generation === generation && executorOverview(state, now).nodes[executorId]?.healthy === true;
@@ -11337,7 +11347,9 @@ function bootstrapControl(input, now = Date.now()) {
 }
 function transitionControl(s, input, now = Date.now(), receiptId = globalThis.crypto.randomUUID()) {
   if (!s || input.expectedGeneration !== s.generation || input.executorFrom !== s.primaryExecutor || input.executorTo !== s.standbyExecutor) fail("generation_conflict", 409);
+  executorApprovalScope(input);
   const view = executorOverview(s, now);
+  if (input.transitionMode !== view.transitionMode) fail("transition_mode_conflict", 409);
   if (!view.ready) fail("transition_blocked: " + view.blockers.join(", "), 409);
   if (!safeText(input.reason) || input.reason.includes("/")) fail("invalid_reason");
   return validateControlState({ ...s, primaryExecutor: s.standbyExecutor, standbyExecutor: s.primaryExecutor, generation: s.generation + 1, lastTransitionAt: new Date(now).toISOString(), transitionReason: input.reason, relatedIssue: input.issueNumber ?? s.relatedIssue, activationPending: true, activationReceipt: validateLeaseReceipt({ receiptId, executorFrom: s.primaryExecutor, executorTo: s.standbyExecutor, previousGeneration: s.generation, generation: s.generation + 1, relatedIssue: input.issueNumber ?? s.relatedIssue, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 6e5).toISOString() }) });
@@ -11345,7 +11357,8 @@ function transitionControl(s, input, now = Date.now(), receiptId = globalThis.cr
 function executorApprovalScope(p, bootstrap = false) {
   if (!integer(p.issueNumber) || p.targetConfirmed !== true || !nodeId(p.executorFrom) || !nodeId(p.executorTo) || p.executorFrom === p.executorTo || !(bootstrap ? p.expectedGeneration === 0 : integer(p.expectedGeneration))) fail("invalid_transition_scope");
   if (bootstrap && (p.executorFrom !== "vps" || p.executorTo !== "mac" || !exactVersion(p.approvedCodexVersion))) fail("invalid_bootstrap_scope");
-  return { actionType: "destructive", highRiskKind: bootstrap ? "executor_failover_bootstrap" : "executor_failover", issueNumber: String(p.issueNumber), executorFrom: p.executorFrom, executorTo: p.executorTo, executorGeneration: String(p.expectedGeneration), ...bootstrap ? { executorCodexVersion: p.approvedCodexVersion } : {} };
+  if (!bootstrap && (!["planned", "emergency"].includes(p.transitionMode) || (p.transitionMode === "emergency" ? p.primaryIsolationConfirmed !== true : p.primaryIsolationConfirmed !== false))) fail("primary_isolation_or_mode_required");
+  return { ...bootstrap ? {} : { transitionMode: p.transitionMode, primaryIsolationConfirmed: String(p.primaryIsolationConfirmed) }, actionType: "destructive", highRiskKind: bootstrap ? "executor_failover_bootstrap" : "executor_failover", issueNumber: String(p.issueNumber), executorFrom: p.executorFrom, executorTo: p.executorTo, executorGeneration: String(p.expectedGeneration), ...bootstrap ? { executorCodexVersion: p.approvedCodexVersion } : {} };
 }
 async function readExecutorBody(request) {
   const reader = request.body?.getReader();
@@ -11384,13 +11397,27 @@ function verifyLeaseReceipt(state, receipt, now = Date.now()) {
   if (!state?.activationPending || !expected || Object.keys(receipt).some((k) => receipt[k] !== expected[k]) || now < Date.parse(receipt.issuedAt) - 12e4 || now >= Date.parse(receipt.expiresAt)) fail("lease_receipt_mismatch_or_expired", 409);
   return { valid: true, receipt: structuredClone(expected) };
 }
-function reduceEnvelope(envelope, kind, p, now) {
+async function reduceEnvelope(envelope, kind, p, now) {
+  if (kind === "enroll") {
+    enrollmentScope(p);
+    if ((envelope.identities?.[p.executorId] || "") !== p.previousPublicKey) fail("node_key_conflict", 409);
+    const control2 = envelope.control ? structuredClone(envelope.control) : null;
+    if (control2) delete control2.nodes[p.executorId];
+    return { ...envelope, control: control2, candidate: envelope.candidate?.executorId === p.executorId ? null : envelope.candidate, identities: { ...envelope.identities, [p.executorId]: p.publicKey } };
+  }
+  if (kind === "signedReport" || kind === "signedAuthorize") {
+    envelope = await verifyNodeRequest(envelope, kind === "signedReport" ? "report" : "authorize", p, now);
+    p = p.payload;
+    if (envelope.control && p.generation !== envelope.control.generation) fail("node_generation_conflict", 409);
+    if (kind === "signedAuthorize") return { ...envelope, decision: authorizeExecutor(envelope.control, p, now) };
+    kind = "report";
+  }
   const { control: s, candidate } = envelope;
   if (kind === "report" && !s) {
     const r = validateNodeReport(p);
     if (r.executorId !== "mac" || !fresh(r.observedAt, now, 12e4) || !fresh(r.heartbeatAt, now, 12e4)) fail("bootstrap_candidate_requires_fresh_mac");
     if (candidate && Date.parse(r.observedAt) <= Date.parse(candidate.observedAt)) fail("out_of_order_report", 409);
-    return { control: null, candidate: { ...r, receivedAt: new Date(now).toISOString() } };
+    return { ...envelope, control: null, candidate: { ...r, receivedAt: new Date(now).toISOString() } };
   }
   if (kind === "bootstrap" && s) fail("already_initialized", 409);
   let input = p;
@@ -11400,7 +11427,7 @@ function reduceEnvelope(envelope, kind, p, now) {
     input = { ...p, macReport };
   }
   const control = kind === "bootstrap" ? bootstrapControl(input, now) : kind === "report" ? applyNodeReport(s, p, now) : kind === "version" ? approveExecutorVersion(s, p, now) : transitionControl(s, p, now);
-  return { control, candidate: null };
+  return { ...envelope, control, candidate: null };
 }
 function createD1ExecutorStore(db) {
   let schema;
@@ -11409,7 +11436,7 @@ function createD1ExecutorStore(db) {
     await ready();
     return db.prepare("SELECT revision,payload FROM vtdd_executor_control WHERE id=1").first();
   };
-  const decode3 = (row) => {
+  const decode4 = (row) => {
     const p = row ? JSON.parse(row.payload) : null;
     const e = p?.primaryExecutor ? { control: p, candidate: null } : p ?? { control: null, candidate: null };
     if (e.control) validateControlState(e.control);
@@ -11418,16 +11445,18 @@ function createD1ExecutorStore(db) {
   async function mutate(kind, p, now = Date.now()) {
     for (let attempt = 0; attempt < 8; attempt++) {
       const row = await read();
-      const next = reduceEnvelope(decode3(row), kind, p, now);
+      const next = await reduceEnvelope(decode4(row), kind, p, now);
       const result = row ? await db.prepare("UPDATE vtdd_executor_control SET revision=revision+1,payload=? WHERE id=1 AND revision=?").bind(JSON.stringify(next), row.revision).run() : await db.prepare("INSERT OR IGNORE INTO vtdd_executor_control (id,revision,payload) VALUES (1,1,?)").bind(JSON.stringify(next)).run();
-      if (result.meta?.changes === 1) return next.control;
+      if (result.meta?.changes === 1) return kind === "signedAuthorize" ? next.decision : next.control;
     }
     fail("generation_conflict", 409);
   }
-  return { async get() {
-    return decode3(await read()).control;
+  return { enroll: (p, n) => mutate("enroll", p, n), signedReport: (p, n) => mutate("signedReport", p, n), signedAuthorize: (p, n) => mutate("signedAuthorize", p, n), async getIdentities() {
+    return decode4(await read()).identities || {};
+  }, async get() {
+    return decode4(await read()).control;
   }, async getCandidate() {
-    return decode3(await read()).candidate;
+    return decode4(await read()).candidate;
   }, bootstrap: (p, n) => mutate("bootstrap", p, n), report: (p, n) => mutate("report", p, n), approveVersion: (p, n) => mutate("version", p, n), transition: (p, n) => mutate("transition", p, n) };
 }
 var stores = /* @__PURE__ */ new WeakMap();
@@ -11437,6 +11466,44 @@ function resolveExecutorStore(env) {
   if (!db?.prepare) return null;
   if (!stores.has(db)) stores.set(db, createD1ExecutorStore(db));
   return stores.get(db);
+}
+
+// src/core/executor-node-identity.js
+var reject = (message) => {
+  throw new ExecutorInputError(message, 403);
+};
+var encode = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+var decode = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+var identityMessage = (route, payload, proof) => JSON.stringify(["vtdd-executor-ed25519-v1", route, payload.executorId, payload.generation, proof.timestamp, proof.nonce, proof.digest]);
+async function bodyDigest(payload) {
+  return encode(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(payload))));
+}
+function enrollmentScope(p) {
+  if (!["mac", "vps"].includes(p.executorId) || !Number.isSafeInteger(p.issueNumber) || p.issueNumber < 1 || p.targetConfirmed !== true || !/^[A-Za-z0-9+/]{43}=$/.test(p.publicKey || "") || p.previousPublicKey !== "" && !/^[A-Za-z0-9+/]{43}=$/.test(p.previousPublicKey || "")) reject("invalid_node_enrollment");
+  return { actionType: "destructive", highRiskKind: "executor_node_enroll", issueNumber: String(p.issueNumber), executorId: p.executorId, executorPublicKey: p.publicKey, executorPreviousPublicKey: p.previousPublicKey };
+}
+async function verifyNodeRequest(envelope, route, input, now) {
+  strictObject(input, ["payload", "identity"]);
+  const { payload, identity: proof } = input;
+  if (!payload || !["mac", "vps"].includes(payload.executorId) || !Number.isSafeInteger(payload.generation) || payload.generation < 1 || !proof) reject("node_signature_required");
+  strictObject(proof, ["timestamp", "nonce", "digest", "signature"]);
+  const timestamp2 = Date.parse(proof.timestamp);
+  if (!Number.isFinite(timestamp2) || Math.abs(now - timestamp2) > 12e4 || !/^[a-f0-9-]{36}$/.test(proof.nonce || "")) reject("node_signature_stale_or_invalid");
+  const publicKey = envelope.identities?.[payload.executorId];
+  if (!publicKey) reject("node_not_enrolled");
+  const replayKey = payload.executorId + ":" + proof.nonce;
+  const replays = Object.fromEntries(Object.entries(envelope.replays || {}).filter(([, expiry]) => expiry >= now));
+  if (replays[replayKey]) reject("node_signature_replay");
+  if (Object.keys(replays).length >= 4096) reject("node_replay_capacity");
+  try {
+    if (proof.digest !== await bodyDigest(payload)) reject("node_body_digest_mismatch");
+    const key = await crypto.subtle.importKey("raw", decode(publicKey), { name: "Ed25519" }, false, ["verify"]);
+    if (!await crypto.subtle.verify("Ed25519", key, decode(proof.signature), new TextEncoder().encode(identityMessage(route, payload, proof)))) reject("node_signature_invalid");
+  } catch {
+    reject("node_signature_invalid");
+  }
+  replays[replayKey] = timestamp2 + 120001;
+  return { ...envelope, replays };
 }
 
 // src/core/butler-ui-client.generated.js
@@ -11581,6 +11648,7 @@ var passkeyAuthenticationScript = `
 
 // src/core/executor-operator-page.js
 function renderExecutorOperatorPage(params = {}) {
+  const transitionMode = params.transitionMode === "emergency" ? "emergency" : "planned";
   const versionMode = params.mode === "executor-version";
   const approvedCodexVersion = exactVersion(params.approvedCodexVersion) ? params.approvedCodexVersion : "";
   const previousCodexVersion = exactVersion(params.previousCodexVersion) ? params.previousCodexVersion : "";
@@ -11589,8 +11657,8 @@ function renderExecutorOperatorPage(params = {}) {
   const to = versionMode ? "mac" : from === "mac" ? "vps" : "mac";
   const generation = /^\d{1,10}$/.test(params.executorGeneration || "") ? Number(params.executorGeneration) : 0;
   const issueNumber = /^[1-9]\d{0,9}$/.test(params.issueNumber || "") ? Number(params.issueNumber) : null;
-  const data = JSON.stringify({ bootstrap, versionMode, approvedCodexVersion, previousCodexVersion, from, to, generation, issueNumber });
-  return renderButlerDocument(`<!doctype html><html lang="ja"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>\u5B9F\u884C\u57FA\u76E4\u306E\u627F\u8A8D</title></head><body><main><h1>\u5B9F\u884C\u57FA\u76E4\u306E${versionMode ? "Codex exact version \u627F\u8A8D" : bootstrap ? "\u521D\u671F\u5316" : "\u624B\u52D5\u5207\u66FF"}</h1><p>Issue #${issueNumber ?? "\u672A\u6307\u5B9A"} \xB7 ${bootstrap ? "\u672A\u521D\u671F\u5316 \u2192 MAC PRIMARY" : from.toUpperCase() + " \u2192 " + to.toUpperCase()} \xB7 generation ${generation}</p>${versionMode ? "<p>\u627F\u8A8D\u6E08\u307F\u7248\u3060\u3051\u3092 " + previousCodexVersion + " \u2192 " + approvedCodexVersion + " \u306B\u5909\u66F4\u3057\u307E\u3059\u3002package install\u3084\u5B9F\u884C\u57FA\u76E4\u5207\u66FF\u306F\u884C\u3044\u307E\u305B\u3093\u3002</p>" : "<p>Butler \u306E control-state \u3060\u3051\u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u5BFE\u8C61\u30CE\u30FC\u30C9\u306E lease \u9069\u7528\u307E\u3067\u5207\u66FF\u6E96\u5099\u4E2D\u3067\u3059\u3002</p>"}${bootstrap ? '<p id="candidate">Mac \u306E\u5831\u544A\u5019\u88DC\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p>' : ""}<button id="approve" ${bootstrap || !issueNumber ? "disabled" : ""}>\u30D1\u30B9\u30AD\u30FC\u3067\u627F\u8A8D\u3057\u3066\u6E96\u5099</button><p id="status" role="status"></p><a href="/dashboard">\u30DB\u30FC\u30E0\u3078</a></main><script>
+  const data = JSON.stringify({ transitionMode, bootstrap, versionMode, approvedCodexVersion, previousCodexVersion, from, to, generation, issueNumber });
+  return renderButlerDocument(`<!doctype html><html lang="ja"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>\u5B9F\u884C\u57FA\u76E4\u306E\u627F\u8A8D</title></head><body><main><h1>\u5B9F\u884C\u57FA\u76E4\u306E${versionMode ? "Codex exact version \u627F\u8A8D" : bootstrap ? "\u521D\u671F\u5316" : "\u624B\u52D5\u5207\u66FF"}</h1><p>Issue #${issueNumber ?? "\u672A\u6307\u5B9A"} \xB7 ${bootstrap ? "\u672A\u521D\u671F\u5316 \u2192 MAC PRIMARY" : from.toUpperCase() + " \u2192 " + to.toUpperCase()} \xB7 generation ${generation}</p>${versionMode ? "<p>\u627F\u8A8D\u6E08\u307F\u7248\u3060\u3051\u3092 " + previousCodexVersion + " \u2192 " + approvedCodexVersion + " \u306B\u5909\u66F4\u3057\u307E\u3059\u3002package install\u3084\u5B9F\u884C\u57FA\u76E4\u5207\u66FF\u306F\u884C\u3044\u307E\u305B\u3093\u3002</p>" : "<p>Butler \u306E control-state \u3060\u3051\u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u5BFE\u8C61\u30CE\u30FC\u30C9\u306E lease \u9069\u7528\u307E\u3067\u5207\u66FF\u6E96\u5099\u4E2D\u3067\u3059\u3002</p>"}${bootstrap ? '<p id="candidate">Mac \u306E\u5831\u544A\u5019\u88DC\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p>' : ""}${!bootstrap && !versionMode && transitionMode === "emergency" ? '<section role="alert"><h2>\u7DCA\u6025\u5207\u66FF\uFF1A\u65E7PRIMARY\u306E\u9694\u96E2\u304C\u5FC5\u8981\u3067\u3059</h2><p>heartbeat\u55AA\u5931\u3060\u3051\u3067\u306F\u66F8\u8FBC\u307F\u505C\u6B62\u3092\u8A3C\u660E\u3067\u304D\u307E\u305B\u3093\u3002\u767A\u884C\u6E08\u307F\u306E\u5916\u90E8\u526F\u4F5C\u7528\u3092\u53D6\u308A\u6D88\u3059\u3053\u3068\u306F\u3067\u304D\u307E\u305B\u3093\u3002\u6700\u5F8C\u306Echeckpoint\u306F\u53E4\u3044\u53EF\u80FD\u6027\u304C\u3042\u308A\u3001\u5B8C\u5168\u306A\u4F5C\u696D\u56DE\u5FA9\u306F\u4FDD\u8A3C\u3057\u307E\u305B\u3093\u3002</p><label><input type="checkbox" id="isolation">\u96FB\u6E90\u30FB\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u30FB\u30A2\u30AF\u30BB\u30B9\u306E\u9694\u96E2\u306B\u3088\u308A\u3001\u65E7PRIMARY\u304C\u66F8\u8FBC\u307F\u3092\u7D99\u7D9A\u3067\u304D\u306A\u3044\u3053\u3068\u3092\u78BA\u8A8D\u3057\u307E\u3057\u305F</label></section>' : ""}<button id="approve" ${bootstrap || !issueNumber ? "disabled" : ""}>\u30D1\u30B9\u30AD\u30FC\u3067\u627F\u8A8D\u3057\u3066\u6E96\u5099</button><p id="status" role="status"></p><a href="/dashboard">\u30DB\u30FC\u30E0\u3078</a></main><script>
 ${passkeyAuthenticationScript}
 const config=${data}; let candidate;
 const status=document.getElementById('status'), button=document.getElementById('approve');
@@ -11603,7 +11671,8 @@ if(config.bootstrap) (async()=>{try{
 }catch(e){status.textContent=e.message;}})();
 async function post(path, body){const r=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw Error(v.error||'\u627F\u8A8D\u306B\u5931\u6557\u3057\u307E\u3057\u305F');return v;}
 button.onclick=async()=>{button.disabled=true;try{
- const body={expectedGeneration:config.generation,executorFrom:config.from,executorTo:config.to,issueNumber:config.issueNumber,targetConfirmed:true,reason:'owner_manual_transition',...(config.bootstrap?{approvedCodexVersion:candidate.codexVersion}:config.versionMode?{approvedCodexVersion:config.approvedCodexVersion,previousCodexVersion:config.previousCodexVersion}:{})};
+ if(!config.bootstrap && !config.versionMode && config.transitionMode==='emergency' && !document.getElementById('isolation').checked)throw Error('\u65E7PRIMARY\u306E\u9694\u96E2\u78BA\u8A8D\u304C\u5FC5\u8981\u3067\u3059');
+ const body={...(!config.bootstrap && !config.versionMode ? {transitionMode:config.transitionMode,primaryIsolationConfirmed:config.transitionMode==='emergency' && document.getElementById('isolation').checked} : {}),expectedGeneration:config.generation,executorFrom:config.from,executorTo:config.to,issueNumber:config.issueNumber,targetConfirmed:true,reason:'owner_manual_transition',...(config.bootstrap?{approvedCodexVersion:candidate.codexVersion}:config.versionMode?{approvedCodexVersion:config.approvedCodexVersion,previousCodexVersion:config.previousCodexVersion}:{})};
  const kind=config.versionMode?'executor_failover_version':config.bootstrap?'executor_failover_bootstrap':'executor_failover';
  const c=await post('/v2/approval/passkey/challenge',{...body,highRiskKind:kind,policyInput:{actionType:'destructive',highRiskKind:kind}});
  const assertion=await navigator.credentials.get({publicKey:decodeAuthenticationOptions(c.optionsJSON)});
@@ -11612,6 +11681,25 @@ button.onclick=async()=>{button.disabled=true;try{
  if(outcome.leaseReceipt){const a=document.createElement('a');a.textContent='\u5BFE\u8C61\u30CE\u30FC\u30C9\u7528lease receipt\u3092\u4FDD\u5B58';a.download='executor-lease-receipt.json';a.href=URL.createObjectURL(new Blob([JSON.stringify(outcome.leaseReceipt)],{type:'application/json'}));status.after(a);}
  status.textContent=config.versionMode?'\u627F\u8A8D\u6E08\u307FCodex\u7248\u3060\u3051\u3092\u66F4\u65B0\u3057\u307E\u3057\u305F\u3002VPS package\u66F4\u65B0\u306F\u5225\u306E\u627F\u8A8D\u7D4C\u8DEF\u304C\u5FC5\u8981\u3067\u3059\u3002':config.bootstrap?'\u5B9F\u884C\u57FA\u76E4\u306E\u521D\u671F\u72B6\u614B\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002runner \u63A5\u7D9A\u306F\u5225\u9014\u78BA\u8A8D\u304C\u5FC5\u8981\u3067\u3059\u3002':'\u5207\u66FF\u6E96\u5099\u4E2D / activation pending\u3002\u5BFE\u8C61\u306Elease\u9069\u7528\u3068heartbeat\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002';
 }catch(e){status.textContent=String(e.message);}finally{button.disabled=false;}};
+<\/script></body></html>`, { active: "home", layout: "home" });
+}
+function renderExecutorEnrollmentPage(params = {}) {
+  const executorId = params.executorId === "vps" ? "vps" : "mac";
+  const issueNumber = /^[1-9]\d{0,9}$/.test(params.issueNumber || "") ? Number(params.issueNumber) : null;
+  return renderButlerDocument(`<!doctype html><html lang="ja"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>\u5B9F\u884C\u30CE\u30FC\u30C9\u516C\u958B\u9375\u306E\u767B\u9332</title></head><body><main><h1>${executorId.toUpperCase()} \u516C\u958B\u9375\u306E\u767B\u9332\u30FB\u66F4\u65B0</h1><p>Issue #${issueNumber ?? "\u672A\u6307\u5B9A"}\u3002\u516C\u958B\u9375\u3060\u3051\u3092\u767B\u9332\u3057\u307E\u3059\u3002\u79D8\u5BC6\u9375\u306F\u7AEF\u672B\u306Eprivate\u30D5\u30A1\u30A4\u30EB\u304B\u3089\u79FB\u52D5\u3055\u305B\u306A\u3044\u3067\u304F\u3060\u3055\u3044\u3002PRIMARY\u30FBgeneration\u30FBmerge\u30FBdeploy\u6A29\u9650\u306F\u5909\u66F4\u3057\u307E\u305B\u3093\u3002\u66F4\u65B0\u5F8C\u306F\u7F72\u540D\u4ED8\u304D\u306E\u65B0\u3057\u3044\u5831\u544A\u304C\u5FC5\u8981\u3067\u3059\u3002</p><label>Ed25519\u516C\u958B\u9375\uFF08base64\uFF09<input id="publicKey" autocomplete="off"></label><p id="previous"></p><button id="approve" disabled>\u8868\u793A\u3057\u305F\u516C\u958B\u9375\u3092\u30D1\u30B9\u30AD\u30FC\u3067\u627F\u8A8D</button><p id="status" role="status"></p></main><script>
+${passkeyAuthenticationScript}
+const config=${JSON.stringify({ executorId, issueNumber })};
+const button=document.getElementById('approve'), status=document.getElementById('status');let previousPublicKey;
+(async()=>{try{const r=await fetch('/v2/executors/overview',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('\u767B\u9332\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093');const v=await r.json();previousPublicKey=v.nodePublicKeys?.[config.executorId]||'';document.getElementById('previous').textContent='\u73FE\u5728\u306E\u516C\u958B\u9375: '+(previousPublicKey||'\u672A\u767B\u9332');button.disabled=!config.issueNumber;}catch(e){status.textContent=e.message;}})();
+async function post(path,body){const r=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw Error(v.error||'\u627F\u8A8D\u5931\u6557');return v;}
+button.onclick=async()=>{button.disabled=true;try{
+ const publicKey=document.getElementById('publicKey').value.trim();if(!/^[A-Za-z0-9+/]{43}=$/.test(publicKey))throw Error('Ed25519\u516C\u958B\u9375\u3092\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044');
+ const body={...config,publicKey,previousPublicKey,targetConfirmed:true};
+ const c=await post('/v2/approval/passkey/challenge',{...body,highRiskKind:'executor_node_enroll',policyInput:{actionType:'destructive',highRiskKind:'executor_node_enroll'}});
+ const assertion=await navigator.credentials.get({publicKey:decodeAuthenticationOptions(c.optionsJSON)});
+ const v=await post('/v2/approval/passkey/verify',{sessionId:c.sessionId,response:encodeAuthenticationAssertion(assertion)});
+ await post('/v2/executors/enroll',{...body,approvalGrantId:v.approvalGrant?.approvalId||v.approvalGrantId});previousPublicKey=publicKey;document.getElementById('previous').textContent='\u73FE\u5728\u306E\u516C\u958B\u9375: '+publicKey;status.textContent='\u516C\u958B\u9375\u3092\u767B\u9332\u3057\u307E\u3057\u305F\u3002\u7F72\u540D\u4ED8\u304D\u306E\u65B0\u3057\u3044\u5831\u544A\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002';
+}catch(e){status.textContent=e.message;}finally{button.disabled=false;}};
 <\/script></body></html>`, { active: "home", layout: "home" });
 }
 
@@ -12117,7 +12205,7 @@ function trimPadding(input) {
 var isoCBOR_exports = {};
 __export(isoCBOR_exports, {
   decodeFirst: () => decodeFirst,
-  encode: () => encode
+  encode: () => encode2
 });
 
 // node_modules/@levischuck/tiny-cbor/esm/cbor/cbor_internal.js
@@ -12553,7 +12641,7 @@ function decodeFirst(input) {
   const [first] = decoded;
   return first;
 }
-function encode(input) {
+function encode2(input) {
   return encodeCBOR(input);
 }
 
@@ -12644,7 +12732,7 @@ function mapCoseAlgToWebCryptoAlg(alg) {
 // node_modules/@simplewebauthn/server/esm/helpers/iso/isoCrypto/getWebCrypto.js
 var webCrypto = void 0;
 function getWebCrypto() {
-  const toResolve = new Promise((resolve, reject) => {
+  const toResolve = new Promise((resolve, reject2) => {
     if (webCrypto) {
       return resolve(webCrypto);
     }
@@ -12653,7 +12741,7 @@ function getWebCrypto() {
       webCrypto = _globalThisCrypto;
       return resolve(webCrypto);
     }
-    return reject(new MissingWebCrypto());
+    return reject2(new MissingWebCrypto());
   });
   return toResolve;
 }
@@ -19995,19 +20083,19 @@ function __awaiter(thisArg, _arguments, P, generator) {
       resolve(value);
     });
   }
-  return new (P || (P = Promise))(function(resolve, reject) {
+  return new (P || (P = Promise))(function(resolve, reject2) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
       } catch (e) {
-        reject(e);
+        reject2(e);
       }
     }
     function rejected(value) {
       try {
         step(generator["throw"](value));
       } catch (e) {
-        reject(e);
+        reject2(e);
       }
     }
     function step(result) {
@@ -25149,12 +25237,12 @@ var InvalidBackupFlags = class extends Error {
 async function matchExpectedRPID(rpIDHash, expectedRPIDs) {
   try {
     const matchedRPID = await Promise.any(expectedRPIDs.map((expected) => {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve, reject2) => {
         toHash(isoUint8Array_exports.fromASCIIString(expected)).then((expectedRPIDHash) => {
           if (isoUint8Array_exports.areEqual(rpIDHash, expectedRPIDHash)) {
             resolve(expected);
           } else {
-            reject();
+            reject2();
           }
         });
       });
@@ -25415,14 +25503,14 @@ var BaseMetadataService = class {
         resolve();
       });
     }
-    const readyPromise = new Promise((resolve, reject) => {
+    const readyPromise = new Promise((resolve, reject2) => {
       const totalTimeoutMS = 7e4;
       const intervalMS = 100;
       let iterations = totalTimeoutMS / intervalMS;
       const intervalID = globalThis.setInterval(() => {
         if (iterations < 1) {
           clearInterval(intervalID);
-          reject(`State did not become ready in ${totalTimeoutMS / 1e3} seconds`);
+          reject2(`State did not become ready in ${totalTimeoutMS / 1e3} seconds`);
         } else if (this.state === SERVICE_STATE.READY) {
           clearInterval(intervalID);
           resolve();
@@ -27635,7 +27723,9 @@ function normalizeScopeSnapshot(scope = {}) {
     vpsCapabilityId: normalizeText3(scope.vpsCapabilityId),
     vpsImpactScope: normalizeText3(scope.vpsImpactScope),
     vpsExpiresAt: normalizeText3(scope.vpsExpiresAt),
+    ...scope.highRiskKind === "executor_node_enroll" ? { executorId: normalizeText3(scope.executorId), executorPublicKey: normalizeText3(scope.executorPublicKey), executorPreviousPublicKey: normalizeText3(scope.executorPreviousPublicKey) } : {},
     ...scope.highRiskKind?.startsWith("executor_failover") ? {
+      ...scope.highRiskKind === "executor_failover" ? { transitionMode: normalizeText3(scope.transitionMode), primaryIsolationConfirmed: normalizeText3(scope.primaryIsolationConfirmed) } : {},
       executorFrom: normalizeText3(scope.executorFrom),
       executorTo: normalizeText3(scope.executorTo),
       executorGeneration: normalizeText3(scope.executorGeneration),
@@ -52653,8 +52743,8 @@ var parse2 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse4 = /* @__PURE__ */ _safeParse(ZodRealError);
 var safeParseAsync3 = /* @__PURE__ */ _safeParseAsync(ZodRealError);
-var encode3 = /* @__PURE__ */ _encode(ZodRealError);
-var decode2 = /* @__PURE__ */ _decode(ZodRealError);
+var encode4 = /* @__PURE__ */ _encode(ZodRealError);
+var decode3 = /* @__PURE__ */ _decode(ZodRealError);
 var encodeAsync2 = /* @__PURE__ */ _encodeAsync(ZodRealError);
 var decodeAsync2 = /* @__PURE__ */ _decodeAsync(ZodRealError);
 var safeEncode2 = /* @__PURE__ */ _safeEncode(ZodRealError);
@@ -52717,8 +52807,8 @@ var ZodType2 = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
   inst.parseAsync = async (data, params) => parseAsync2(inst, data, params, { callee: inst.parseAsync });
   inst.safeParseAsync = async (data, params) => safeParseAsync3(inst, data, params);
   inst.spa = inst.safeParseAsync;
-  inst.encode = (data, params) => encode3(inst, data, params);
-  inst.decode = (data, params) => decode2(inst, data, params);
+  inst.encode = (data, params) => encode4(inst, data, params);
+  inst.decode = (data, params) => decode3(inst, data, params);
   inst.encodeAsync = async (data, params) => encodeAsync2(inst, data, params);
   inst.decodeAsync = async (data, params) => decodeAsync2(inst, data, params);
   inst.safeEncode = (data, params) => safeEncode2(inst, data, params);
@@ -56888,9 +56978,9 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, reject2) => {
       const earlyReject = (error2) => {
-        reject(error2);
+        reject2(error2);
       };
       if (!this._transport) {
         earlyReject(new Error("Not connected"));
@@ -56952,24 +57042,24 @@ var Protocol = class {
           }
         }, { relatedRequestId, resumptionToken, onresumptiontoken }).catch((error3) => this._onerror(new Error(`Failed to send cancellation: ${error3}`)));
         const error2 = reason instanceof McpError ? reason : new McpError(ErrorCode.RequestTimeout, String(reason));
-        reject(error2);
+        reject2(error2);
       };
       this._responseHandlers.set(messageId, (response) => {
         if (options?.signal?.aborted) {
           return;
         }
         if (response instanceof Error) {
-          return reject(response);
+          return reject2(response);
         }
         try {
           const parseResult = safeParse3(resultSchema, response.result);
           if (!parseResult.success) {
-            reject(parseResult.error);
+            reject2(parseResult.error);
           } else {
             resolve(parseResult.data);
           }
         } catch (error2) {
-          reject(error2);
+          reject2(error2);
         }
       });
       options?.signal?.addEventListener("abort", () => {
@@ -56995,12 +57085,12 @@ var Protocol = class {
           timestamp: Date.now()
         }).catch((error2) => {
           this._cleanupTimeout(messageId);
-          reject(error2);
+          reject2(error2);
         });
       } else {
         this._transport.send(jsonrpcRequest, { relatedRequestId, resumptionToken, onresumptiontoken }).catch((error2) => {
           this._cleanupTimeout(messageId);
-          reject(error2);
+          reject2(error2);
         });
       }
     });
@@ -57227,15 +57317,15 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, reject2) => {
       if (signal.aborted) {
-        reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
+        reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
       const timeoutId = setTimeout(resolve, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
-        reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
+        reject2(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
       }, { once: true });
     });
   }
@@ -60790,7 +60880,7 @@ var runtime_default = {
     }
     if (url.pathname.startsWith("/v2/executors/")) {
       const route = url.pathname.slice("/v2/executors/".length);
-      if (!(request.method === "GET" && route === "overview" || request.method === "POST" && ["report", "transition", "bootstrap", "activation/verify", "authorize", "version"].includes(route))) return json(404, { error: "not_found" });
+      if (!(request.method === "GET" && route === "overview" || request.method === "POST" && ["report", "transition", "bootstrap", "activation/verify", "authorize", "version", "enroll"].includes(route))) return json(404, { error: "not_found" });
       const auth = ["report", "activation/verify", "authorize"].includes(route) ? authorizeGatewayRequest({ request, env, apiSuffix: "/executors/" + route }) : await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/" + route });
       const headers = { "cache-control": "no-store" };
       if (!auth.ok) return json(auth.status, { error: "unauthorized" }, headers);
@@ -60798,20 +60888,24 @@ var runtime_default = {
       if (!store) return json(503, { error: "executor_store_unavailable" }, headers);
       try {
         if (route === "overview" && auth.authType === "machine") return json(403, { error: "dashboard_owner_required" }, headers);
-        if (route === "overview") return json(200, { ...executorOverview(await store.get()), bootstrapCandidate: await store.getCandidate?.() ?? null }, headers);
+        if (route === "overview") return json(200, { ...executorOverview(await store.get()), nodePublicKeys: await store.getIdentities(), bootstrapCandidate: await store.getCandidate?.() ?? null }, headers);
         const body = await readExecutorBody(request);
         if (route === "report") {
-          const state2 = await store.report(body);
+          const state2 = await store.signedReport(body);
           return json(state2 ? 200 : 202, { ok: true, initialized: !!state2, bootstrapCandidateStored: !state2 }, headers);
         }
-        if (route === "authorize") return json(200, authorizeExecutor(await store.get(), body), headers);
+        if (route === "authorize") return json(200, await store.signedAuthorize(body), headers);
         if (route === "activation/verify") return json(200, verifyLeaseReceipt(await store.get(), body), headers);
         const bootstrap = route === "bootstrap";
-        strictObject(body, ["approvalGrantId", "expectedGeneration", "executorFrom", "executorTo", "issueNumber", "targetConfirmed", "reason", ...bootstrap ? ["approvedCodexVersion"] : route === "version" ? ["approvedCodexVersion", "previousCodexVersion"] : []]);
-        const scope = route === "version" ? executorVersionScope(body) : executorApprovalScope(body, bootstrap);
+        strictObject(body, ["approvalGrantId", "expectedGeneration", "executorFrom", "executorTo", "issueNumber", "targetConfirmed", "reason", "transitionMode", "primaryIsolationConfirmed", ...route === "enroll" ? ["executorId", "publicKey", "previousPublicKey"] : [], ...bootstrap ? ["approvedCodexVersion"] : route === "version" ? ["approvedCodexVersion", "previousCodexVersion"] : []]);
+        const scope = route === "enroll" ? enrollmentScope(body) : route === "version" ? executorVersionScope(body) : executorApprovalScope(body, bootstrap);
         const resolved = await resolveApprovalGrant({ payload: {}, policyInput: { approvalGrantId: body.approvalGrantId }, env });
         const grant = resolved.approvalGrant;
         if (!grant || !Number.isFinite(Date.parse(grant.expiresAt)) || !evaluateApprovalGrant({ approvalGrant: grant, scope }).ok) return json(403, { error: "real_scoped_passkey_required" }, headers);
+        if (route === "enroll") {
+          await store.enroll(body);
+          return json(200, { ok: true, authority: "node_identity_only" }, headers);
+        }
         const state = bootstrap ? await store.bootstrap({ primaryExecutor: "mac", standbyExecutor: "vps", approvedCodexVersion: body.approvedCodexVersion, relatedIssue: body.issueNumber }) : route === "version" ? await store.approveVersion(body) : await store.transition(body);
         if (route === "version") return json(200, { ok: true, overview: auth.authType === "machine" ? void 0 : executorOverview(state), authority: "approved_codex_version_only" }, headers);
         return json(200, { ok: true, activationPending: !!state.activationPending, leaseReceipt: state.activationReceipt ?? null, overview: auth.authType === "machine" ? void 0 : executorOverview(state), authority: "executor_control_state_only" }, headers);
@@ -67459,10 +67553,10 @@ async function handleCustomGptSetupImportArtifactRequest(url, env) {
 }
 async function handlePasskeyOperatorPageRequest(request, env) {
   const url = new URL(request.url);
-  if (["failover", "failover-bootstrap", "executor-version"].includes(url.searchParams.get("mode"))) {
+  if (["failover", "failover-bootstrap", "executor-version", "executor-enroll"].includes(url.searchParams.get("mode"))) {
     const auth = await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/overview" });
     if (!auth.ok) return new Response("Dashboard \u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059", { status: auth.status });
-    return new Response(renderExecutorOperatorPage(Object.fromEntries(url.searchParams)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+    return new Response((url.searchParams.get("mode") === "executor-enroll" ? renderExecutorEnrollmentPage : renderExecutorOperatorPage)(Object.fromEntries(url.searchParams)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   }
   const syncApiBase = normalizeOptionalHttpUrl(url.searchParams.get("syncApiBase"));
   const syncEnabled = Boolean(syncApiBase);
@@ -68373,6 +68467,13 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
 }
 async function buildPasskeyApprovalScopeForRequest({ provider, payload }) {
   const highRiskKind = normalizeText34(payload?.highRiskKind || payload?.policyInput?.highRiskKind);
+  if (highRiskKind === "executor_node_enroll") {
+    try {
+      return { ok: true, scope: enrollmentScope(payload) };
+    } catch {
+      return { ok: false, issues: ["invalid_node_enrollment"] };
+    }
+  }
   if (highRiskKind === "executor_failover_version") {
     try {
       return { ok: true, scope: executorVersionScope(payload) };

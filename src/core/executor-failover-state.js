@@ -1,3 +1,4 @@
+import { enrollmentScope, verifyNodeRequest } from './executor-node-identity.js';
 // Issue #858: control-plane state only. Never starts/stops a runner.
 export class ExecutorInputError extends Error {
   constructor(message, status = 422) { super(message); this.status = status; }
@@ -44,6 +45,9 @@ export function validateControlState(s) {
 }
 const age = (v, now) => Number.isFinite(Date.parse(v)) ? now - Date.parse(v) : Infinity;
 const fresh = (v, now, limit) => age(v, now) >= -120000 && age(v, now) <= limit;
+const matchingHandoff = (a, b) => !!a && !!b &&
+  ['repository','branch','baseRef','headSha'].every(key => a[key] === b[key]) &&
+  ['issueNumber','pullNumber'].every(key => (a[key] ?? null) === (b[key] ?? null));
 export function executorOverview(s, now = Date.now()) {
   if (!s) return { initialized: false, ownerAction: '実行基盤は未初期化', nodes: {}, blockers: ['未初期化'], ready: false };
   const nodes = {};
@@ -65,18 +69,31 @@ export function executorOverview(s, now = Date.now()) {
   if (!['standby','inactive','stopped'].includes(target.serviceState)) blockers.push('待機側の実行競合');
   if (target.checkpoint?.dirty) blockers.push('待機側に未コミットの変更あり');
   if (target.checkpoint?.unpushed) blockers.push('待機側に未pushの変更あり');
+  const primary = nodes[s.primaryExecutor];
+  const primaryFresh = fresh(primary.heartbeatAt, now, s.primaryExecutor === 'mac' ? 120000 : 300000) && fresh(primary.receivedAt, now, 300000) && fresh(primary.observedAt, now, 300000);
+  const transitionMode = primaryFresh ? 'planned' : 'emergency';
   const cp = s.checkpoint;
-  if (!cp || !fresh(cp.updatedAt, now, 600000)) blockers.push('checkpointが古い・未確認');
+  if (!cp || (primaryFresh && !fresh(cp.updatedAt, now, 600000))) blockers.push('checkpointが古い・未確認');
   if (cp?.dirty) blockers.push('未コミットの変更あり');
   if (cp?.unpushed) blockers.push('未pushの変更あり');
   if (cp?.generation !== s.generation) blockers.push('checkpointの世代が不一致');
-  // A live running primary must be explicitly quiesced before handoff.
-  if (fresh(nodes[s.primaryExecutor].heartbeatAt, now, s.primaryExecutor === 'mac' ? 120000 : 300000) && nodes[s.primaryExecutor].serviceState === 'running') blockers.push('PRIMARYが実行中');
-  if (fresh(nodes[s.primaryExecutor].heartbeatAt, now, s.primaryExecutor === 'mac' ? 120000 : 300000) && !['running','standby','inactive','stopped'].includes(nodes[s.primaryExecutor].serviceState)) blockers.push('PRIMARYの停止確認が必要');
+  const targetCheckpoint = target.checkpoint;
+  const checkpointSynchronized = !!targetCheckpoint && targetCheckpoint.dirty === false &&
+    targetCheckpoint.unpushed === false && targetCheckpoint.generation === s.generation &&
+    cp?.generation === s.generation && cp.dirty === false && cp.unpushed === false &&
+    matchingHandoff(targetCheckpoint, cp) && (!primaryFresh || (
+      fresh(targetCheckpoint.updatedAt, now, 600000) && fresh(cp.updatedAt, now, 600000) &&
+      matchingHandoff(targetCheckpoint, primary.checkpoint)));
+  if (!checkpointSynchronized) blockers.push('待機側checkpointの同期不一致・欠落（計画切替では鮮度も必要）');
+  if (primaryFresh) {
+    if (!['inactive','stopped','standby'].includes(primary.serviceState)) blockers.push(primary.serviceState === 'running' ? 'PRIMARYが実行中' : 'PRIMARYの停止確認が必要');
+    const checkpoint = primary.checkpoint;
+    if (!checkpoint || checkpoint.dirty || checkpoint.unpushed || checkpoint.generation !== s.generation || primary.generation !== s.generation || !fresh(checkpoint.updatedAt, now, 600000)) blockers.push('PRIMARYのclean・pushed・fresh checkpointが必要');
+  } else if (!primary.heartbeatAt || !primary.receivedAt || age(primary.heartbeatAt, now) < 600000 || age(primary.receivedAt, now) < 600000 || age(primary.observedAt, now) < 600000) blockers.push('緊急切替にはPRIMARYの最終報告から10分以上必要');
   const ready = blockers.length === 0;
   const macHealthy = nodes.mac.healthy;
   const relatedIssue = s.relatedIssue ?? s.checkpoint?.issueNumber;
-  return { ...structuredClone(s), initialized: true, activationPending: !!s.activationPending, versionApprovalPending, versionCandidate, versionActionURL: versionApprovalPending && integer(relatedIssue) ? '/v2/approval/passkey/operator?mode=executor-version&executorFrom=mac&executorGeneration=' + s.generation + '&issueNumber=' + relatedIssue + '&approvedCodexVersion=' + encodeURIComponent(versionCandidate) + '&previousCodexVersion=' + encodeURIComponent(s.approvedCodexVersion) : null, fencingBoundary: 'accidental_stale_process_only_shared_bearer', nodes, blockers, ready, standbyReady: !versionApprovalPending && target.healthy && ['standby','inactive','stopped'].includes(target.serviceState), checkpointFresh: !!cp && fresh(cp.updatedAt, now, 600000), ownerAction: s.activationPending ? '切替準備中 / activation pending · 対象のlease適用とheartbeatを待っています' : !macHealthy ? (ready ? 'Mac未確認 · 手動切替を承認できます' : 'Mac未確認 · ' + blockers.join('、')) : ready ? '手動切替を承認できます' : blockers.length === 1 && blockers[0] === 'PRIMARYが実行中' ? '通常稼働中です。計画切替にはPRIMARYをquiesce（仕事を止めて停止確認）してください' : blockers.join('、'), actionURL: ready && integer(relatedIssue) ? '/v2/approval/passkey/operator?mode=failover&executorFrom=' + s.primaryExecutor + '&executorTo=' + s.standbyExecutor + '&executorGeneration=' + s.generation + '&issueNumber=' + relatedIssue : null };
+  return { ...structuredClone(s), initialized: true, transitionMode, primaryIsolationRequired: transitionMode === 'emergency', activationPending: !!s.activationPending, versionApprovalPending, versionCandidate, versionActionURL: versionApprovalPending && integer(relatedIssue) ? '/v2/approval/passkey/operator?mode=executor-version&executorFrom=mac&executorGeneration=' + s.generation + '&issueNumber=' + relatedIssue + '&approvedCodexVersion=' + encodeURIComponent(versionCandidate) + '&previousCodexVersion=' + encodeURIComponent(s.approvedCodexVersion) : null, fencingBoundary: 'ed25519_admission_only_external_effects_not_revocable', nodes, blockers, ready, standbyReady: checkpointSynchronized && !versionApprovalPending && target.healthy && ['standby','inactive','stopped'].includes(target.serviceState), checkpointFresh: !!cp && fresh(cp.updatedAt, now, 600000), ownerAction: s.activationPending ? '切替準備中 / activation pending · 対象のlease適用とheartbeatを待っています' : !macHealthy ? (ready ? 'Mac未確認 · 手動切替を承認できます' : 'Mac未確認 · ' + blockers.join('、')) : ready ? '手動切替を承認できます' : blockers.length === 1 && blockers[0] === 'PRIMARYが実行中' ? '通常稼働中です。計画切替にはPRIMARYをquiesce（仕事を止めて停止確認）してください' : blockers.join('、'), actionURL: ready && integer(relatedIssue) ? '/v2/approval/passkey/operator?mode=failover&executorFrom=' + s.primaryExecutor + '&executorTo=' + s.standbyExecutor + '&executorGeneration=' + s.generation + '&issueNumber=' + relatedIssue + '&transitionMode=' + transitionMode : null };
 }
 export function executorMayWrite(state, executorId, generation, now = Date.now()) {
   return !!state && state.primaryExecutor === executorId && state.generation === generation && executorOverview(state, now).nodes[executorId]?.healthy === true;
@@ -117,7 +134,9 @@ export function bootstrapControl(input, now = Date.now()) {
 }
 export function transitionControl(s, input, now = Date.now(), receiptId = globalThis.crypto.randomUUID()) {
   if (!s || input.expectedGeneration !== s.generation || input.executorFrom !== s.primaryExecutor || input.executorTo !== s.standbyExecutor) fail('generation_conflict', 409);
+  executorApprovalScope(input);
   const view = executorOverview(s, now);
+  if (input.transitionMode !== view.transitionMode) fail('transition_mode_conflict', 409);
   if (!view.ready) fail('transition_blocked: ' + view.blockers.join(', '), 409);
   if (!safeText(input.reason) || input.reason.includes('/')) fail('invalid_reason');
   return validateControlState({ ...s, primaryExecutor: s.standbyExecutor, standbyExecutor: s.primaryExecutor, generation: s.generation + 1, lastTransitionAt: new Date(now).toISOString(), transitionReason: input.reason, relatedIssue: input.issueNumber ?? s.relatedIssue, activationPending: true, activationReceipt: validateLeaseReceipt({ receiptId, executorFrom: s.primaryExecutor, executorTo: s.standbyExecutor, previousGeneration: s.generation, generation: s.generation + 1, relatedIssue: input.issueNumber ?? s.relatedIssue, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 600000).toISOString() }) });
@@ -125,7 +144,8 @@ export function transitionControl(s, input, now = Date.now(), receiptId = global
 export function executorApprovalScope(p, bootstrap = false) {
   if (!integer(p.issueNumber) || p.targetConfirmed !== true || !nodeId(p.executorFrom) || !nodeId(p.executorTo) || p.executorFrom === p.executorTo || !(bootstrap ? p.expectedGeneration === 0 : integer(p.expectedGeneration))) fail('invalid_transition_scope');
   if (bootstrap && (p.executorFrom !== 'vps' || p.executorTo !== 'mac' || !exactVersion(p.approvedCodexVersion))) fail('invalid_bootstrap_scope');
-  return { actionType: 'destructive', highRiskKind: bootstrap ? 'executor_failover_bootstrap' : 'executor_failover', issueNumber: String(p.issueNumber), executorFrom: p.executorFrom, executorTo: p.executorTo, executorGeneration: String(p.expectedGeneration), ...(bootstrap ? { executorCodexVersion: p.approvedCodexVersion } : {}) };
+  if (!bootstrap && (!['planned','emergency'].includes(p.transitionMode) || (p.transitionMode === 'emergency' ? p.primaryIsolationConfirmed !== true : p.primaryIsolationConfirmed !== false))) fail('primary_isolation_or_mode_required');
+  return { ...(bootstrap ? {} : {transitionMode:p.transitionMode, primaryIsolationConfirmed:String(p.primaryIsolationConfirmed)}), actionType: 'destructive', highRiskKind: bootstrap ? 'executor_failover_bootstrap' : 'executor_failover', issueNumber: String(p.issueNumber), executorFrom: p.executorFrom, executorTo: p.executorTo, executorGeneration: String(p.expectedGeneration), ...(bootstrap ? { executorCodexVersion: p.approvedCodexVersion } : {}) };
 }
 export async function readExecutorBody(request) {
   const reader = request.body?.getReader(); if (!reader) fail('missing_body');
@@ -145,13 +165,28 @@ export function verifyLeaseReceipt(state, receipt, now = Date.now()) {
   if (!state?.activationPending || !expected || Object.keys(receipt).some(k => receipt[k] !== expected[k]) || now < Date.parse(receipt.issuedAt)-120000 || now >= Date.parse(receipt.expiresAt)) fail('lease_receipt_mismatch_or_expired',409);
   return { valid: true, receipt: structuredClone(expected) };
 }
-function reduceEnvelope(envelope, kind, p, now) {
+async function reduceEnvelope(envelope, kind, p, now) {
+  if (kind === 'enroll') {
+    enrollmentScope(p);
+    if ((envelope.identities?.[p.executorId] || '') !== p.previousPublicKey) fail('node_key_conflict',409);
+    // A rekey invalidates that node's previous health/candidate evidence.
+    const control = envelope.control ? structuredClone(envelope.control) : null;
+    if (control) delete control.nodes[p.executorId];
+    return {...envelope,control,candidate:envelope.candidate?.executorId === p.executorId ? null : envelope.candidate,identities:{...envelope.identities,[p.executorId]:p.publicKey}};
+  }
+  if (kind === 'signedReport' || kind === 'signedAuthorize') {
+    envelope = await verifyNodeRequest(envelope,kind === 'signedReport' ? 'report' : 'authorize',p,now);
+    p = p.payload;
+    if (envelope.control && p.generation !== envelope.control.generation) fail('node_generation_conflict',409);
+    if (kind === 'signedAuthorize') return {...envelope,decision:authorizeExecutor(envelope.control,p,now)};
+    kind = 'report';
+  }
   const { control: s, candidate } = envelope;
   if (kind === 'report' && !s) {
     const r = validateNodeReport(p);
     if (r.executorId !== 'mac' || !fresh(r.observedAt,now,120000) || !fresh(r.heartbeatAt,now,120000)) fail('bootstrap_candidate_requires_fresh_mac');
     if (candidate && Date.parse(r.observedAt) <= Date.parse(candidate.observedAt)) fail('out_of_order_report',409);
-    return { control: null, candidate: { ...r, receivedAt: new Date(now).toISOString() } };
+    return { ...envelope, control: null, candidate: { ...r, receivedAt: new Date(now).toISOString() } };
   }
   if (kind === 'bootstrap' && s) fail('already_initialized',409);
   let input = p;
@@ -161,12 +196,13 @@ function reduceEnvelope(envelope, kind, p, now) {
     input = { ...p, macReport };
   }
   const control = kind === 'bootstrap' ? bootstrapControl(input,now) : kind === 'report' ? applyNodeReport(s,p,now) : kind === 'version' ? approveExecutorVersion(s,p,now) : transitionControl(s,p,now);
-  return { control, candidate: null };
+  return { ...envelope, control, candidate: null };
 }
 export function createInMemoryExecutorStore() {
   let envelope = { control: null, candidate: null };
-  const mutate = async (kind,p,now=Date.now()) => { envelope=reduceEnvelope(envelope,kind,p,now); return structuredClone(envelope.control); };
-  return { async get() { return structuredClone(envelope.control); }, async getCandidate() { return structuredClone(envelope.candidate); }, bootstrap: (p,n)=>mutate('bootstrap',p,n), report:(p,n)=>mutate('report',p,n), approveVersion:(p,n)=>mutate('version',p,n), transition:(p,n)=>mutate('transition',p,n) };
+  let serial = Promise.resolve();
+  const mutate = (kind,p,now=Date.now()) => { const task = serial.then(async () => { envelope=await reduceEnvelope(envelope,kind,p,now); return structuredClone(kind === 'signedAuthorize' ? envelope.decision : envelope.control); }); serial = task.catch(()=>{}); return task; };
+  return { enroll:(p,n)=>mutate('enroll',p,n), signedReport:(p,n)=>mutate('signedReport',p,n), signedAuthorize:(p,n)=>mutate('signedAuthorize',p,n), async getIdentities() {return structuredClone(envelope.identities || {});}, async get() { return structuredClone(envelope.control); }, async getCandidate() { return structuredClone(envelope.candidate); }, bootstrap: (p,n)=>mutate('bootstrap',p,n), report:(p,n)=>mutate('report',p,n), approveVersion:(p,n)=>mutate('version',p,n), transition:(p,n)=>mutate('transition',p,n) };
 }
 export function createD1ExecutorStore(db) {
   let schema;
@@ -176,13 +212,13 @@ export function createD1ExecutorStore(db) {
   async function mutate(kind, p, now = Date.now()) {
     for (let attempt = 0; attempt < 8; attempt++) {
       const row = await read();
-      const next = reduceEnvelope(decode(row),kind,p,now);
+      const next = await reduceEnvelope(decode(row),kind,p,now);
       const result = row ? await db.prepare('UPDATE vtdd_executor_control SET revision=revision+1,payload=? WHERE id=1 AND revision=?').bind(JSON.stringify(next),row.revision).run() : await db.prepare('INSERT OR IGNORE INTO vtdd_executor_control (id,revision,payload) VALUES (1,1,?)').bind(JSON.stringify(next)).run();
-      if (result.meta?.changes === 1) return next.control;
+      if (result.meta?.changes === 1) return kind === 'signedAuthorize' ? next.decision : next.control;
     }
     fail('generation_conflict',409);
   }
-  return { async get() { return decode(await read()).control; }, async getCandidate() { return decode(await read()).candidate; }, bootstrap: (p,n) => mutate('bootstrap',p,n), report: (p,n) => mutate('report',p,n), approveVersion: (p,n) => mutate('version',p,n), transition: (p,n) => mutate('transition',p,n) };
+  return { enroll:(p,n)=>mutate('enroll',p,n), signedReport:(p,n)=>mutate('signedReport',p,n), signedAuthorize:(p,n)=>mutate('signedAuthorize',p,n), async getIdentities() {return decode(await read()).identities || {};}, async get() { return decode(await read()).control; }, async getCandidate() { return decode(await read()).candidate; }, bootstrap: (p,n) => mutate('bootstrap',p,n), report: (p,n) => mutate('report',p,n), approveVersion: (p,n) => mutate('version',p,n), transition: (p,n) => mutate('transition',p,n) };
 }
 const stores = new WeakMap();
 export function resolveExecutorStore(env) {

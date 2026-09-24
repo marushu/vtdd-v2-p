@@ -31,9 +31,9 @@ transition は control-state 更新だけで activationPending=true。対象・�
 relatedIssue・10分の期限を束縛した receipt を、対象側 helper がサーバーと照合して private
 config に明示適用する。対象の新世代/receipt付き fresh heartbeat・running・smoke・承認済み版一致まで
 「切替準備中」と表示する。
-reporter はサーバー generation を自動取得・採用しない。共有 bearer のためノード本人性の
-暗号学的証明はなく、偶発的な旧世代プロセス対策である。adversarial split-brain 防止とは
-主張しない。receipt の期限切れからの再承認/recovery は未接続で、fail closed を維持する。
+reporter はサーバー generation を自動取得・採用しない。共有 bearer は transport 認証のみ。report/authorize は scoped passkey で
+登録したノードごとの Ed25519 公開鍵で署名を検証し、nonce と時刻で replay を拒否する。
+秘密鍵は端末の private ファイルだけに保持する。侵害済みノードの停止は保証しない。receipt の期限切れからの再承認/recovery は未接続で、fail closed を維持する。
 
 この隔離実装は control-state と実行前 admission fence を接続した slice である。
 bridge の各turn/selector、VPS runner のqueue pickup/subprocess/GitHub write前にserverを照会する。
@@ -533,7 +533,7 @@ completion evidence must state the Codex surface used for execution.
 ## Issue #858 のローカル実装と operator 引継ぎ
 
 - `GET /v2/executors/overview` は Dashboard 認証、`POST /v2/executors/report`
-  は machine bearer 認証。初回 Mac report は bounded bootstrapCandidate として保存するが
+  は machine bearer + 登録済み Ed25519 署名認証。初回 Mac report は bounded bootstrapCandidate として保存するが
   初期化しない。first report だけで PRIMARY は存在しない。
 - 初期化画面は同一 origin の
   `/v2/approval/passkey/operator?mode=failover-bootstrap&executorFrom=vps&executorGeneration=0&issueNumber=<current-related-issue>`。
@@ -546,7 +546,7 @@ completion evidence must state the Codex surface used for execution.
   checkpoint と inactive/stopped report を生成する工程。ここで汎用 kill API は追加しない。
   Butler からの計画 quiesce の自動 dispatch は未接続であり、この工程を完了済みと扱わない。
 - PRIMARY heartbeat が stale の緊急切替は owner の明示 passkey が必須。heartbeat 喪失だけ
-  で実プロセス停止を証明できないため、運用時には旧ノードの隔離/fencing 確認も必要。
+  で実プロセス停止を証明できないため、APIは最終報告から10分以上とownerの旧ノード隔離確認を必須にする。
   transition は control-state 更新のみ。既存runnerの実行前admission fenceはコード接続済みだが、
   進行中Codexの強制停止やlive配備済みの保証はない。
 - transition は generation を一回増やし activationPending=true にする。応答の bounded
@@ -615,8 +615,8 @@ configを読み直す。lease helperの明示更新後は対象だけが新世�
 endpoint originはconfig.originまたはVTDD_RUNTIME_URL、transport tokenは既存環境から渡す。
 追加vault読取やcredentials変更はこのfenceにはない。
 
-`POST /v2/executors/authorize` は machine-auth、入力は executorId/generation/purpose
-(dashboard_turn / vps_queue / vps_work) のみ。返却は allowed/reason のみで世代を配布しない。
+`POST /v2/executors/authorize` は machine-auth、署名 envelope の payload は executorId/generation/purpose
+(dashboard_turn / vps_queue / vps_work)。返却は allowed/reason のみで世代を配布しない。
 control state未初期化はbootstrap_requiredで拒否。初回reportとowner passkey初期化を先に行う。
 通信失敗・設定不足・非PRIMARY・旧世代・activationPending・unhealthyも拒否する。
 共有gateway tokenだけのoverview読取は拒否し、home aggregateでもexecutor詳細を返さない。
@@ -628,6 +628,43 @@ bridgeは認可済み起動時のみrepo sync/app-server initializeを行い、�
 
 これはチェック時点のadmission fenceであって、進行中turn/subprocessのremote killや
 全副作用をserver generationと一つのtransactionにする機構ではない。直前認可後の切替競合、
-ローカルで直接起動した別経路、shared bearerによるID偽装は別の境界。planned切替はまず
+ローカルで直接起動した別経路、侵害済みのnode秘密鍵は別の境界。planned切替はまず
 PRIMARY quiesceとclean/pushed checkpointを必要とし、runningをreadyとは表示しない。
 smoke/report/leaseがコード上存在しても、live Mac/VPSサービス接続・本番PWAの成功は未主張。
+
+
+### Review #3: ノード登録・切替の契約
+
+共有 bearer だけの report/authorize は拒否する。初回reportより先に、Dashboard認証された
+operator の `mode=executor-enroll`（executorId=mac/vps、issueNumber指定）で公開鍵を確認し、
+scoped passkey を取得する。公開鍵はraw Ed25519 32byteのbase64。登録APIは
+`POST /v2/executors/enroll`、scopeはnode・旧公開鍵・新公開鍵・Issueを束縛する。
+公開鍵とreplay cacheはcontrol envelopeへCAS保存し、登録・rekeyはprimary/generationを
+変更しない。rekeyは旧node報告を無効にして再報告を要求する。鍵生成・実配備は未実施。
+
+private reporter config の `identityKeyPath` はmode 0600の秘密JWK JSONへの絶対パス。
+`VTDD_EXECUTOR_CONFIG_PATH` で同じconfigをreporter/runtime fenceが参照する。
+秘密鍵を環境変数、引数、report、ログへ出さない。外部送信はpayloadと署名だけ。
+署名はdomain・route・executorId・generation・timestamp・nonce・SHA-256本文digestを束縛。
+時刻許容は±120秒、nonceは有効期限までdurable CASで一度だけ消費（最大4096、超過は拒否）。
+旧世代、未登録、署名なし、wrong key、改竄、replayは拒否する。
+
+plannedは新鮮なPRIMARYのinactive/stopped/standbyと、その報告内のclean/pushed/freshな
+現世代checkpoint、activation pendingなしを必要とする。emergencyは最終heartbeat・観測・
+受信から10分以上と `primaryIsolationConfirmed=true` を必要とする。これはownerが
+電源・ネットワーク・アクセス隔離により旧PRIMARYのwrite継続を防いだ確認であり、
+heartbeatから推測しない。operatorの警告とcheckboxをpasskey前に表示する。
+`transitionMode` と隔離確認を承認scope・payloadへ束縛し、planned/emergencyの流用を拒否する。
+
+10分待機とplannedのcheckpoint鮮度10分をemergencyにも同時要求すると、実質切替不能に
+なるため、emergencyは最後に報告されたclean/pushedな現世代checkpointを使う。
+その鮮度はoverviewのcheckpointFreshに表示し、完全な作業回復の証明とはしない。
+既発行の外部副作用を暗号学的・原子的に取り消せない。したがって隔離未確認のemergencyは
+禁止、plannedはgeneration変更より前のquiesceが必須。自動failover/failbackは追加しない。
+merge/deploy権限はButlerに集中したまま。live接続・自然文からの鍵登録案内は未検証。
+
+
+checkpoint-sync-004: plannedの待機側checkpointはclean/pushed・現世代・freshに加え、
+PRIMARY報告とcontrol双方のrepository/branch/baseRef/headSha/issueNumber/pullNumberと一致が
+必要（nullable IDの未指定とnullは同値）。emergencyは鮮度だけを免除し、最後のdurable
+controlとの同項目一致を要求する。欠落・不一致は専用blockerを返しstandbyReadyもfalse。

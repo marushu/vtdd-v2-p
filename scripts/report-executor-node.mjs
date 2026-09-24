@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { signExecutorRequest } from './sign-executor-request.mjs';
 import { readPrivateJson, atomicPrivateJson } from './executor-private-file.mjs';
 import { loadGatewayBearerTokenFromVault } from '../src/core/desktop-bootstrap-vault.js';
 import { readFile, open, unlink, stat } from 'node:fs/promises';
@@ -30,9 +31,9 @@ export function projectNodeReport(config, facts, now = Date.now()) {
   return validateNodeReport({ executorId: config.executorId, generation: config.generation, observedAt: new Date(now).toISOString(), heartbeatAt: new Date(now).toISOString(), codexVersion, appServerSmokeOk, serviceState: facts.serviceState || 'unknown', ...(config.leaseReceiptId ? {leaseReceiptId:config.leaseReceiptId} : {}), ...(facts.checkpoint ? {checkpoint:validateCheckpoint(facts.checkpoint)} : facts.git ? { checkpoint: parseGitCheckpoint(facts.git, config, now) } : {}) });
 }
 export function validateReporterConfig(c) {
-  strictObject(c, ['executorId','generation','codexCommand','repoPath','repository','baseRef','issueNumber','pullNumber','origin','lockPath','smokeEvidencePath','serviceUnit','intervalSeconds','outputPath','checkpointPath','leaseReceiptId']);
+  strictObject(c, ['executorId','generation','codexCommand','repoPath','repository','baseRef','issueNumber','pullNumber','origin','lockPath','smokeEvidencePath','serviceUnit','intervalSeconds','outputPath','checkpointPath','leaseReceiptId','identityKeyPath']);
   if (!['mac','vps'].includes(c.executorId) || !Number.isSafeInteger(c.generation) || c.generation < 1 || typeof c.codexCommand !== 'string' || !(c.codexCommand === 'codex' || isAbsolute(c.codexCommand))) throw Error('invalid_config');
-  for (const k of ['repoPath','lockPath','smokeEvidencePath','outputPath','checkpointPath']) if (c[k] != null && !isAbsolute(c[k])) throw Error('absolute_private_path_required');
+  for (const k of ['repoPath','lockPath','smokeEvidencePath','outputPath','checkpointPath','identityKeyPath']) if (c[k] != null && !isAbsolute(c[k])) throw Error('absolute_private_path_required');
   if (!c.lockPath || (c.intervalSeconds != null && (!Number.isSafeInteger(c.intervalSeconds) || c.intervalSeconds < 30 || c.intervalSeconds > 3600))) throw Error('invalid_interval_or_lock');
   if (c.leaseReceiptId && !/^[a-f0-9-]{36}$/.test(c.leaseReceiptId)) throw Error('invalid_lease_receipt_id');
   if (c.serviceUnit && !/^[a-zA-Z0-9_.@-]+\.service$/.test(c.serviceUnit)) throw Error('invalid_service_unit');
@@ -78,7 +79,7 @@ export async function runReporter(args = process.argv.slice(2)) {
       if (!args.includes('--output-only')) {
         const token = await resolveReporterToken();
         if (!token) throw Error('report_token_unavailable');
-        const result = await fetch(new URL('/v2/executors/report',c.origin),{method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(report)});
+        const result = await fetch(new URL('/v2/executors/report',c.origin),{method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(await signExecutorRequest(c,'report',report))});
         if (!result.ok) throw Error('report_rejected');
       }
       if (args.includes('--once')) break;

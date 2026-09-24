@@ -102,3 +102,41 @@ version承認は独立passkey scope (Issue/current generation/from-to Mac/exact 
 検証: Worker/bridge/runnerの実経路でstale/standby/pending/missingを拒否しCodex非呼出、
 正しいPRIMARYを許可。実SQLiteでversion/report競合、passkey scope mismatch、home link。
 全検証はfake fetch/child/private test files。live bridge/runner/credentialsは触らない。
+
+## Review #3 — quiesce / owner isolation / Ed25519（ローカル検証段階）
+
+設計: planned は fresh な PRIMARY の inactive/stopped/standby と、そのノード自身の
+clean・pushed・fresh checkpoint を要求する。emergency は最終 PRIMARY heartbeat と
+受信から最低10分、owner の電源・ネットワーク・アクセス隔離確認を必要とする。
+transitionMode と primaryIsolationConfirmed を passkey scope に含め、相互流用を拒否する。
+既発行の外部副作用を暗号学的・原子的に取り消せないため、この確認は省略不可。
+merge/deploy は引き続き Butler の集中権限。自動切替は追加しない。
+
+設計: Ed25519 公開鍵を node ごとの scoped passkey で登録・更新し、control envelope
+に保存する（初期化前の登録にも対応）。秘密鍵は private config のファイル参照だけ。
+report/authorize は node、generation、route、timestamp、nonce、body digest を署名し、
+Worker が公開鍵検証する。nonce 消費と report は同一 CAS、authorize も同じ state revision
+で判定する。enrollment は generation/primary/merge/deploy authority を変更しない。
+
+仮説: transport bearer の漏洩だけでは別ノードを偽装できず、CAS で replay と rekey 競合を
+拒否できる。一方、侵害済み executor や既に開始した外部 write の停止は保証しない。
+検証: planned quiesce、10分境界、isolation確認とscope流用、wrong key/replay/stale/body改竄、
+正しい世代、登録scope、rekey、SQLite race、private file signer、synthetic operator UI。
+対象: executor state/routes/passkey/operator/reporter/fence、focused tests、生成worker、E2E証跡。
+非対象: live鍵作成・登録、install、services、live monitor、push/merge/deploy。
+停止条件: native Ed25519 と既存passkey/CASで接続できない場合はidentity branchを未完とする。
+
+判断記録: emergencyにもcheckpoint鮮度10分を課すと最終報告からの10分待機と両立せず、
+実質的に利用不能になる。fresh checkpoint要件はowner指示どおりplannedに適用し、
+emergencyは最後のclean/pushed checkpointと隔離確認を必須にする。古さと回復限界を表示する。
+
+## Review #3 follow-up checkpoint-sync-004
+
+設計: standbyのclean状態だけでは同期済みhandoffを証明できないため、control checkpointと
+repository/branch/baseRef/headSha/issueNumber/pullNumber（nullと未指定は同値）を比較する。
+plannedはPRIMARY報告内checkpointとも一致し、standbyのcheckpointがfreshであることを要求。
+emergencyは10分待機のためcheckpointの経過時間を許容するが、最後のdurable controlとの
+一致・clean/pushed・現世代は必須。欠落/不一致は専用blockerで表示しstandbyReadyもfalse。
+仮説: heartbeatとcheckoutの清潔さだけで異なるHEADを昇格できる穴を閉じられる。
+検証: 各比較フィールド・世代・欠落・planned鮮度・emergency年齢許容/不一致拒否をテスト。
+既存root範囲内のreadiness補強のみ。署名/passkey/10分隔離条件や自動切替禁止は維持。

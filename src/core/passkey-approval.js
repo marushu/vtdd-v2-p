@@ -430,7 +430,9 @@ export function normalizeScopeSnapshot(scope = {}) {
     vpsCapabilityId: normalizeText(scope.vpsCapabilityId),
     vpsImpactScope: normalizeText(scope.vpsImpactScope),
     vpsExpiresAt: normalizeText(scope.vpsExpiresAt),
+    ...(scope.highRiskKind === 'executor_node_enroll' ? {executorId:normalizeText(scope.executorId),executorPublicKey:normalizeText(scope.executorPublicKey),executorPreviousPublicKey:normalizeText(scope.executorPreviousPublicKey)} : {}),
     ...(scope.highRiskKind?.startsWith("executor_failover") ? {
+      ...(scope.highRiskKind === 'executor_failover' ? {transitionMode:normalizeText(scope.transitionMode),primaryIsolationConfirmed:normalizeText(scope.primaryIsolationConfirmed)} : {}),
       executorFrom: normalizeText(scope.executorFrom),
       executorTo: normalizeText(scope.executorTo),
       executorGeneration: normalizeText(scope.executorGeneration),

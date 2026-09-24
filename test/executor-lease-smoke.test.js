@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -9,7 +10,7 @@ import { smokeAppServer } from '../scripts/smoke-executor-app-server.mjs';
 import { bootstrapControl, applyNodeReport, transitionControl, verifyLeaseReceipt } from '../src/core/executor-failover-state.js';
 import { collectNodeReport, resolveReporterToken } from '../scripts/report-executor-node.mjs';
 import { seed,report,transition,now,stamp } from './executor-failover-fixtures.js';
-async function temporary(fn){const dir=await mkdtemp(resolve('.local/issue-858/test-'));try{return await fn(dir);}finally{await rm(dir,{recursive:true,force:true});}}
+async function temporary(fn){const dir=await mkdtemp(resolve(tmpdir(),'executor-test-'));try{return await fn(dir);}finally{await rm(dir,{recursive:true,force:true});}}
 test('atomic private overwrite supports consecutive cycles and never exposes permissive mode',()=>temporary(async dir=>{
  const path=dir+'/report.json';await atomicPrivateJson(path,{n:1});await atomicPrivateJson(path,{n:2});assert.deepEqual(JSON.parse(await readFile(path)),{n:2});assert.equal((await stat(path)).mode&0o777,0o600);
 }));

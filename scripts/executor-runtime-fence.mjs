@@ -1,5 +1,6 @@
+import { signExecutorRequest } from './sign-executor-request.mjs';
 import { readPrivateJson } from './executor-private-file.mjs';
-// Transport bearer is NOT node identity. This is an admission fence for stale processes.
+// Transport bearer plus enrolled Ed25519 identity; admission cannot revoke in-flight writes.
 export async function authorizeRuntimeExecutor({ purpose, runtimeUrl, token, env=process.env, fetchImpl=globalThis.fetch }={}) {
   try {
     const config=env.VTDD_EXECUTOR_CONFIG_PATH ? await readPrivateJson(env.VTDD_EXECUTOR_CONFIG_PATH) : {executorId:env.VTDD_EXECUTOR_ID,generation:Number(env.VTDD_EXECUTOR_GENERATION)};
@@ -8,7 +9,7 @@ export async function authorizeRuntimeExecutor({ purpose, runtimeUrl, token, env
     if(origin.protocol!=='https:' || origin.username || origin.password) return {allowed:false,reason:'executor_origin_invalid'};
     const bearer=token || env.VTDD_GATEWAY_BEARER_TOKEN;
     if(!bearer)return {allowed:false,reason:'executor_transport_unavailable'};
-    const response=await fetchImpl(new URL('/v2/executors/authorize',origin),{method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:'Bearer '+bearer},body:JSON.stringify({executorId:config.executorId,generation:config.generation,purpose})});
+    const response=await fetchImpl(new URL('/v2/executors/authorize',origin),{method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:'Bearer '+bearer},body:JSON.stringify(await signExecutorRequest(config,'authorize',{executorId:config.executorId,generation:config.generation,purpose}))});
     if(!response.ok)return {allowed:false,reason:'executor_authorization_unavailable'};
     const result=await response.json();
     return result.allowed===true && result.reason==='authorized' ? {allowed:true,reason:'authorized'} : {allowed:false,reason:'executor_blocked'};
