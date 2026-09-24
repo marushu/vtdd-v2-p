@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { build } from 'esbuild';
 import { renderDashboardMonitorHome } from '../src/worker/dashboard-monitor-home.js';
 
 class Element {
@@ -11,13 +12,13 @@ class Element {
   replaceChildren(...nodes) { this.children = nodes; }
   get text() { return this.textContent + this.children.map(n => n.text).join(' '); }
 }
-function browser(fetcher) {
+function browser(fetcher, renderer = renderDashboardMonitorHome) {
   const nodes = new Map(), events = {}, intervals = [], timeouts = [];
   let elapsed = 0;
   const document = { hidden: false, getElementById(id) { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); }, createElement: tag => new Element(tag, document), addEventListener: (name, fn) => { events[name] = fn; } };
   const navigator = { onLine: true };
   const context = { document, navigator, window: { addEventListener: (name, fn) => { events[name] = fn; } }, fetch: fetcher, performance: { now: () => elapsed }, AbortController, Date, setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; }, clearInterval() {}, setTimeout(fn) { timeouts.push(fn); return timeouts.length; }, clearTimeout() {} };
-  vm.runInNewContext(renderDashboardMonitorHome().match(/<script>([\s\S]*)<\/script>/)[1], context);
+  vm.runInNewContext(renderer().match(/<script>([\s\S]*)<\/script>/)[1], context);
   return { nodes, events, intervals, timeouts, document, navigator, advance(ms) { elapsed += ms; intervals.find(t => t.ms === 5000).fn(); } };
 }
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
@@ -101,4 +102,21 @@ test('booking is opt-in monitor metadata and 300 seconds is five minutes', async
   b.events.pageshow(); await flush(); assert.match(b.nodes.get('monitors').text, /自動予約/);
   data.monitors[0].type = 'task';
   b.events.pageshow(); await flush(); assert.doesNotMatch(b.nodes.get('monitors').text, /自動予約/);
+});
+
+// The production bundler preserves names, which must not introduce missing browser helpers.
+test('name-preserved production bundle hydrates the home without Worker-only helpers', async () => {
+  const result = await build({ entryPoints: ['src/worker/dashboard-monitor-home.js'], bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022', keepNames: true, legalComments: 'none' });
+  const bundled = await import('data:text/javascript;base64,' + Buffer.from(result.outputFiles[0].text).toString('base64'));
+  const b = browser(async () => ({ ok: true, json: async () => overview() }), bundled.renderDashboardMonitorHome);
+  await flush();
+  assert.equal(b.nodes.get('monitors').children.length, 1);
+  assert.match(b.nodes.get('connection').text, /接続中/);
+});
+
+test('generated browser source matches the canonical unbundled client', async () => {
+  const { dashboardMonitorClientSource } = await import('../scripts/build-dashboard-monitor-client.mjs');
+  const { dashboardMonitorClientScript } = await import('../src/worker/dashboard-monitor-client.generated.js');
+  assert.equal(dashboardMonitorClientScript, dashboardMonitorClientSource());
+  assert.doesNotMatch(dashboardMonitorClientScript, /__name\(/);
 });
