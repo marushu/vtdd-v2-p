@@ -10,7 +10,7 @@ test("authority model defines Codex freedom inside Issue scope and Butler-side m
   assert.equal(doc.includes("Codex is free inside bounded Issue scope."), true);
   assert.equal(doc.includes("Codex does not merge or close issues directly."), true);
   assert.equal(doc.includes("Merge and issue close are Butler-side authority actions."), true);
-  assert.equal(doc.includes("ChatGPT Pro / Codex Cloud"), true);
+  assert.equal(doc.includes("Butler -> Mac PRIMARY; VPS STANDBY after scoped manual promotion"), true);
   assert.equal(doc.includes("`OPENAI_API_KEY`-backed runners are optional opt-in machine paths"), true);
   assert.equal(doc.includes("merge and bounded issue close require explicit `GO + real passkey`"), true);
 });

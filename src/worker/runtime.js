@@ -1,3 +1,5 @@
+import { executorOverview, resolveExecutorStore, readExecutorBody, strictObject, executorApprovalScope, executorVersionScope, authorizeExecutor, verifyLeaseReceipt, ExecutorInputError } from "../core/executor-failover-state.js";
+import { renderExecutorOperatorPage } from "../core/executor-operator-page.js";
 import { renderButlerDocument, butlerActivePage } from '../core/butler-ui-shell.js';
 import {
   normalizeMonitorSnapshot, computeMonitorView, readMonitorBody,
@@ -1538,6 +1540,39 @@ export default {
       return png(200, dashboardButlerIconPngDataUrl);
     }
 
+    if (url.pathname.startsWith("/v2/executors/")) {
+      const route = url.pathname.slice("/v2/executors/".length);
+      if (!((request.method === "GET" && route === "overview") || (request.method === "POST" && ["report", "transition", "bootstrap", "activation/verify", "authorize", "version"].includes(route)))) return json(404, { error: "not_found" });
+      const auth = ["report", "activation/verify", "authorize"].includes(route)
+        ? authorizeGatewayRequest({ request, env, apiSuffix: "/executors/" + route })
+        : await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/" + route });
+      const headers = { "cache-control": "no-store" };
+      if (!auth.ok) return json(auth.status, { error: "unauthorized" }, headers);
+      const store = resolveExecutorStore(env);
+      if (!store) return json(503, { error: "executor_store_unavailable" }, headers);
+      try {
+        if (route === "overview" && auth.authType === "machine") return json(403, {error:"dashboard_owner_required"}, headers);
+        if (route === "overview") return json(200, { ...executorOverview(await store.get()), bootstrapCandidate: await store.getCandidate?.() ?? null }, headers);
+        const body = await readExecutorBody(request);
+        if (route === "report") { const state = await store.report(body); return json(state ? 200 : 202, { ok: true, initialized: !!state, bootstrapCandidateStored: !state }, headers); }
+        if (route === "authorize") return json(200, authorizeExecutor(await store.get(),body), headers);
+        if (route === "activation/verify") return json(200, verifyLeaseReceipt(await store.get(), body), headers);
+        const bootstrap = route === "bootstrap";
+        strictObject(body, ['approvalGrantId','expectedGeneration','executorFrom','executorTo','issueNumber','targetConfirmed','reason', ...(bootstrap ? ['approvedCodexVersion'] : route === 'version' ? ['approvedCodexVersion','previousCodexVersion'] : [])]);
+        const scope = route === 'version' ? executorVersionScope(body) : executorApprovalScope(body, bootstrap);
+        const resolved = await resolveApprovalGrant({ payload: {}, policyInput: { approvalGrantId: body.approvalGrantId }, env });
+        const grant = resolved.approvalGrant;
+        if (!grant || !Number.isFinite(Date.parse(grant.expiresAt)) || !evaluateApprovalGrant({ approvalGrant: grant, scope }).ok) return json(403, { error: "real_scoped_passkey_required" }, headers);
+        const state = bootstrap
+          ? await store.bootstrap({ primaryExecutor: 'mac', standbyExecutor: 'vps', approvedCodexVersion: body.approvedCodexVersion, relatedIssue: body.issueNumber })
+          : route === 'version' ? await store.approveVersion(body) : await store.transition(body);
+        if (route === "version") return json(200, {ok:true,overview:auth.authType === "machine" ? undefined : executorOverview(state),authority:"approved_codex_version_only"}, headers);
+        return json(200, { ok: true, activationPending: !!state.activationPending, leaseReceipt: state.activationReceipt ?? null, overview: auth.authType === "machine" ? undefined : executorOverview(state), authority: "executor_control_state_only" }, headers);
+      } catch (error) {
+        return json(error instanceof ExecutorInputError ? error.status : 503, { error: error instanceof ExecutorInputError ? error.message : "executor_store_unavailable" }, headers);
+      }
+    }
+
     if ((request.method === "POST" && url.pathname === "/v2/dashboard/monitors") ||
         (request.method === "GET" && url.pathname === "/v2/dashboard/overview")) {
       const writing = request.method === "POST";
@@ -1568,7 +1603,10 @@ export default {
             notificationsAvailable = true;
           } catch { /* History failure must not disguise current monitor truth. */ }
         }
-        return json(200, { serverTime: new Date(now).toISOString(), monitors, notifications, notificationsAvailable }, headers);
+        let executors;
+        try { const executorStore = resolveExecutorStore(env); executors = auth.authType === "machine" ? {ready:false,ownerAction:"実行基盤の詳細はDashboardで確認してください"} : executorStore ? executorOverview(await executorStore.get(), now) : { initialized: false, ownerAction: "実行基盤を取得できません", ready: false }; }
+        catch { executors = { initialized: false, ownerAction: "実行基盤を取得できません", ready: false }; }
+        return json(200, { serverTime: new Date(now).toISOString(), monitors, notifications, notificationsAvailable, executors }, headers);
       } catch (error) {
         return json(error instanceof MonitorInputError ? error.status : 503,
           { error: error instanceof MonitorInputError ? error.message : "monitor_store_unavailable" }, headers);
@@ -9045,6 +9083,11 @@ async function handleCustomGptSetupImportArtifactRequest(url, env) {
 
 async function handlePasskeyOperatorPageRequest(request, env) {
   const url = new URL(request.url);
+  if (["failover", "failover-bootstrap", "executor-version"].includes(url.searchParams.get("mode"))) {
+    const auth = await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/overview" });
+    if (!auth.ok) return new Response("Dashboard 認証が必要です", { status: auth.status });
+    return new Response(renderExecutorOperatorPage(Object.fromEntries(url.searchParams)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+  }
   const syncApiBase = normalizeOptionalHttpUrl(url.searchParams.get("syncApiBase"));
   const syncEnabled = Boolean(syncApiBase);
   const requestedActionType = url.searchParams.get("actionType");
@@ -10149,6 +10192,13 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
 
 async function buildPasskeyApprovalScopeForRequest({ provider, payload }) {
   const highRiskKind = normalizeText(payload?.highRiskKind || payload?.policyInput?.highRiskKind);
+  if (highRiskKind === "executor_failover_version") {
+    try { return {ok:true,scope:executorVersionScope(payload)}; } catch {return {ok:false,issues:['invalid_version_scope']};}
+  }
+  if (["executor_failover", "executor_failover_bootstrap"].includes(highRiskKind)) {
+    try { return { ok: true, scope: executorApprovalScope(payload, highRiskKind === "executor_failover_bootstrap") }; }
+    catch { return { ok: false, issues: ["invalid_executor_scope"] }; }
+  }
   if (highRiskKind === "vps_runner_admin" || highRiskKind === "vps_admin") {
     return resolveVpsMaintenanceApprovalScopeForChallenge({ provider, payload });
   }

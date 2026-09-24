@@ -10,6 +10,37 @@ Historical note:
 - Issue `#6` remains useful as historical execution-transport context, not as a
   competing parent contract
 
+## 現行 executor 契約 — Issue #858
+
+Owner の明示承認により **Mac PRIMARY / VPS STANDBY / Butler authority** を採用する。
+iPhone/iPad の Dashboard Butler が主操作面、Mac が通常の実行基盤、VPS は
+emergency / break-glass と固定費内の recovery 用待機基盤である。
+active-active、自動 failover、自動 failback は禁止する。heartbeat 喪失は owner action
+だけを生成し、実行権を移さない。手動切替は現在の policy が指定する正の relatedIssue・from/to・generation に
+束縛した real passkey 承認を必要とする。切替 API は durable control state だけを更新し、
+merge/deploy/root/credential 権限やプロセス操作を含まない。
+
+VPS は Mac で app-server smoke 検証済みかつ owner 承認済みの exact Codex version だけに追従する。
+Mac の bundled Codex 自動更新は PRIMARY の健康性を壊さず、versionApprovalPending と
+未承認 candidate を表示する。承認済み版は standby sync の目標で、自動変更しない。
+latest の推測、npm 自動更新は禁止。初期化も専用 passkey を必要とし、初回 report
+から PRIMARY を推測しない。未初期化は Dashboard にそのまま表示する。
+古い generation の復帰ノードは実行可能と扱わない。
+
+transition は control-state 更新だけで activationPending=true。対象・旧新 generation・
+relatedIssue・10分の期限を束縛した receipt を、対象側 helper がサーバーと照合して private
+config に明示適用する。対象の新世代/receipt付き fresh heartbeat・running・smoke・承認済み版一致まで
+「切替準備中」と表示する。
+reporter はサーバー generation を自動取得・採用しない。共有 bearer のためノード本人性の
+暗号学的証明はなく、偶発的な旧世代プロセス対策である。adversarial split-brain 防止とは
+主張しない。receipt の期限切れからの再承認/recovery は未接続で、fail closed を維持する。
+
+この隔離実装は control-state と実行前 admission fence を接続した slice である。
+bridge の各turn/selector、VPS runner のqueue pickup/subprocess/GitHub write前にserverを照会する。
+未初期化もbootstrap_requiredで拒否する。live設定・配置、installerのprovider-bound実行契約、
+本番E2Eは未実施。進行中Codexの強制停止や認可と副作用の間の原子性は保証しない。
+ローカル検証だけで運用全体の single-writer 完了を主張しない。
+
 ## Purpose
 
 VTDD must be able to launch remote Codex CLI execution from Butler without
@@ -65,9 +96,9 @@ Codex Cloud comment delegation remains request-state until GitHub-visible
 runtime truth appears. Queued/requested/comment-only evidence is not
 implementation success.
 
-## Default Codex Cloud GitHub Comment Runner
+## Optional Codex Cloud GitHub Comment Runner
 
-The default no-extra-API-cost runner is:
+The optional no-extra-API-cost comment transport is:
 
 - Butler builds a bounded execution contract from Issue and GitHub runtime truth
 - VTDD posts that contract as a GitHub comment containing `@codex`
@@ -498,3 +529,105 @@ The bounded goal of this executor slice is:
 When using the optional API-backed runner, completion evidence must state that
 the run used the API-backed path. When using a no-extra-API-cost path,
 completion evidence must state the Codex surface used for execution.
+
+## Issue #858 のローカル実装と operator 引継ぎ
+
+- `GET /v2/executors/overview` は Dashboard 認証、`POST /v2/executors/report`
+  は machine bearer 認証。初回 Mac report は bounded bootstrapCandidate として保存するが
+  初期化しない。first report だけで PRIMARY は存在しない。
+- 初期化画面は同一 origin の
+  `/v2/approval/passkey/operator?mode=failover-bootstrap&executorFrom=vps&executorGeneration=0&issueNumber=<current-related-issue>`。
+  from=vps は初期割当の scope 識別子。画面は server candidate の版と smoke/時刻を表示し、
+  ファイル upload や JSON 入力を要求しない。exact version・relatedIssue・from/to・generation
+  を real passkey で承認する。候補の版が変わる/古くなる場合、初期化は再承認が必要。
+- 正常な PRIMARY が running なら owner action は不要。計画切替は **quiesce → report →
+  scope確認 → passkey → control transition → 対象lease適用 → heartbeat** の順。
+  quiesce は担当 runner の既存承認境界で新規仕事を止め、進行中の仕事を終えて clean/pushed
+  checkpoint と inactive/stopped report を生成する工程。ここで汎用 kill API は追加しない。
+  Butler からの計画 quiesce の自動 dispatch は未接続であり、この工程を完了済みと扱わない。
+- PRIMARY heartbeat が stale の緊急切替は owner の明示 passkey が必須。heartbeat 喪失だけ
+  で実プロセス停止を証明できないため、運用時には旧ノードの隔離/fencing 確認も必要。
+  transition は control-state 更新のみ。既存runnerの実行前admission fenceはコード接続済みだが、
+  進行中Codexの強制停止やlive配備済みの保証はない。
+- transition は generation を一回増やし activationPending=true にする。応答の bounded
+  leaseReceipt は対象ノードに私的に渡し、`apply-executor-lease.mjs --config <private-json>
+  --receipt <private-json>` で適用する。対象・旧世代・期限をローカル確認し、machine-auth
+  `/v2/executors/activation/verify` に完全一致を照会してから config を atomic overwrite。
+  reporter と同じ lock を取るため、適用前に reporter の正常終了が必要。
+- reporter は overview を読んで generation を更新しない。leaseReceiptId 付きの新世代
+  heartbeat/running/smoke/版一致が届くまで PRIMARY healthy とは表示しない。10分の activation
+  receipt 期限切れは再承認 recovery 未接続として停止する。自動 revert/failback はない。
+
+Reporter は `node scripts/report-executor-node.mjs --config <absolute-private-json> --once`。
+config は mode 0600 とし、executorId、generation、codexCommand、origin、lockPath を指定する。
+秘密値は config に入れず `VTDD_GATEWAY_BEARER_TOKEN` または既存 vault helper から取得。
+optional `VTDD_VAULT_MANIFEST_PATH` は private manifest を指定する。token は出力しない。
+outputPath は同じ directory の private temporary file と rename で継続的に原子更新する。
+既存 lock を PID の有無や時刻で削除しない。自分の inode の lock だけを終了時に解除する。
+
+checkpointPath は現在の仕事を担当する executor が書いた mode 0600 の bounded checkpoint。
+repository/branch/headSha/current issueNumber を含む。会話やコマンド本文を入れない。
+無指定/ファイル未生成時は repoPath/repository/baseRef の固定 git read を fallback とする。
+不正な checkpoint は fallback で隠さず失敗。現在の Issue が不明なら issueNumber=null。
+元の updatedAt を書き換えない。dirty/unpushed は切替を強く阻止する。
+
+`node scripts/smoke-executor-app-server.mjs --config <private-json>` は configured codexCommand
+で固定 `--version` と ephemeral `app-server` を shell=false で起動し、initialize と initialized
+だけを送る。thread/start/resume/turn は送らない。終了対象は自分が spawn した子プロセスだけ。
+結果は smokeEvidencePath に private atomic write。通常 Mac service の起動は不要。
+reporter はこの証拠を読み、版一致と120秒の鮮度を検証する。report/証拠の時計ずれは未来側
+120秒まで許容し、server receivedAt でも鮮度を制限する。配置/scheduling は live 未実施。
+
+`plan-codex-version-sync.mjs` は Mac/VPS report/control overview JSON から exact plan を生成。
+`sync-codex-exact-version.mjs --request <file> --check` は `packageName=@openai/codex` と
+exact semver、正の issueNumber を検証するだけ。`--apply` は必ず blocked。JSON verified:true
+は real grant の代替ではない。installer/rollback/sudo は実行しない。Macの候補版はhomeの「Macの検証済み版を承認」から明示的に承認する。
+`POST /v2/executors/version` は executor_failover_version / destructive のreal passkeyを
+Issue/current generation/from-to Mac/previous version/exact candidateへ束縛する。
+CASの再評価で現在のMac fresh smoke報告を照合し、approvedCodexVersionだけを変更する。
+package installやpromotion権限を含まない。
+
+### Mac PWA bridge activation の未接続境界
+
+実行基盤カードだけでは PWA → Mac Codex の疎通完了ではない。
+`run-dashboard-app-server-bridge.mjs` の既存起動契約は VTDD_RUNTIME_URL、
+VTDD_GATEWAY_BEARER_TOKEN（private environment、引数にsecretを書かない）、
+VTDD_DASHBOARD_THREAD_ID、VTDD_DASHBOARD_CODEX_CWD、
+VTDD_DASHBOARD_BRIDGE_HEARTBEAT_FILE（private absolute path）。Node の WebSocket 対応と
+承認した Codex binary が解決される PATH を確認する。新しい公開URL/個人パスを固定しない。
+bridge の既定 repo-sync preflight は git/network に触れるため、この隔離検証では実行しない。
+launchd の generic installer/plist、live executor config/lease運用設定、live起動、
+iPhone→Mac会話happy/failure E2E は **次の live activation gap / 未実装・未検証**。
+この coding turn では launchd/service/credential/runtime profile を変更しない。
+
+Synthetic home E2E は `node scripts/e2e-issue858-executor-home.mjs`。
+390×844 light/dark × 正常・staleで昇格可能・版不一致・dirty・activation pending・未初期化
+の12ケース。全 request を intercept し、本番・既存 browser profile に接続しない。
+成果物は `.local/issue-858/browser`。sandbox が Chromium 起動を拒否する環境では未検証と
+して引き継ぎ、制限を迂回しない。monitor/notification/shared navigation も同時に確認する。
+
+### Review #2 — 実行 admission fence
+
+共通 private reporter config を `VTDD_EXECUTOR_CONFIG_PATH`（絶対パス、0600）で
+bridge/runner に指定する。代替は明示的 `VTDD_EXECUTOR_ID` / `VTDD_EXECUTOR_GENERATION`。
+サーバーgenerationを読む・自動採用する経路はない。runtime側は各認可時にこのローカル
+configを読み直す。lease helperの明示更新後は対象だけが新世代になり、旧ノードは旧世代のまま。
+endpoint originはconfig.originまたはVTDD_RUNTIME_URL、transport tokenは既存環境から渡す。
+追加vault読取やcredentials変更はこのfenceにはない。
+
+`POST /v2/executors/authorize` は machine-auth、入力は executorId/generation/purpose
+(dashboard_turn / vps_queue / vps_work) のみ。返却は allowed/reason のみで世代を配布しない。
+control state未初期化はbootstrap_requiredで拒否。初回reportとowner passkey初期化を先に行う。
+通信失敗・設定不足・非PRIMARY・旧世代・activationPending・unhealthyも拒否する。
+共有gateway tokenだけのoverview読取は拒否し、home aggregateでもexecutor詳細を返さない。
+
+bridgeは認可済み起動時のみrepo sync/app-server initializeを行い、未承認時はidle transport
+を維持する。各owner turnのselector（Codex起動を含む）前とhandler前、model fallback前にも
+再認可する。拒否はowner-facing executor_fenced。VPS runnerはpreflight/queue claimより前、
+仕事dispatch、subprocess、GitHub write前に再認可する。standbyでは仕事を開始しない。
+
+これはチェック時点のadmission fenceであって、進行中turn/subprocessのremote killや
+全副作用をserver generationと一つのtransactionにする機構ではない。直前認可後の切替競合、
+ローカルで直接起動した別経路、shared bearerによるID偽装は別の境界。planned切替はまず
+PRIMARY quiesceとclean/pushed checkpointを必要とし、runningをreadyとは表示しない。
+smoke/report/leaseがコード上存在しても、live Mac/VPSサービス接続・本番PWAの成功は未主張。

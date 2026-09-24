@@ -10990,7 +10990,7 @@ var require_formats = __commonJS({
     }
     var TIME2 = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
     function getTime(strictTimeZone) {
-      return function time3(str) {
+      return function time4(str) {
         const matches = TIME2.exec(str);
         if (!matches)
           return false;
@@ -11036,10 +11036,10 @@ var require_formats = __commonJS({
     }
     var DATE_TIME_SEPARATOR = /t|\s/i;
     function getDateTime(strictTimeZone) {
-      const time3 = getTime(strictTimeZone);
+      const time4 = getTime(strictTimeZone);
       return function date_time(str) {
         const dateTime = str.split(DATE_TIME_SEPARATOR);
-        return dateTime.length === 2 && date3(dateTime[0]) && time3(dateTime[1]);
+        return dateTime.length === 2 && date3(dateTime[0]) && time4(dateTime[1]);
       };
     }
     function compareDateTime(dt1, dt2) {
@@ -11210,6 +11210,235 @@ var require_dist = __commonJS({
   }
 });
 
+// src/core/executor-failover-state.js
+var ExecutorInputError = class extends Error {
+  constructor(message, status = 422) {
+    super(message);
+    this.status = status;
+  }
+};
+var fail = (message, status) => {
+  throw new ExecutorInputError(message, status);
+};
+var exactVersion = (value) => typeof value === "string" && value.length <= 80 && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/.test(value);
+var nodeId = (v) => ["mac", "vps"].includes(v);
+var integer = (v) => Number.isSafeInteger(v) && v >= 1;
+var time = (v) => typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(v) && Number.isFinite(Date.parse(v));
+var safeText = (v) => typeof v === "string" && v.length > 0 && v.length <= 120 && /^[A-Za-z0-9][A-Za-z0-9_.\/-]*$/.test(v) && !/(?:\.\.|\/\/|token|secret|password|credential|bearer|ghp_|github_pat_|sk-)/i.test(v);
+function strictObject(v, keys) {
+  if (!v || typeof v !== "object" || Array.isArray(v) || Object.keys(v).some((k) => !keys.includes(k))) fail("unexpected_fields");
+  if (new TextEncoder().encode(JSON.stringify(v)).length > 16384) fail("payload_too_large", 413);
+}
+function validateCheckpoint(v) {
+  strictObject(v, ["repository", "issueNumber", "pullNumber", "branch", "baseRef", "headSha", "dirty", "unpushed", "lastSuccessfulAction", "nextSafeAction", "generation", "updatedAt"]);
+  if (!safeText(v.repository) || !/^[\w.-]+\/[\w.-]+$/.test(v.repository) || !safeText(v.branch) || !safeText(v.baseRef) || !/^[a-f0-9]{40,64}$/.test(v.headSha) || typeof v.dirty !== "boolean" || typeof v.unpushed !== "boolean" || !integer(v.generation) || !time(v.updatedAt)) fail("invalid_checkpoint");
+  for (const k of ["issueNumber", "pullNumber"]) if (v[k] != null && !integer(v[k])) fail("invalid_checkpoint");
+  for (const k of ["lastSuccessfulAction", "nextSafeAction"]) if (!safeText(v[k]) || v[k].includes("/")) fail("invalid_checkpoint_action");
+  return structuredClone(v);
+}
+function validateNodeReport(v) {
+  strictObject(v, ["executorId", "generation", "observedAt", "heartbeatAt", "codexVersion", "appServerSmokeOk", "serviceState", "checkpoint", "leaseReceiptId"]);
+  if (!nodeId(v.executorId) || !integer(v.generation) || !time(v.observedAt) || !time(v.heartbeatAt) || !exactVersion(v.codexVersion) || typeof v.appServerSmokeOk !== "boolean" || !["running", "standby", "inactive", "stopped", "unknown"].includes(v.serviceState)) fail("invalid_node_report");
+  if (v.leaseReceiptId !== void 0 && !/^[a-f0-9-]{36}$/.test(v.leaseReceiptId)) fail("invalid_lease_receipt_id");
+  if (v.checkpoint !== void 0) validateCheckpoint(v.checkpoint);
+  return structuredClone(v);
+}
+function validateControlState(s) {
+  strictObject(s, ["primaryExecutor", "standbyExecutor", "generation", "approvedCodexVersion", "lastTransitionAt", "transitionReason", "nodes", "checkpoint", "activationPending", "activationReceipt", "relatedIssue"]);
+  if (!nodeId(s.primaryExecutor) || !nodeId(s.standbyExecutor) || s.primaryExecutor === s.standbyExecutor || !integer(s.generation) || !exactVersion(s.approvedCodexVersion) || !time(s.lastTransitionAt) || !safeText(s.transitionReason)) fail("invalid_control_state");
+  if (s.activationPending !== void 0 && typeof s.activationPending !== "boolean") fail("invalid_activation");
+  if (s.relatedIssue != null && !integer(s.relatedIssue)) fail("invalid_related_issue");
+  if (s.activationReceipt) validateLeaseReceipt(s.activationReceipt);
+  strictObject(s.nodes, ["mac", "vps"]);
+  for (const [id, report] of Object.entries(s.nodes)) {
+    const { receivedAt, ...raw } = report;
+    validateNodeReport(raw);
+    if (raw.executorId !== id || !time(receivedAt)) fail("invalid_stored_report");
+  }
+  if (s.checkpoint) validateCheckpoint(s.checkpoint);
+  return structuredClone(s);
+}
+var age = (v, now) => Number.isFinite(Date.parse(v)) ? now - Date.parse(v) : Infinity;
+var fresh = (v, now, limit) => age(v, now) >= -12e4 && age(v, now) <= limit;
+function executorOverview(s, now = Date.now()) {
+  if (!s) return { initialized: false, ownerAction: "\u5B9F\u884C\u57FA\u76E4\u306F\u672A\u521D\u671F\u5316", nodes: {}, blockers: ["\u672A\u521D\u671F\u5316"], ready: false };
+  const nodes = {};
+  for (const id of ["mac", "vps"]) {
+    const r = s.nodes[id];
+    const limit = id === "mac" ? 12e4 : 3e5;
+    nodes[id] = {
+      ...r,
+      role: s.primaryExecutor === id ? "PRIMARY" : "STANDBY",
+      heartbeatAgeSeconds: r ? Math.max(0, Math.floor(age(r.heartbeatAt, now) / 1e3)) : null,
+      versionMatch: r?.codexVersion === s.approvedCodexVersion,
+      healthy: !!r && fresh(r.heartbeatAt, now, limit) && fresh(r.receivedAt, now, limit) && fresh(r.observedAt, now, limit) && r.generation === s.generation && r.appServerSmokeOk && (id === "mac" && s.primaryExecutor === "mac" || r.codexVersion === s.approvedCodexVersion) && !(s.activationPending && id === s.primaryExecutor)
+    };
+  }
+  const versionApprovalPending = !!nodes.mac.healthy && nodes.mac.codexVersion !== s.approvedCodexVersion;
+  const versionCandidate = versionApprovalPending ? nodes.mac.codexVersion : null;
+  const target = nodes[s.standbyExecutor], blockers = [];
+  if (s.activationPending) blockers.push("\u5207\u66FF\u6E96\u5099\u4E2D / activation pending");
+  if (versionApprovalPending) blockers.push("Mac\u306E\u65B0\u3057\u3044\u7248\u306F\u627F\u8A8D\u5F85\u3061");
+  if (!target.receivedAt || !fresh(target.heartbeatAt, now, s.standbyExecutor === "mac" ? 12e4 : 3e5) || !fresh(target.receivedAt, now, 3e5) || !fresh(target.observedAt, now, 3e5)) blockers.push("\u5F85\u6A5F\u5074\u306E\u5831\u544A\u304C\u53E4\u3044\u30FB\u672A\u78BA\u8A8D");
+  if (!target.versionMatch) blockers.push("Codex\u7248\u304C\u4E0D\u4E00\u81F4");
+  if (!target.appServerSmokeOk) blockers.push("app-server\u78BA\u8A8D\u5931\u6557");
+  if (target.generation !== s.generation) blockers.push("\u5F85\u6A5F\u5074\u306E\u4E16\u4EE3\u304C\u4E0D\u4E00\u81F4");
+  if (!["standby", "inactive", "stopped"].includes(target.serviceState)) blockers.push("\u5F85\u6A5F\u5074\u306E\u5B9F\u884C\u7AF6\u5408");
+  if (target.checkpoint?.dirty) blockers.push("\u5F85\u6A5F\u5074\u306B\u672A\u30B3\u30DF\u30C3\u30C8\u306E\u5909\u66F4\u3042\u308A");
+  if (target.checkpoint?.unpushed) blockers.push("\u5F85\u6A5F\u5074\u306B\u672Apush\u306E\u5909\u66F4\u3042\u308A");
+  const cp = s.checkpoint;
+  if (!cp || !fresh(cp.updatedAt, now, 6e5)) blockers.push("checkpoint\u304C\u53E4\u3044\u30FB\u672A\u78BA\u8A8D");
+  if (cp?.dirty) blockers.push("\u672A\u30B3\u30DF\u30C3\u30C8\u306E\u5909\u66F4\u3042\u308A");
+  if (cp?.unpushed) blockers.push("\u672Apush\u306E\u5909\u66F4\u3042\u308A");
+  if (cp?.generation !== s.generation) blockers.push("checkpoint\u306E\u4E16\u4EE3\u304C\u4E0D\u4E00\u81F4");
+  if (fresh(nodes[s.primaryExecutor].heartbeatAt, now, s.primaryExecutor === "mac" ? 12e4 : 3e5) && nodes[s.primaryExecutor].serviceState === "running") blockers.push("PRIMARY\u304C\u5B9F\u884C\u4E2D");
+  if (fresh(nodes[s.primaryExecutor].heartbeatAt, now, s.primaryExecutor === "mac" ? 12e4 : 3e5) && !["running", "standby", "inactive", "stopped"].includes(nodes[s.primaryExecutor].serviceState)) blockers.push("PRIMARY\u306E\u505C\u6B62\u78BA\u8A8D\u304C\u5FC5\u8981");
+  const ready = blockers.length === 0;
+  const macHealthy = nodes.mac.healthy;
+  const relatedIssue = s.relatedIssue ?? s.checkpoint?.issueNumber;
+  return { ...structuredClone(s), initialized: true, activationPending: !!s.activationPending, versionApprovalPending, versionCandidate, versionActionURL: versionApprovalPending && integer(relatedIssue) ? "/v2/approval/passkey/operator?mode=executor-version&executorFrom=mac&executorGeneration=" + s.generation + "&issueNumber=" + relatedIssue + "&approvedCodexVersion=" + encodeURIComponent(versionCandidate) + "&previousCodexVersion=" + encodeURIComponent(s.approvedCodexVersion) : null, fencingBoundary: "accidental_stale_process_only_shared_bearer", nodes, blockers, ready, standbyReady: !versionApprovalPending && target.healthy && ["standby", "inactive", "stopped"].includes(target.serviceState), checkpointFresh: !!cp && fresh(cp.updatedAt, now, 6e5), ownerAction: s.activationPending ? "\u5207\u66FF\u6E96\u5099\u4E2D / activation pending \xB7 \u5BFE\u8C61\u306Elease\u9069\u7528\u3068heartbeat\u3092\u5F85\u3063\u3066\u3044\u307E\u3059" : !macHealthy ? ready ? "Mac\u672A\u78BA\u8A8D \xB7 \u624B\u52D5\u5207\u66FF\u3092\u627F\u8A8D\u3067\u304D\u307E\u3059" : "Mac\u672A\u78BA\u8A8D \xB7 " + blockers.join("\u3001") : ready ? "\u624B\u52D5\u5207\u66FF\u3092\u627F\u8A8D\u3067\u304D\u307E\u3059" : blockers.length === 1 && blockers[0] === "PRIMARY\u304C\u5B9F\u884C\u4E2D" ? "\u901A\u5E38\u7A3C\u50CD\u4E2D\u3067\u3059\u3002\u8A08\u753B\u5207\u66FF\u306B\u306FPRIMARY\u3092quiesce\uFF08\u4ED5\u4E8B\u3092\u6B62\u3081\u3066\u505C\u6B62\u78BA\u8A8D\uFF09\u3057\u3066\u304F\u3060\u3055\u3044" : blockers.join("\u3001"), actionURL: ready && integer(relatedIssue) ? "/v2/approval/passkey/operator?mode=failover&executorFrom=" + s.primaryExecutor + "&executorTo=" + s.standbyExecutor + "&executorGeneration=" + s.generation + "&issueNumber=" + relatedIssue : null };
+}
+function executorMayWrite(state, executorId, generation, now = Date.now()) {
+  return !!state && state.primaryExecutor === executorId && state.generation === generation && executorOverview(state, now).nodes[executorId]?.healthy === true;
+}
+function authorizeExecutor(state, input, now = Date.now()) {
+  strictObject(input, ["executorId", "generation", "purpose"]);
+  if (!nodeId(input.executorId) || !integer(input.generation) || !["dashboard_turn", "vps_queue", "vps_work"].includes(input.purpose)) fail("invalid_executor_authorization");
+  if (!state) return { allowed: false, reason: "bootstrap_required" };
+  return executorMayWrite(state, input.executorId, input.generation, now) ? { allowed: true, reason: "authorized" } : { allowed: false, reason: "executor_blocked" };
+}
+function executorVersionScope(p) {
+  if (!integer(p.issueNumber) || !integer(p.expectedGeneration) || p.targetConfirmed !== true || p.executorFrom !== "mac" || p.executorTo !== "mac" || !exactVersion(p.approvedCodexVersion) || !exactVersion(p.previousCodexVersion)) fail("invalid_version_scope");
+  return { actionType: "destructive", highRiskKind: "executor_failover_version", issueNumber: String(p.issueNumber), executorFrom: "mac", executorTo: "mac", executorGeneration: String(p.expectedGeneration), executorCodexVersion: p.approvedCodexVersion, executorPreviousCodexVersion: p.previousCodexVersion };
+}
+function approveExecutorVersion(s, p, now = Date.now()) {
+  executorVersionScope(p);
+  if (!s || s.generation !== p.expectedGeneration || s.approvedCodexVersion !== p.previousCodexVersion || s.activationPending) fail("version_generation_conflict", 409);
+  const mac2 = s.nodes.mac;
+  if (!mac2 || mac2.generation !== s.generation || mac2.codexVersion !== p.approvedCodexVersion || !mac2.appServerSmokeOk || !fresh(mac2.receivedAt, now, 12e4) || !fresh(mac2.observedAt, now, 12e4) || !fresh(mac2.heartbeatAt, now, 12e4)) fail("fresh_mac_candidate_required", 409);
+  return validateControlState({ ...s, approvedCodexVersion: p.approvedCodexVersion });
+}
+function applyNodeReport(s, input, now = Date.now()) {
+  if (!s) fail("executor_not_initialized", 409);
+  const r = validateNodeReport(input), receivedAt = new Date(now).toISOString();
+  if (age(r.heartbeatAt, now) < -12e4 || age(r.observedAt, now) < -12e4 || r.checkpoint && age(r.checkpoint.updatedAt, now) < -12e4) fail("future_report");
+  const previous = s.nodes[r.executorId];
+  if (previous && (Date.parse(r.observedAt) <= Date.parse(previous.observedAt) || r.generation < previous.generation)) fail("out_of_order_report", 409);
+  const next = { ...s, nodes: { ...s.nodes, [r.executorId]: { ...r, receivedAt } } };
+  if (s.activationPending && r.executorId === s.primaryExecutor && r.generation === s.generation && r.leaseReceiptId === s.activationReceipt?.receiptId && Date.parse(s.activationReceipt.expiresAt) > now && fresh(r.observedAt, now, 12e4) && fresh(r.heartbeatAt, now, 12e4) && r.serviceState === "running" && r.appServerSmokeOk && r.codexVersion === s.approvedCodexVersion) next.activationPending = false;
+  if (r.executorId === s.primaryExecutor && r.generation === s.generation && r.checkpoint) next.checkpoint = r.checkpoint;
+  return validateControlState(next);
+}
+function bootstrapControl(input, now = Date.now()) {
+  strictObject(input, ["primaryExecutor", "standbyExecutor", "approvedCodexVersion", "macReport", "relatedIssue"]);
+  const r = validateNodeReport(input.macReport);
+  if (input.primaryExecutor !== "mac" || input.standbyExecutor !== "vps" || r.executorId !== "mac" || r.generation !== 1 || !r.appServerSmokeOk || r.codexVersion !== input.approvedCodexVersion || !fresh(r.heartbeatAt, now, 12e4) || !fresh(r.observedAt, now, 12e4)) fail("bootstrap_requires_validated_mac");
+  return applyNodeReport({ primaryExecutor: "mac", standbyExecutor: "vps", generation: 1, approvedCodexVersion: r.codexVersion, lastTransitionAt: new Date(now).toISOString(), transitionReason: "owner_bootstrap", activationPending: false, relatedIssue: input.relatedIssue ?? r.checkpoint?.issueNumber ?? null, nodes: {}, checkpoint: null }, r, now);
+}
+function transitionControl(s, input, now = Date.now(), receiptId = globalThis.crypto.randomUUID()) {
+  if (!s || input.expectedGeneration !== s.generation || input.executorFrom !== s.primaryExecutor || input.executorTo !== s.standbyExecutor) fail("generation_conflict", 409);
+  const view = executorOverview(s, now);
+  if (!view.ready) fail("transition_blocked: " + view.blockers.join(", "), 409);
+  if (!safeText(input.reason) || input.reason.includes("/")) fail("invalid_reason");
+  return validateControlState({ ...s, primaryExecutor: s.standbyExecutor, standbyExecutor: s.primaryExecutor, generation: s.generation + 1, lastTransitionAt: new Date(now).toISOString(), transitionReason: input.reason, relatedIssue: input.issueNumber ?? s.relatedIssue, activationPending: true, activationReceipt: validateLeaseReceipt({ receiptId, executorFrom: s.primaryExecutor, executorTo: s.standbyExecutor, previousGeneration: s.generation, generation: s.generation + 1, relatedIssue: input.issueNumber ?? s.relatedIssue, issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 6e5).toISOString() }) });
+}
+function executorApprovalScope(p, bootstrap = false) {
+  if (!integer(p.issueNumber) || p.targetConfirmed !== true || !nodeId(p.executorFrom) || !nodeId(p.executorTo) || p.executorFrom === p.executorTo || !(bootstrap ? p.expectedGeneration === 0 : integer(p.expectedGeneration))) fail("invalid_transition_scope");
+  if (bootstrap && (p.executorFrom !== "vps" || p.executorTo !== "mac" || !exactVersion(p.approvedCodexVersion))) fail("invalid_bootstrap_scope");
+  return { actionType: "destructive", highRiskKind: bootstrap ? "executor_failover_bootstrap" : "executor_failover", issueNumber: String(p.issueNumber), executorFrom: p.executorFrom, executorTo: p.executorTo, executorGeneration: String(p.expectedGeneration), ...bootstrap ? { executorCodexVersion: p.approvedCodexVersion } : {} };
+}
+async function readExecutorBody(request) {
+  const reader = request.body?.getReader();
+  if (!reader) fail("missing_body");
+  let size = 0, chunks = [];
+  for (; ; ) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > 16384) {
+      await reader.cancel();
+      fail("payload_too_large", 413);
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let offset = 0;
+  for (const c of chunks) {
+    all.set(c, offset);
+    offset += c.length;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(all));
+  } catch {
+    fail("invalid_json");
+  }
+}
+function validateLeaseReceipt(r) {
+  strictObject(r, ["receiptId", "executorFrom", "executorTo", "previousGeneration", "generation", "relatedIssue", "issuedAt", "expiresAt"]);
+  if (!/^[a-f0-9-]{36}$/.test(r.receiptId) || !nodeId(r.executorFrom) || !nodeId(r.executorTo) || r.executorFrom === r.executorTo || !integer(r.previousGeneration) || r.generation !== r.previousGeneration + 1 || !integer(r.relatedIssue) || !time(r.issuedAt) || !time(r.expiresAt) || Date.parse(r.expiresAt) - Date.parse(r.issuedAt) !== 6e5) fail("invalid_lease_receipt");
+  return structuredClone(r);
+}
+function verifyLeaseReceipt(state, receipt, now = Date.now()) {
+  validateLeaseReceipt(receipt);
+  const expected = state?.activationReceipt;
+  if (!state?.activationPending || !expected || Object.keys(receipt).some((k) => receipt[k] !== expected[k]) || now < Date.parse(receipt.issuedAt) - 12e4 || now >= Date.parse(receipt.expiresAt)) fail("lease_receipt_mismatch_or_expired", 409);
+  return { valid: true, receipt: structuredClone(expected) };
+}
+function reduceEnvelope(envelope, kind, p, now) {
+  const { control: s, candidate } = envelope;
+  if (kind === "report" && !s) {
+    const r = validateNodeReport(p);
+    if (r.executorId !== "mac" || !fresh(r.observedAt, now, 12e4) || !fresh(r.heartbeatAt, now, 12e4)) fail("bootstrap_candidate_requires_fresh_mac");
+    if (candidate && Date.parse(r.observedAt) <= Date.parse(candidate.observedAt)) fail("out_of_order_report", 409);
+    return { control: null, candidate: { ...r, receivedAt: new Date(now).toISOString() } };
+  }
+  if (kind === "bootstrap" && s) fail("already_initialized", 409);
+  let input = p;
+  if (kind === "bootstrap" && !p.macReport) {
+    if (!candidate || !fresh(candidate.receivedAt, now, 12e4)) fail("bootstrap_candidate_unavailable", 409);
+    const { receivedAt, ...macReport } = candidate;
+    input = { ...p, macReport };
+  }
+  const control = kind === "bootstrap" ? bootstrapControl(input, now) : kind === "report" ? applyNodeReport(s, p, now) : kind === "version" ? approveExecutorVersion(s, p, now) : transitionControl(s, p, now);
+  return { control, candidate: null };
+}
+function createD1ExecutorStore(db) {
+  let schema;
+  const ready = () => schema ??= db.prepare("CREATE TABLE IF NOT EXISTS vtdd_executor_control (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, payload TEXT NOT NULL)").run();
+  const read = async () => {
+    await ready();
+    return db.prepare("SELECT revision,payload FROM vtdd_executor_control WHERE id=1").first();
+  };
+  const decode3 = (row) => {
+    const p = row ? JSON.parse(row.payload) : null;
+    const e = p?.primaryExecutor ? { control: p, candidate: null } : p ?? { control: null, candidate: null };
+    if (e.control) validateControlState(e.control);
+    return e;
+  };
+  async function mutate(kind, p, now = Date.now()) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const row = await read();
+      const next = reduceEnvelope(decode3(row), kind, p, now);
+      const result = row ? await db.prepare("UPDATE vtdd_executor_control SET revision=revision+1,payload=? WHERE id=1 AND revision=?").bind(JSON.stringify(next), row.revision).run() : await db.prepare("INSERT OR IGNORE INTO vtdd_executor_control (id,revision,payload) VALUES (1,1,?)").bind(JSON.stringify(next)).run();
+      if (result.meta?.changes === 1) return next.control;
+    }
+    fail("generation_conflict", 409);
+  }
+  return { async get() {
+    return decode3(await read()).control;
+  }, async getCandidate() {
+    return decode3(await read()).candidate;
+  }, bootstrap: (p, n) => mutate("bootstrap", p, n), report: (p, n) => mutate("report", p, n), approveVersion: (p, n) => mutate("version", p, n), transition: (p, n) => mutate("transition", p, n) };
+}
+var stores = /* @__PURE__ */ new WeakMap();
+function resolveExecutorStore(env) {
+  if (env.EXECUTOR_STORE) return env.EXECUTOR_STORE;
+  const db = env.VTDD_MEMORY_D1 ?? env.MEMORY_D1;
+  if (!db?.prepare) return null;
+  if (!stores.has(db)) stores.set(db, createD1ExecutorStore(db));
+  return stores.get(db);
+}
+
 // src/core/butler-ui-client.generated.js
 var butlerUiClientScript = '(() => {\n  // src/core/butler-ui-client.js\n  var menu = document.querySelector("[data-butler-menu]");\n  var summary = menu?.querySelector("summary");\n  function closeMenu(restoreFocus = false) {\n    if (!menu?.open) return;\n    menu.open = false;\n    if (restoreFocus) summary.focus({ preventScroll: true });\n  }\n  document.addEventListener("keydown", (event) => {\n    if (event.key === "Escape" && menu?.open) {\n      event.preventDefault();\n      closeMenu(true);\n    }\n  });\n  document.addEventListener("pointerdown", (event) => {\n    if (menu?.open && !menu.contains(event.target)) closeMenu(menu.contains(document.activeElement));\n  });\n  menu?.addEventListener("focusout", (event) => {\n    if (event.relatedTarget) {\n      if (!menu.contains(event.relatedTarget)) closeMenu();\n      return;\n    }\n    setTimeout(() => {\n      if (!menu.contains(document.activeElement)) closeMenu();\n    }, 0);\n  });\n  function resizeViewport() {\n    const viewport = window.visualViewport;\n    const height = viewport?.height || window.innerHeight;\n    const top = viewport?.offsetTop || 0;\n    const style = document.documentElement.style;\n    style.setProperty("--butler-viewport-height", `${height}px`);\n    style.setProperty("--butler-viewport-top", `${top}px`);\n    const header = document.querySelector("[data-butler-header]");\n    const headerHeight = header?.getBoundingClientRect().height || 64;\n    const nav = document.querySelector("[data-butler-primary-nav]");\n    const navHeight = nav?.getBoundingClientRect().height || 65;\n    style.setProperty("--butler-header-reserve", `${headerHeight}px`);\n    if (document.body.dataset.butlerShell === "chat") {\n      document.body.dataset.butlerCompact = height - headerHeight - navHeight < 230 ? "true" : "false";\n    }\n    if (menu?.open) {\n      const menuTop = summary.getBoundingClientRect().bottom + 8;\n      const available = top + height - navHeight - menuTop - 8;\n      style.setProperty("--butler-menu-max-height", `${Math.max(0, available)}px`);\n    }\n  }\n  menu?.addEventListener("toggle", resizeViewport);\n  window.visualViewport?.addEventListener("resize", resizeViewport);\n  window.visualViewport?.addEventListener("scroll", resizeViewport);\n  window.addEventListener("resize", resizeViewport);\n  resizeViewport();\n})();\n';
 
@@ -11296,6 +11525,96 @@ function renderButlerDocument(document2, { active = "", layout = "page", pagePat
   return themed.replace("<body>", `<body data-butler-shell="${safeLayout}">${renderButlerHeader(pagePath)}`).replace("</body>", `${renderButlerPrimaryNav(active)}<script data-butler-client>${butlerUiClientScript}<\/script></body>`);
 }
 
+// src/core/passkey-browser-authentication.js
+var passkeyAuthenticationScript = `
+      function decodeAuthenticationOptions(options) {
+        return {
+          ...options,
+          challenge: base64UrlToBuffer(options.challenge),
+          allowCredentials: Array.isArray(options.allowCredentials)
+            ? options.allowCredentials.map((item) => ({
+                ...item,
+                id: base64UrlToBuffer(item.id)
+              }))
+            : []
+        };
+      }
+
+      function encodeAuthenticationAssertion(assertion) {
+        return {
+          id: assertion.id,
+          rawId: bufferToBase64Url(assertion.rawId),
+          type: assertion.type,
+          response: {
+            authenticatorData: bufferToBase64Url(assertion.response.authenticatorData),
+            clientDataJSON: bufferToBase64Url(assertion.response.clientDataJSON),
+            signature: bufferToBase64Url(assertion.response.signature),
+            userHandle: assertion.response.userHandle
+              ? bufferToBase64Url(assertion.response.userHandle)
+              : null
+          }
+        };
+      }
+
+      function base64UrlToBuffer(value) {
+        const base64 = String(value)
+          .replace(/-/g, "+")
+          .replace(/_/g, "/")
+          .padEnd(Math.ceil(String(value).length / 4) * 4, "=");
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        return bytes;
+      }
+
+      function bufferToBase64Url(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let text = "";
+        for (const byte of bytes) {
+          text += String.fromCharCode(byte);
+        }
+        return btoa(text).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+      }
+`;
+
+// src/core/executor-operator-page.js
+function renderExecutorOperatorPage(params = {}) {
+  const versionMode = params.mode === "executor-version";
+  const approvedCodexVersion = exactVersion(params.approvedCodexVersion) ? params.approvedCodexVersion : "";
+  const previousCodexVersion = exactVersion(params.previousCodexVersion) ? params.previousCodexVersion : "";
+  const bootstrap = params.mode === "failover-bootstrap";
+  const from = ["mac", "vps"].includes(params.executorFrom) ? params.executorFrom : "vps";
+  const to = versionMode ? "mac" : from === "mac" ? "vps" : "mac";
+  const generation = /^\d{1,10}$/.test(params.executorGeneration || "") ? Number(params.executorGeneration) : 0;
+  const issueNumber = /^[1-9]\d{0,9}$/.test(params.issueNumber || "") ? Number(params.issueNumber) : null;
+  const data = JSON.stringify({ bootstrap, versionMode, approvedCodexVersion, previousCodexVersion, from, to, generation, issueNumber });
+  return renderButlerDocument(`<!doctype html><html lang="ja"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>\u5B9F\u884C\u57FA\u76E4\u306E\u627F\u8A8D</title></head><body><main><h1>\u5B9F\u884C\u57FA\u76E4\u306E${versionMode ? "Codex exact version \u627F\u8A8D" : bootstrap ? "\u521D\u671F\u5316" : "\u624B\u52D5\u5207\u66FF"}</h1><p>Issue #${issueNumber ?? "\u672A\u6307\u5B9A"} \xB7 ${bootstrap ? "\u672A\u521D\u671F\u5316 \u2192 MAC PRIMARY" : from.toUpperCase() + " \u2192 " + to.toUpperCase()} \xB7 generation ${generation}</p>${versionMode ? "<p>\u627F\u8A8D\u6E08\u307F\u7248\u3060\u3051\u3092 " + previousCodexVersion + " \u2192 " + approvedCodexVersion + " \u306B\u5909\u66F4\u3057\u307E\u3059\u3002package install\u3084\u5B9F\u884C\u57FA\u76E4\u5207\u66FF\u306F\u884C\u3044\u307E\u305B\u3093\u3002</p>" : "<p>Butler \u306E control-state \u3060\u3051\u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u5BFE\u8C61\u30CE\u30FC\u30C9\u306E lease \u9069\u7528\u307E\u3067\u5207\u66FF\u6E96\u5099\u4E2D\u3067\u3059\u3002</p>"}${bootstrap ? '<p id="candidate">Mac \u306E\u5831\u544A\u5019\u88DC\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p>' : ""}<button id="approve" ${bootstrap || !issueNumber ? "disabled" : ""}>\u30D1\u30B9\u30AD\u30FC\u3067\u627F\u8A8D\u3057\u3066\u6E96\u5099</button><p id="status" role="status"></p><a href="/dashboard">\u30DB\u30FC\u30E0\u3078</a></main><script>
+${passkeyAuthenticationScript}
+const config=${data}; let candidate;
+const status=document.getElementById('status'), button=document.getElementById('approve');
+if(config.bootstrap) (async()=>{try{
+ const response=await fetch('/v2/executors/overview',{credentials:'same-origin',cache:'no-store'});if(!response.ok)throw Error('\u5019\u88DC\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093');
+ const data=await response.json();candidate=data.bootstrapCandidate;
+ if(data.initialized || !candidate?.appServerSmokeOk || candidate.generation !== 1 || !candidate.receivedAt || Date.now()-Date.parse(candidate.observedAt)>120000 || Date.now()-Date.parse(candidate.observedAt)<-120000 || Date.now()-Date.parse(candidate.receivedAt)>120000)throw Error('\u65B0\u9BAE\u306AMac\u691C\u8A3C\u5831\u544A\u304C\u5FC5\u8981\u3067\u3059');
+ document.getElementById('candidate').textContent='Mac Codex '+candidate.codexVersion+' \xB7 smoke\u78BA\u8A8D\u6E08\u307F \xB7 \u5831\u544A '+candidate.observedAt;
+ button.disabled=!config.issueNumber;
+}catch(e){status.textContent=e.message;}})();
+async function post(path, body){const r=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw Error(v.error||'\u627F\u8A8D\u306B\u5931\u6557\u3057\u307E\u3057\u305F');return v;}
+button.onclick=async()=>{button.disabled=true;try{
+ const body={expectedGeneration:config.generation,executorFrom:config.from,executorTo:config.to,issueNumber:config.issueNumber,targetConfirmed:true,reason:'owner_manual_transition',...(config.bootstrap?{approvedCodexVersion:candidate.codexVersion}:config.versionMode?{approvedCodexVersion:config.approvedCodexVersion,previousCodexVersion:config.previousCodexVersion}:{})};
+ const kind=config.versionMode?'executor_failover_version':config.bootstrap?'executor_failover_bootstrap':'executor_failover';
+ const c=await post('/v2/approval/passkey/challenge',{...body,highRiskKind:kind,policyInput:{actionType:'destructive',highRiskKind:kind}});
+ const assertion=await navigator.credentials.get({publicKey:decodeAuthenticationOptions(c.optionsJSON)});
+ const verified=await post('/v2/approval/passkey/verify',{sessionId:c.sessionId,response:encodeAuthenticationAssertion(assertion)});
+ const outcome=await post('/v2/executors/'+(config.versionMode?'version':config.bootstrap?'bootstrap':'transition'),{...body,approvalGrantId:verified.approvalGrant?.approvalId||verified.approvalGrantId});
+ if(outcome.leaseReceipt){const a=document.createElement('a');a.textContent='\u5BFE\u8C61\u30CE\u30FC\u30C9\u7528lease receipt\u3092\u4FDD\u5B58';a.download='executor-lease-receipt.json';a.href=URL.createObjectURL(new Blob([JSON.stringify(outcome.leaseReceipt)],{type:'application/json'}));status.after(a);}
+ status.textContent=config.versionMode?'\u627F\u8A8D\u6E08\u307FCodex\u7248\u3060\u3051\u3092\u66F4\u65B0\u3057\u307E\u3057\u305F\u3002VPS package\u66F4\u65B0\u306F\u5225\u306E\u627F\u8A8D\u7D4C\u8DEF\u304C\u5FC5\u8981\u3067\u3059\u3002':config.bootstrap?'\u5B9F\u884C\u57FA\u76E4\u306E\u521D\u671F\u72B6\u614B\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002runner \u63A5\u7D9A\u306F\u5225\u9014\u78BA\u8A8D\u304C\u5FC5\u8981\u3067\u3059\u3002':'\u5207\u66FF\u6E96\u5099\u4E2D / activation pending\u3002\u5BFE\u8C61\u306Elease\u9069\u7528\u3068heartbeat\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002';
+}catch(e){status.textContent=String(e.message);}finally{button.disabled=false;}};
+<\/script></body></html>`, { active: "home", layout: "home" });
+}
+
 // src/core/dashboard-monitor-state.js
 var MonitorInputError = class extends Error {
   constructor(message, status = 400) {
@@ -11303,82 +11622,82 @@ var MonitorInputError = class extends Error {
     this.status = status;
   }
 };
-var fail = (message, status) => {
+var fail2 = (message, status) => {
   throw new MonitorInputError(message, status);
 };
 var statuses = ["unknown", "checking", "no_slots", "available", "error", "action_required", "completed", "stopped"];
 var modes = ["monitoring", "executing", "paused"];
 function monitorText(value, max = 500) {
   if (value == null) return "";
-  if (typeof value !== "string" || value.length > max) fail("invalid summary");
-  if (/[/\\]/.test(value)) fail("private machine paths are not allowed");
-  if (/[\x00-\x1f\x7f]|(?:https?:\/\/|(?:^|\s)[/~\\]|[A-Za-z]:\\)|\b(?:bearer|password|secret|token|pid)\s*[:= ]|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[a-z0-9-]+\.(?:[a-z]{2,})(?:\b|\/)/i.test(value)) fail("private machine details are not allowed");
+  if (typeof value !== "string" || value.length > max) fail2("invalid summary");
+  if (/[/\\]/.test(value)) fail2("private machine paths are not allowed");
+  if (/[\x00-\x1f\x7f]|(?:https?:\/\/|(?:^|\s)[/~\\]|[A-Za-z]:\\)|\b(?:bearer|password|secret|token|pid)\s*[:= ]|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[a-z0-9-]+\.(?:[a-z]{2,})(?:\b|\/)/i.test(value)) fail2("private machine details are not allowed");
   return value.trim();
 }
 function timestamp(value, now, future = false) {
   if (value == null) return null;
-  if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(value)) fail("invalid timestamp");
+  if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(value)) fail2("invalid timestamp");
   const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().replace(".000Z", "Z") !== value.replace(".000Z", "Z")) fail("invalid timestamp");
-  if (!future && parsed > now + 12e4) fail("future observation");
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().replace(".000Z", "Z") !== value.replace(".000Z", "Z")) fail2("invalid timestamp");
+  if (!future && parsed > now + 12e4) fail2("future observation");
   return new Date(parsed).toISOString();
 }
 function normalizeMonitorSnapshot(input, now = Date.now()) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) fail("invalid monitor");
+  if (!input || typeof input !== "object" || Array.isArray(input)) fail2("invalid monitor");
   const out = {};
   for (const key of ["source", "id"]) {
-    if (typeof input[key] !== "string" || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(input[key])) fail(`invalid ${key}`);
+    if (typeof input[key] !== "string" || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(input[key])) fail2(`invalid ${key}`);
     out[key] = input[key];
   }
   out.type = input.type ?? "monitor";
-  if (!["monitor", "task"].includes(out.type)) fail("invalid type");
+  if (!["monitor", "task"].includes(out.type)) fail2("invalid type");
   out.status = input.status ?? "unknown";
-  if (!statuses.includes(out.status)) fail("invalid status");
+  if (!statuses.includes(out.status)) fail2("invalid status");
   out.mode = input.mode ?? "monitoring";
-  if (!modes.includes(out.mode)) fail("invalid mode");
+  if (!modes.includes(out.mode)) fail2("invalid mode");
   for (const key of ["title", "description", "resultSummary", "automationScope", "requiredAction", "evidenceSummary"]) out[key] = monitorText(input[key], key === "title" ? 100 : 500);
-  if (!out.title) fail("title required");
+  if (!out.title) fail2("title required");
   for (const key of ["processAlive", "automaticBookingEnabled"]) {
-    if (input[key] != null && typeof input[key] !== "boolean") fail(`invalid ${key}`);
+    if (input[key] != null && typeof input[key] !== "boolean") fail2(`invalid ${key}`);
     out[key] = input[key] ?? null;
   }
   out.intervalSeconds = input.intervalSeconds ?? null;
-  if (out.intervalSeconds !== null && (!Number.isInteger(out.intervalSeconds) || out.intervalSeconds < 1 || out.intervalSeconds > 86400)) fail("invalid interval");
+  if (out.intervalSeconds !== null && (!Number.isInteger(out.intervalSeconds) || out.intervalSeconds < 1 || out.intervalSeconds > 86400)) fail2("invalid interval");
   out.consecutiveFailures = input.consecutiveFailures ?? 0;
-  if (!Number.isInteger(out.consecutiveFailures) || out.consecutiveFailures < 0 || out.consecutiveFailures > 1e6) fail("invalid failure count");
+  if (!Number.isInteger(out.consecutiveFailures) || out.consecutiveFailures < 0 || out.consecutiveFailures > 1e6) fail2("invalid failure count");
   for (const key of ["observedAt", "lastAttemptAt", "lastSuccessAt", "completedAt", "nextCheckAt"]) out[key] = timestamp(input[key], now, key === "nextCheckAt");
   for (const key of ["lastAttemptAt", "lastSuccessAt", "completedAt"]) {
-    if (out[key] && out.observedAt && out[key] > out.observedAt) fail("event after observation");
+    if (out[key] && out.observedAt && out[key] > out.observedAt) fail2("event after observation");
   }
   out.actionURL = input.actionURL ?? null;
-  if (out.actionURL !== null && !["/dashboard/chat", "/dashboard/notifications", "/dashboard"].includes(out.actionURL)) fail("invalid action path");
+  if (out.actionURL !== null && !["/dashboard/chat", "/dashboard/notifications", "/dashboard"].includes(out.actionURL)) fail2("invalid action path");
   out.receivedAt = new Date(now).toISOString();
   return out;
 }
 function computeMonitorView(snapshot, now = Date.now(), connected = true) {
   const m = snapshot;
-  const age = (value) => value && Number.isFinite(Date.parse(value)) ? (now - Date.parse(value)) / 1e3 : Infinity;
+  const age2 = (value) => value && Number.isFinite(Date.parse(value)) ? (now - Date.parse(value)) / 1e3 : Infinity;
   let state = m.status;
   const documentedCompletion = m.status === "completed" && Boolean(m.observedAt && m.completedAt && m.evidenceSummary) && !m.consecutiveFailures;
-  const reporterState = !connected ? "unknown" : age(m.receivedAt) > 120 || age(m.observedAt) > 120 ? "sync_stale" : "connected";
+  const reporterState = !connected ? "unknown" : age2(m.receivedAt) > 120 || age2(m.observedAt) > 120 ? "sync_stale" : "connected";
   if (documentedCompletion) state = "completed";
   else if (!connected) state = "unknown";
   else if (!m.observedAt || !m.receivedAt || m.processAlive == null || !m.intervalSeconds) state = "unknown";
-  else if (age(m.receivedAt) > 120 || age(m.observedAt) > 120) state = "sync_stale";
+  else if (age2(m.receivedAt) > 120 || age2(m.observedAt) > 120) state = "sync_stale";
   else if (m.processAlive === false || m.mode === "paused" || m.status === "stopped") state = "stopped";
   else if (m.status === "error" || m.consecutiveFailures > 0) state = "error";
   else if (m.status === "action_required") state = "action_required";
   else if (!m.lastAttemptAt || !m.lastSuccessAt) state = "unknown";
-  else if (age(m.lastSuccessAt) > Math.max(2 * m.intervalSeconds + 60, 180)) state = "checking_unverified";
+  else if (age2(m.lastSuccessAt) > Math.max(2 * m.intervalSeconds + 60, 180)) state = "checking_unverified";
   else if (m.status === "completed") state = "unknown";
   const needsAction = ["error", "action_required", "stopped", "sync_stale", "checking_unverified"].includes(state);
   return { ...m, currentState: state, reporterState, documentedCompletion, needsAction, healthy: ["no_slots", "available", "checking"].includes(state) };
 }
 async function readMonitorBody(request) {
-  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) fail("JSON required", 415);
-  if (Number(request.headers.get("content-length")) > 16384) fail("body too large", 413);
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) fail2("JSON required", 415);
+  if (Number(request.headers.get("content-length")) > 16384) fail2("body too large", 413);
   const reader = request.body?.getReader();
-  if (!reader) fail("body required");
+  if (!reader) fail2("body required");
   let size = 0;
   const chunks = [];
   try {
@@ -11388,7 +11707,7 @@ async function readMonitorBody(request) {
       size += value.byteLength;
       if (size > 16384) {
         await reader.cancel();
-        fail("body too large", 413);
+        fail2("body too large", 413);
       }
       chunks.push(value);
     }
@@ -11404,7 +11723,7 @@ async function readMonitorBody(request) {
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
-    fail("invalid JSON");
+    fail2("invalid JSON");
   }
 }
 function createD1DashboardMonitorStore(d1) {
@@ -11428,21 +11747,21 @@ function createD1DashboardMonitorStore(d1) {
           OR EXISTS (SELECT 1 FROM vtdd_dashboard_monitors WHERE source = ? AND id = ?)
         ON CONFLICT(source, id) DO UPDATE SET observed_at = excluded.observed_at, payload_json = excluded.payload_json
         WHERE excluded.observed_at IS NOT NULL AND (vtdd_dashboard_monitors.observed_at IS NULL OR excluded.observed_at > vtdd_dashboard_monitors.observed_at)`).bind(m.source, m.id, m.observedAt, JSON.stringify(m), m.source, m.id).run();
-      if (!result.meta?.changes) fail("out-of-order observation or monitor limit reached", 409);
+      if (!result.meta?.changes) fail2("out-of-order observation or monitor limit reached", 409);
     }
   };
 }
-var stores = /* @__PURE__ */ new WeakMap();
+var stores2 = /* @__PURE__ */ new WeakMap();
 function resolveDashboardMonitorStore(env) {
   if (env.DASHBOARD_MONITOR_STORE) return env.DASHBOARD_MONITOR_STORE;
   const d1 = env.VTDD_MEMORY_D1 ?? env.MEMORY_D1;
   if (!d1?.prepare) return null;
-  if (!stores.has(d1)) stores.set(d1, createD1DashboardMonitorStore(d1));
-  return stores.get(d1);
+  if (!stores2.has(d1)) stores2.set(d1, createD1DashboardMonitorStore(d1));
+  return stores2.get(d1);
 }
 
 // src/worker/dashboard-monitor-client.generated.js
-var dashboardMonitorClientScript = "(function mountMonitorHome(computeView) {\n  const byId = id => document.getElementById(id);\n  const labels = { unknown: '\u672A\u78BA\u8A8D', checking: '\u76E3\u8996\u4E2D', no_slots: '\u7A7A\u304D\u306A\u3057', available: '\u5019\u88DC\u3042\u308A', error: '\u78BA\u8A8D\u30A8\u30E9\u30FC', action_required: '\u5BFE\u5FDC\u304C\u5FC5\u8981', stopped: '\u505C\u6B62', sync_stale: '\u540C\u671F\u304C\u53E4\u3044', checking_unverified: '\u78BA\u8A8D\u7D50\u679C\u304C\u53E4\u3044', completed: '\u5B8C\u4E86\uFF08\u8A18\u9332\uFF09' };\n  const cards = new Map();\n  let notificationSignature = null;\n  let lastRender = '';\n  let snapshot = null, connected = false, controller = null, serverTime = 0, loadedAt = 0, loadedWallTime = 0;\n  const localTime = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u672A\u78BA\u8A8D';\n  const element = (tag, text, className) => {\n    const node = document.createElement(tag);\n    if (text != null) node.textContent = text;\n    if (className) node.className = className;\n    return node;\n  };\n  const interval = seconds => seconds % 3600 === 0 ? `${seconds / 3600}\u6642\u9593` : seconds % 60 === 0 ? `${seconds / 60}\u5206` : `${Math.floor(seconds / 60) ? Math.floor(seconds / 60) + '\u5206' : ''}${seconds % 60}\u79D2`;\n  function card(m) {\n    const node = element('article', null, 'card');\n    const head = element('div', null, 'card-head');\n    head.append(element('h3', m.title), element('span', labels[m.currentState] || '\u672A\u78BA\u8A8D', 'chip ' + (m.documentedCompletion ? 'neutral' : m.healthy ? 'green' : ['error', 'stopped', 'action_required'].includes(m.currentState) ? 'red' : 'amber')));\n    node.append(head);\n    if (m.description) node.append(element('p', m.description, 'muted'));\n    node.append(element('p', (m.documentedCompletion ? '\u5B8C\u4E86\u306E\u8A18\u9332\uFF1A' : m.healthy ? '\u78BA\u8A8D\u7D50\u679C\uFF1A' : '\u524D\u56DE\u306E\u8A18\u9332\uFF08\u73FE\u5728\u306E\u6B63\u5E38\u6027\u306F\u672A\u78BA\u8A8D\uFF09\uFF1A') + (m.resultSummary || '\u307E\u3060\u78BA\u8A8D\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093'), 'result'));\n    const facts = element('dl');\n    for (const [label, value] of [\n      ['\u6700\u7D42\u6210\u529F', localTime(m.lastSuccessAt)],\n      ...(m.documentedCompletion ? [['\u5B8C\u4E86\u65E5\u6642', localTime(m.completedAt)]] : [['\u6B21\u306E\u78BA\u8A8D', localTime(m.nextCheckAt) + (m.intervalSeconds ? ` \xB7 ${interval(m.intervalSeconds)}\u3054\u3068` : ' \xB7 \u9593\u9694\u672A\u78BA\u8A8D')]]),\n      ['\u4EFB\u305B\u3066\u3044\u308B\u7BC4\u56F2', m.automationScope || '\u672A\u8A2D\u5B9A'],\n      ...(m.type !== 'task' && typeof m.automaticBookingEnabled === 'boolean' ? [['\u81EA\u52D5\u4E88\u7D04', m.automaticBookingEnabled ? '\u8A2D\u5B9A\u3042\u308A\uFF08\u8868\u793A\u306E\u307F\uFF09' : '\u8A2D\u5B9A\u306A\u3057']] : []),\n      ['\u3042\u306A\u305F\u306E\u5BFE\u5FDC', m.needsAction ? (m.requiredAction || '\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044') : '\u73FE\u5728\u306E\u5BFE\u5FDC\u4F9D\u983C\u306F\u3042\u308A\u307E\u305B\u3093']\n    ]) facts.append(element('dt', label), element('dd', value));\n    node.append(facts);\n    const details = element('details');\n    const key = m.source + ':' + m.id;\n    const previous = cards.get(key);\n    details.open = previous?.details.open || false;\n    const summary = element('summary', '\u78BA\u8A8D\u306E\u8A18\u9332');\n    const focus = previous && (document.activeElement === previous.summary ? 'summary' : previous.link && document.activeElement === previous.link ? 'link' : null);\n    details.append(summary, element('p', '\u6700\u7D42\u8A66\u884C\uFF1A' + localTime(m.lastAttemptAt)), element('p', '\u89B3\u6E2C\uFF1A' + localTime(m.observedAt)), element('p', '\u53D7\u4FE1\uFF1A' + localTime(m.receivedAt)), element('p', `\u9023\u7D9A\u5931\u6557\uFF1A${m.consecutiveFailures}\u56DE`));\n    if (m.evidenceSummary) details.append(element('p', '\u5B8C\u4E86\u306E\u6839\u62E0\uFF1A' + m.evidenceSummary));\n    node.append(details);\n    let link;\n    if (m.needsAction && ['/dashboard/chat', '/dashboard/notifications', '/dashboard'].includes(m.actionURL)) {\n      link = element('a', '\u5BFE\u5FDC\u3092\u78BA\u8A8D', 'action'); link.href = m.actionURL; node.append(link);\n    }\n    cards.set(key, { node, details, summary, link, focus });\n    return node;\n  }\n  function render() {\n    byId('today').textContent = new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'long' });\n    if (!snapshot) return;\n    const now = serverTime + Math.max(0, performance.now() - loadedAt, Date.now() - loadedWallTime);\n    const freshConnection = connected && now - serverTime <= 120000;\n    if (connected && !freshConnection) byId('connection').textContent = '\u66F4\u65B0\u304C\u9014\u7D76\u3048\u3066\u3044\u307E\u3059 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D';\n    const views = snapshot.monitors.map(m => computeView(m, now, freshConnection));\n    const signature = JSON.stringify([snapshot, freshConnection, views.map(m => m.currentState)]);\n    if (signature === lastRender) return;\n    lastRender = signature;\n    const problems = views.filter(m => m.needsAction);\n    byId('attention-section').hidden = problems.length === 0;\n    byId('attention').replaceChildren(...problems.map(m => {\n      const node = element('p', null, 'attention-item');\n      node.append(element('strong', m.title), element('span', ' \u2014 ' + (labels[m.currentState] || '\u672A\u78BA\u8A8D')));\n      return node;\n    }));\n    byId('counts').textContent = !freshConnection ? '\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D' : `${views.filter(m => m.processAlive && m.currentState !== 'completed' && m.currentState !== 'unknown' && m.currentState !== 'sync_stale' && m.currentState !== 'stopped').length}\u4EF6 \u76E3\u8996\u30FB\u5B9F\u884C\u4E2D\u3000 /\u3000${problems.length}\u4EF6 \u8981\u78BA\u8A8D${views.some(m => m.currentState === 'unknown') ? ' \xB7 \u672A\u78BA\u8A8D\u306E\u9805\u76EE\u3042\u308A' : ''}`;\n    byId('monitors').replaceChildren(...views.map(card));\n    const keys = new Set(views.map(m => m.source + ':' + m.id));\n    for (const [key, entry] of cards) {\n      if (!keys.has(key)) { cards.delete(key); continue; }\n      if (entry.focus) (entry[entry.focus] || entry.summary).focus({ preventScroll: true });\n    }\n    if (!views.length) byId('monitors').append(element('p', freshConnection ? '\u63A5\u7D9A\u3055\u308C\u305F\u76E3\u8996\u306F\u307E\u3060\u3042\u308A\u307E\u305B\u3093\u3002\u63A5\u7D9A\u3059\u308B\u3068\u3001\u3053\u3053\u306B\u73FE\u5728\u306E\u72B6\u614B\u304C\u5C4A\u304D\u307E\u3059\u3002' : '\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u306E\u56DE\u5FA9\u3092\u304A\u5F85\u3061\u304F\u3060\u3055\u3044\u3002', 'empty'));\n    const historySignature = JSON.stringify([snapshot.notifications, snapshot.notificationsAvailable, freshConnection]);\n    if (historySignature === notificationSignature) return;\n    notificationSignature = historySignature;\n    byId('notifications').replaceChildren(...snapshot.notifications.map(n => {\n      const node = element('article', null, 'history');\n      node.append(element('h3', n.title || '\u901A\u77E5'), element('p', n.message || '\u672C\u6587\u306A\u3057'), element('time', localTime(n.createdAt)));\n      return node;\n    }));\n    if (!snapshot.notifications.length) byId('notifications').append(element('p', !freshConnection || snapshot.notificationsAvailable === false ? '\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u901A\u77E5\u30DA\u30FC\u30B8\u3067\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002' : '\u6700\u8FD1\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002', 'muted'));\n  }\n  function unavailable(message) {\n    connected = false;\n    byId('connection').textContent = message;\n    if (!snapshot) {\n      byId('monitors').replaceChildren(element('p', '\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002', 'empty'));\n      byId('notifications').replaceChildren(element('p', '\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u307E\u305F\u306F\u8A8D\u8A3C\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002', 'muted'));\n    }\n    byId('counts').textContent = '\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D';\n    render();\n  }\n  async function refresh() {\n    if (document.hidden || controller) return;\n    if (navigator.onLine === false) { unavailable('\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); return; }\n    const current = new AbortController(); controller = current;\n    const timeout = setTimeout(() => current.abort(), 10000);\n    try {\n      const response = await fetch('/v2/dashboard/overview', { credentials: 'same-origin', cache: 'no-store', signal: current.signal });\n      if (!response.ok) {\n        unavailable(response.status === 401 || response.status === 403 ? '\u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059 \xB7 \u30DB\u30FC\u30E0\u3092\u958B\u304D\u76F4\u3057\u3066\u304F\u3060\u3055\u3044' : '\u63A5\u7D9A\u3092\u78BA\u8A8D\u3067\u304D\u307E\u305B\u3093 \xB7 \u518D\u8A66\u884C\u3057\u307E\u3059');\n        return;\n      }\n      const data = await response.json();\n      if (!Array.isArray(data.monitors) || data.monitors.length > 100 || !Array.isArray(data.notifications) || !Number.isFinite(Date.parse(data.serverTime))) throw new Error('invalid overview');\n      if (current.signal.aborted || navigator.onLine === false) throw new Error('request cancelled');\n      snapshot = data; loadedWallTime = Date.now(); serverTime = Date.parse(data.serverTime); loadedAt = performance.now(); connected = true;\n      byId('connection').textContent = '\u63A5\u7D9A\u4E2D \xB7 ' + localTime(data.serverTime) + ' \u66F4\u65B0';\n      render();\n    } catch { unavailable(navigator.onLine === false ? '\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D' : '\u66F4\u65B0\u3067\u304D\u307E\u305B\u3093 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); }\n    finally { clearTimeout(timeout); controller = null; }\n  }\n  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });\n  window.addEventListener('pageshow', refresh);\n  window.addEventListener('online', refresh);\n  window.addEventListener('offline', () => { controller?.abort(); unavailable('\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); });\n  const polling = setInterval(refresh, 30000);\n  const freshness = setInterval(() => { if (!document.hidden) render(); }, 5000);\n  window.addEventListener('pagehide', event => { controller?.abort(); if (!event.persisted) { clearInterval(polling); clearInterval(freshness); } });\n  if (navigator.serviceWorker) navigator.serviceWorker.register('/dashboard-sw.js', { scope: '/dashboard/' }).catch(() => {});\n  render(); refresh();\n})(function computeMonitorView(snapshot, now = Date.now(), connected = true) {\n  const m = snapshot;\n  const age = value => value && Number.isFinite(Date.parse(value)) ? (now - Date.parse(value)) / 1000 : Infinity;\n  let state = m.status;\n  const documentedCompletion = m.status === 'completed' && Boolean(m.observedAt && m.completedAt && m.evidenceSummary) && !m.consecutiveFailures;\n  const reporterState = !connected ? 'unknown' : age(m.receivedAt) > 120 || age(m.observedAt) > 120 ? 'sync_stale' : 'connected';\n  if (documentedCompletion) state = 'completed';\n  else if (!connected) state = 'unknown';\n  else if (!m.observedAt || !m.receivedAt || m.processAlive == null || !m.intervalSeconds) state = 'unknown';\n  else if (age(m.receivedAt) > 120 || age(m.observedAt) > 120) state = 'sync_stale';\n  else if (m.processAlive === false || m.mode === 'paused' || m.status === 'stopped') state = 'stopped';\n  else if (m.status === 'error' || m.consecutiveFailures > 0) state = 'error';\n  else if (m.status === 'action_required') state = 'action_required';\n  else if (!m.lastAttemptAt || !m.lastSuccessAt) state = 'unknown';\n  else if (age(m.lastSuccessAt) > Math.max(2 * m.intervalSeconds + 60, 180)) state = 'checking_unverified';\n  else if (m.status === 'completed') state = 'unknown';\n  const needsAction = ['error', 'action_required', 'stopped', 'sync_stale', 'checking_unverified'].includes(state);\n  return { ...m, currentState: state, reporterState, documentedCompletion, needsAction, healthy: ['no_slots', 'available', 'checking'].includes(state) };\n});";
+var dashboardMonitorClientScript = "(function mountMonitorHome(computeView) {\n  const byId = id => document.getElementById(id);\n  const labels = { unknown: '\u672A\u78BA\u8A8D', checking: '\u76E3\u8996\u4E2D', no_slots: '\u7A7A\u304D\u306A\u3057', available: '\u5019\u88DC\u3042\u308A', error: '\u78BA\u8A8D\u30A8\u30E9\u30FC', action_required: '\u5BFE\u5FDC\u304C\u5FC5\u8981', stopped: '\u505C\u6B62', sync_stale: '\u540C\u671F\u304C\u53E4\u3044', checking_unverified: '\u78BA\u8A8D\u7D50\u679C\u304C\u53E4\u3044', completed: '\u5B8C\u4E86\uFF08\u8A18\u9332\uFF09' };\n  const cards = new Map();\n  let notificationSignature = null;\n  let lastRender = '';\n  let snapshot = null, connected = false, controller = null, serverTime = 0, loadedAt = 0, loadedWallTime = 0;\n  const localTime = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '\u672A\u78BA\u8A8D';\n  const element = (tag, text, className) => {\n    const node = document.createElement(tag);\n    if (text != null) node.textContent = text;\n    if (className) node.className = className;\n    return node;\n  };\n  const interval = seconds => seconds % 3600 === 0 ? `${seconds / 3600}\u6642\u9593` : seconds % 60 === 0 ? `${seconds / 60}\u5206` : `${Math.floor(seconds / 60) ? Math.floor(seconds / 60) + '\u5206' : ''}${seconds % 60}\u79D2`;\n  function card(m) {\n    const node = element('article', null, 'card');\n    const head = element('div', null, 'card-head');\n    head.append(element('h3', m.title), element('span', labels[m.currentState] || '\u672A\u78BA\u8A8D', 'chip ' + (m.documentedCompletion ? 'neutral' : m.healthy ? 'green' : ['error', 'stopped', 'action_required'].includes(m.currentState) ? 'red' : 'amber')));\n    node.append(head);\n    if (m.description) node.append(element('p', m.description, 'muted'));\n    node.append(element('p', (m.documentedCompletion ? '\u5B8C\u4E86\u306E\u8A18\u9332\uFF1A' : m.healthy ? '\u78BA\u8A8D\u7D50\u679C\uFF1A' : '\u524D\u56DE\u306E\u8A18\u9332\uFF08\u73FE\u5728\u306E\u6B63\u5E38\u6027\u306F\u672A\u78BA\u8A8D\uFF09\uFF1A') + (m.resultSummary || '\u307E\u3060\u78BA\u8A8D\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093'), 'result'));\n    const facts = element('dl');\n    for (const [label, value] of [\n      ['\u6700\u7D42\u6210\u529F', localTime(m.lastSuccessAt)],\n      ...(m.documentedCompletion ? [['\u5B8C\u4E86\u65E5\u6642', localTime(m.completedAt)]] : [['\u6B21\u306E\u78BA\u8A8D', localTime(m.nextCheckAt) + (m.intervalSeconds ? ` \xB7 ${interval(m.intervalSeconds)}\u3054\u3068` : ' \xB7 \u9593\u9694\u672A\u78BA\u8A8D')]]),\n      ['\u4EFB\u305B\u3066\u3044\u308B\u7BC4\u56F2', m.automationScope || '\u672A\u8A2D\u5B9A'],\n      ...(m.type !== 'task' && typeof m.automaticBookingEnabled === 'boolean' ? [['\u81EA\u52D5\u4E88\u7D04', m.automaticBookingEnabled ? '\u8A2D\u5B9A\u3042\u308A\uFF08\u8868\u793A\u306E\u307F\uFF09' : '\u8A2D\u5B9A\u306A\u3057']] : []),\n      ['\u3042\u306A\u305F\u306E\u5BFE\u5FDC', m.needsAction ? (m.requiredAction || '\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044') : '\u73FE\u5728\u306E\u5BFE\u5FDC\u4F9D\u983C\u306F\u3042\u308A\u307E\u305B\u3093']\n    ]) facts.append(element('dt', label), element('dd', value));\n    node.append(facts);\n    const details = element('details');\n    const key = m.source + ':' + m.id;\n    const previous = cards.get(key);\n    details.open = previous?.details.open || false;\n    const summary = element('summary', '\u78BA\u8A8D\u306E\u8A18\u9332');\n    const focus = previous && (document.activeElement === previous.summary ? 'summary' : previous.link && document.activeElement === previous.link ? 'link' : null);\n    details.append(summary, element('p', '\u6700\u7D42\u8A66\u884C\uFF1A' + localTime(m.lastAttemptAt)), element('p', '\u89B3\u6E2C\uFF1A' + localTime(m.observedAt)), element('p', '\u53D7\u4FE1\uFF1A' + localTime(m.receivedAt)), element('p', `\u9023\u7D9A\u5931\u6557\uFF1A${m.consecutiveFailures}\u56DE`));\n    if (m.evidenceSummary) details.append(element('p', '\u5B8C\u4E86\u306E\u6839\u62E0\uFF1A' + m.evidenceSummary));\n    node.append(details);\n    let link;\n    if (m.needsAction && ['/dashboard/chat', '/dashboard/notifications', '/dashboard'].includes(m.actionURL)) {\n      link = element('a', '\u5BFE\u5FDC\u3092\u78BA\u8A8D', 'action'); link.href = m.actionURL; node.append(link);\n    }\n    cards.set(key, { node, details, summary, link, focus });\n    return node;\n  }\n  function render() {\n    byId('today').textContent = new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'long' });\n    if (!snapshot) return;\n    const now = serverTime + Math.max(0, performance.now() - loadedAt, Date.now() - loadedWallTime);\n    const freshConnection = connected && now - serverTime <= 120000;\n    if (connected && !freshConnection) byId('connection').textContent = '\u66F4\u65B0\u304C\u9014\u7D76\u3048\u3066\u3044\u307E\u3059 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D';\n    const executor = byId('executors');\n    if (executor) {\n      const v = snapshot.executors;\n      const priorDetails = executor.querySelector?.('details');\n      const detailOpen = priorDetails?.open;\n      const detailFocused = !!priorDetails && priorDetails.firstChild === document.activeElement;\n      executor.replaceChildren();\n      if (!v?.initialized) executor.append(element('p', v?.ownerAction || '\u5B9F\u884C\u57FA\u76E4\u306F\u672A\u521D\u671F\u5316'));\n      else {\n        const current = freshConnection && now - serverTime < 30000;\n        const elapsed = Math.max(0, (now - serverTime) / 1000);\n        const targetNode = v.nodes[v.standbyExecutor];\n        const standbyFresh = current && targetNode?.healthy && targetNode.heartbeatAgeSeconds + elapsed <= (v.standbyExecutor === 'mac' ? 120 : 300);\n        const checkpointFresh = current && v.checkpointFresh && now - Date.parse(v.checkpoint?.updatedAt) <= 600000;\n        const readyCurrent = current && standbyFresh && checkpointFresh && v.ready;\n        const calm = (v.blockers || []).every(reason => reason === 'PRIMARY\u304C\u5B9F\u884C\u4E2D');\n        const macFresh = current && v.nodes.mac?.healthy && (v.nodes.mac.heartbeatAgeSeconds + elapsed <= 120);\n        executor.append(element('p', v.activationPending ? '\u5207\u66FF\u6E96\u5099\u4E2D / activation pending' : macFresh ? 'Mac \u78BA\u8A8D\u6E08\u307F' : 'Mac\u672A\u78BA\u8A8D', 'chip ' + (macFresh && standbyFresh && v.standbyReady && calm ? 'green' : 'amber')));\n        for (const id of ['mac','vps']) {\n          const n = v.nodes[id];\n          executor.append(element('p', (id === 'mac' ? 'Mac' : 'VPS') + ' ' + n.role + (v.activationPending && n.role === 'PRIMARY' ? '\uFF08\u6709\u52B9\u5316\u5F85\u3061\uFF09' : '') + ' \xB7 Codex ' + (n.codexVersion || '\u672A\u78BA\u8A8D') + ' \xB7 ' + (n.versionMatch ? '\u7248\u4E00\u81F4' : '\u7248\u4E0D\u4E00\u81F4')));\n          executor.append(element('p', 'heartbeat: ' + (n.heartbeatAgeSeconds == null ? '\u672A\u78BA\u8A8D' : Math.floor(n.heartbeatAgeSeconds + elapsed) + '\u79D2\u524D') + ' \xB7 ' + localTime(n.heartbeatAt), 'muted'));\n        }\n        if (v.versionApprovalPending) executor.append(element('p', '\u65B0\u3057\u3044Mac\u7248\u306F\u627F\u8A8D\u5F85\u3061: ' + v.versionCandidate));\n        executor.append(element('p', '\u627F\u8A8D\u6E08\u307FCodex: ' + v.approvedCodexVersion));\n        executor.append(element('p', 'checkpoint: ' + (checkpointFresh ? '\u65B0\u9BAE' : '\u672A\u78BA\u8A8D\u30FB\u53E4\u3044') + ' \xB7 ' + localTime(v.checkpoint?.updatedAt)));\n        executor.append(element('p', current && (!v.ready || readyCurrent) ? v.ownerAction : '\u66F4\u65B0\u5F85\u3061 \xB7 \u624B\u52D5\u5207\u66FF\u306E\u53EF\u5426\u306F\u672A\u78BA\u8A8D'));\n        if (current && v.versionApprovalPending && v.versionActionURL) {\n          const link = new URL(v.versionActionURL, location.origin);\n          if (link.origin === location.origin && link.pathname === '/v2/approval/passkey/operator' && link.searchParams.get('mode') === 'executor-version') {\n            const a = element('a', 'Mac\u306E\u691C\u8A3C\u6E08\u307F\u7248\u3092\u627F\u8A8D', 'action'); a.href = link.pathname + link.search; executor.append(a);\n          }\n        }\n        if (readyCurrent && v.actionURL) {\n          const link = new URL(v.actionURL, location.origin);\n          if (link.origin === location.origin && link.pathname === '/v2/approval/passkey/operator' && link.searchParams.get('mode') === 'failover') {\n            const a = element('a', '\u5B9F\u884C\u57FA\u76E4\u306E\u5207\u66FF\u3092\u78BA\u8A8D', 'action'); a.href = link.pathname + link.search; executor.append(a);\n          }\n        }\n        const detail = element('details'); detail.append(element('summary', '\u5B9F\u884C\u57FA\u76E4\u306E\u8A73\u7D30'), element('p', 'generation: ' + v.generation + ' \xB7 \u5207\u66FF: ' + localTime(v.lastTransitionAt)));\n        detail.open = !!detailOpen;\n        executor.append(detail);\n        if (detailFocused) detail.firstChild.focus();\n      }\n    }\n    const views = snapshot.monitors.map(m => computeView(m, now, freshConnection));\n    const signature = JSON.stringify([snapshot, freshConnection, views.map(m => m.currentState), Math.floor(now / 30000)]);\n    if (signature === lastRender) return;\n    lastRender = signature;\n    const problems = views.filter(m => m.needsAction);\n    byId('attention-section').hidden = problems.length === 0;\n    byId('attention').replaceChildren(...problems.map(m => {\n      const node = element('p', null, 'attention-item');\n      node.append(element('strong', m.title), element('span', ' \u2014 ' + (labels[m.currentState] || '\u672A\u78BA\u8A8D')));\n      return node;\n    }));\n    byId('counts').textContent = !freshConnection ? '\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D' : `${views.filter(m => m.processAlive && m.currentState !== 'completed' && m.currentState !== 'unknown' && m.currentState !== 'sync_stale' && m.currentState !== 'stopped').length}\u4EF6 \u76E3\u8996\u30FB\u5B9F\u884C\u4E2D\u3000 /\u3000${problems.length}\u4EF6 \u8981\u78BA\u8A8D${views.some(m => m.currentState === 'unknown') ? ' \xB7 \u672A\u78BA\u8A8D\u306E\u9805\u76EE\u3042\u308A' : ''}`;\n    byId('monitors').replaceChildren(...views.map(card));\n    const keys = new Set(views.map(m => m.source + ':' + m.id));\n    for (const [key, entry] of cards) {\n      if (!keys.has(key)) { cards.delete(key); continue; }\n      if (entry.focus) (entry[entry.focus] || entry.summary).focus({ preventScroll: true });\n    }\n    if (!views.length) byId('monitors').append(element('p', freshConnection ? '\u63A5\u7D9A\u3055\u308C\u305F\u76E3\u8996\u306F\u307E\u3060\u3042\u308A\u307E\u305B\u3093\u3002\u63A5\u7D9A\u3059\u308B\u3068\u3001\u3053\u3053\u306B\u73FE\u5728\u306E\u72B6\u614B\u304C\u5C4A\u304D\u307E\u3059\u3002' : '\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u306E\u56DE\u5FA9\u3092\u304A\u5F85\u3061\u304F\u3060\u3055\u3044\u3002', 'empty'));\n    const historySignature = JSON.stringify([snapshot.notifications, snapshot.notificationsAvailable, freshConnection]);\n    if (historySignature === notificationSignature) return;\n    notificationSignature = historySignature;\n    byId('notifications').replaceChildren(...snapshot.notifications.map(n => {\n      const node = element('article', null, 'history');\n      node.append(element('h3', n.title || '\u901A\u77E5'), element('p', n.message || '\u672C\u6587\u306A\u3057'), element('time', localTime(n.createdAt)));\n      return node;\n    }));\n    if (!snapshot.notifications.length) byId('notifications').append(element('p', !freshConnection || snapshot.notificationsAvailable === false ? '\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u901A\u77E5\u30DA\u30FC\u30B8\u3067\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002' : '\u6700\u8FD1\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002', 'muted'));\n  }\n  function unavailable(message) {\n    connected = false;\n    byId('connection').textContent = message;\n    if (!snapshot) {\n      byId('executors')?.replaceChildren(element('p', '\u5B9F\u884C\u57FA\u76E4\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002'));\n      byId('monitors').replaceChildren(element('p', '\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002', 'empty'));\n      byId('notifications').replaceChildren(element('p', '\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u307E\u305F\u306F\u8A8D\u8A3C\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002', 'muted'));\n    }\n    byId('counts').textContent = '\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D';\n    render();\n  }\n  async function refresh() {\n    if (document.hidden || controller) return;\n    if (navigator.onLine === false) { unavailable('\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); return; }\n    const current = new AbortController(); controller = current;\n    const timeout = setTimeout(() => current.abort(), 10000);\n    try {\n      const response = await fetch('/v2/dashboard/overview', { credentials: 'same-origin', cache: 'no-store', signal: current.signal });\n      if (!response.ok) {\n        unavailable(response.status === 401 || response.status === 403 ? '\u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059 \xB7 \u30DB\u30FC\u30E0\u3092\u958B\u304D\u76F4\u3057\u3066\u304F\u3060\u3055\u3044' : '\u63A5\u7D9A\u3092\u78BA\u8A8D\u3067\u304D\u307E\u305B\u3093 \xB7 \u518D\u8A66\u884C\u3057\u307E\u3059');\n        return;\n      }\n      const data = await response.json();\n      if (!Array.isArray(data.monitors) || data.monitors.length > 100 || !Array.isArray(data.notifications) || !Number.isFinite(Date.parse(data.serverTime))) throw new Error('invalid overview');\n      if (current.signal.aborted || navigator.onLine === false) throw new Error('request cancelled');\n      snapshot = data; loadedWallTime = Date.now(); serverTime = Date.parse(data.serverTime); loadedAt = performance.now(); connected = true;\n      byId('connection').textContent = '\u63A5\u7D9A\u4E2D \xB7 ' + localTime(data.serverTime) + ' \u66F4\u65B0';\n      render();\n    } catch { unavailable(navigator.onLine === false ? '\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D' : '\u66F4\u65B0\u3067\u304D\u307E\u305B\u3093 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); }\n    finally { clearTimeout(timeout); controller = null; }\n  }\n  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });\n  window.addEventListener('pageshow', refresh);\n  window.addEventListener('online', refresh);\n  window.addEventListener('offline', () => { controller?.abort(); unavailable('\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D'); });\n  const polling = setInterval(refresh, 30000);\n  const freshness = setInterval(() => { if (!document.hidden) render(); }, 5000);\n  window.addEventListener('pagehide', event => { controller?.abort(); if (!event.persisted) { clearInterval(polling); clearInterval(freshness); } });\n  if (navigator.serviceWorker) navigator.serviceWorker.register('/dashboard-sw.js', { scope: '/dashboard/' }).catch(() => {});\n  render(); refresh();\n})(function computeMonitorView(snapshot, now = Date.now(), connected = true) {\n  const m = snapshot;\n  const age = value => value && Number.isFinite(Date.parse(value)) ? (now - Date.parse(value)) / 1000 : Infinity;\n  let state = m.status;\n  const documentedCompletion = m.status === 'completed' && Boolean(m.observedAt && m.completedAt && m.evidenceSummary) && !m.consecutiveFailures;\n  const reporterState = !connected ? 'unknown' : age(m.receivedAt) > 120 || age(m.observedAt) > 120 ? 'sync_stale' : 'connected';\n  if (documentedCompletion) state = 'completed';\n  else if (!connected) state = 'unknown';\n  else if (!m.observedAt || !m.receivedAt || m.processAlive == null || !m.intervalSeconds) state = 'unknown';\n  else if (age(m.receivedAt) > 120 || age(m.observedAt) > 120) state = 'sync_stale';\n  else if (m.processAlive === false || m.mode === 'paused' || m.status === 'stopped') state = 'stopped';\n  else if (m.status === 'error' || m.consecutiveFailures > 0) state = 'error';\n  else if (m.status === 'action_required') state = 'action_required';\n  else if (!m.lastAttemptAt || !m.lastSuccessAt) state = 'unknown';\n  else if (age(m.lastSuccessAt) > Math.max(2 * m.intervalSeconds + 60, 180)) state = 'checking_unverified';\n  else if (m.status === 'completed') state = 'unknown';\n  const needsAction = ['error', 'action_required', 'stopped', 'sync_stale', 'checking_unverified'].includes(state);\n  return { ...m, currentState: state, reporterState, documentedCompletion, needsAction, healthy: ['no_slots', 'available', 'checking'].includes(state) };\n});";
 
 // src/worker/dashboard-monitor-home.js
 function renderDashboardMonitorHome() {
@@ -11491,7 +11810,7 @@ a.action{display:inline-flex;align-items:center;min-height:44px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
 
-</style></head><body><main><header><h1>\u4EFB\u305B\u305F\u3053\u3068\u3092\u3001\u3072\u3068\u76EE\u3067\u3002</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p><p id="counts">\u72B6\u614B\u3092\u53D6\u5F97\u3057\u3066\u3044\u307E\u3059\u2026</p></header><section id="attention-section" hidden><h2>\u5BFE\u5FDC\u304C\u5FC5\u8981</h2><div id="attention"></div></section><section><h2>\u76E3\u8996\u30FB\u5B9F\u884C\u4E2D</h2><div id="monitors" aria-label="\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B"></div></section><section><h2>\u6700\u8FD1\u306E\u901A\u77E5</h2><p class="muted">\u5C4A\u3044\u305F\u901A\u77E5\u306E\u5C65\u6B74\u3067\u3059\u3002\u73FE\u5728\u306E\u72B6\u614B\u306F\u4E0A\u306E\u30AB\u30FC\u30C9\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</p><div id="notifications"></div></section><noscript>\u73FE\u5728\u306E\u72B6\u614B\u3092\u8868\u793A\u3059\u308B\u306B\u306F JavaScript \u3092\u6709\u52B9\u306B\u3057\u3066\u304F\u3060\u3055\u3044\u3002</noscript></main><script>${dashboardMonitorClientScript}<\/script></body></html>`, { active: "home", layout: "home" });
+</style></head><body><main><header><h1>\u4EFB\u305B\u305F\u3053\u3068\u3092\u3001\u3072\u3068\u76EE\u3067\u3002</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p><p id="counts">\u72B6\u614B\u3092\u53D6\u5F97\u3057\u3066\u3044\u307E\u3059\u2026</p></header><section id="attention-section" hidden><h2>\u5BFE\u5FDC\u304C\u5FC5\u8981</h2><div id="attention"></div></section><section><h2>\u5B9F\u884C\u57FA\u76E4</h2><article class="card" id="executors" aria-label="\u5B9F\u884C\u57FA\u76E4">\u5B9F\u884C\u57FA\u76E4\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</article></section><section><h2>\u76E3\u8996\u30FB\u5B9F\u884C\u4E2D</h2><div id="monitors" aria-label="\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B"></div></section><section><h2>\u6700\u8FD1\u306E\u901A\u77E5</h2><p class="muted">\u5C4A\u3044\u305F\u901A\u77E5\u306E\u5C65\u6B74\u3067\u3059\u3002\u73FE\u5728\u306E\u72B6\u614B\u306F\u4E0A\u306E\u30AB\u30FC\u30C9\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</p><div id="notifications"></div></section><noscript>\u73FE\u5728\u306E\u72B6\u614B\u3092\u8868\u793A\u3059\u308B\u306B\u306F JavaScript \u3092\u6709\u52B9\u306B\u3057\u3066\u304F\u3060\u3055\u3044\u3002</noscript></main><script>${dashboardMonitorClientScript}<\/script></body></html>`, { active: "home", layout: "home" });
 }
 
 // src/core/types.js
@@ -14401,9 +14720,9 @@ var Integer = class extends BaseBlock {
     return res;
   }
   convertToDER() {
-    const integer2 = new _a$o({ valueHex: this.valueBlock.valueHexView });
-    integer2.valueBlock.toDER();
-    return integer2;
+    const integer3 = new _a$o({ valueHex: this.valueBlock.valueHexView });
+    integer3.valueBlock.toDER();
+    return integer3;
   }
   convertFromDER() {
     return new _a$o({
@@ -17885,10 +18204,10 @@ __decorate([
 
 // node_modules/@peculiar/asn1-x509/build/es2015/time.js
 var Time = class Time2 {
-  constructor(time3) {
-    if (time3) {
-      if (typeof time3 === "string" || typeof time3 === "number" || time3 instanceof Date) {
-        const date3 = new Date(time3);
+  constructor(time4) {
+    if (time4) {
+      if (typeof time4 === "string" || typeof time4 === "number" || time4 instanceof Date) {
+        const date3 = new Date(time4);
         date3.setMilliseconds(0);
         if (date3.getUTCFullYear() > 2049) {
           this.generalTime = date3;
@@ -17896,16 +18215,16 @@ var Time = class Time2 {
           this.utcTime = date3;
         }
       } else {
-        Object.assign(this, time3);
+        Object.assign(this, time4);
       }
     }
   }
   getTime() {
-    const time3 = this.utcTime || this.generalTime;
-    if (!time3) {
+    const time4 = this.utcTime || this.generalTime;
+    if (!time4) {
       throw new Error("Cannot get time from CHOICE object");
     }
-    return time3;
+    return time4;
   }
 };
 __decorate([
@@ -23421,8 +23740,8 @@ var X509Certificate = class extends PemData {
       return ok2;
     } else {
       const date3 = params.date || /* @__PURE__ */ new Date();
-      const time3 = date3.getTime();
-      return ok2 && this.notBefore.getTime() < time3 && time3 < this.notAfter.getTime();
+      const time4 = date3.getTime();
+      return ok2 && this.notBefore.getTime() < time4 && time4 < this.notAfter.getTime();
     }
   }
   async getThumbprint(...args) {
@@ -27315,7 +27634,14 @@ function normalizeScopeSnapshot(scope = {}) {
     vpsOperation: normalizeText3(scope.vpsOperation),
     vpsCapabilityId: normalizeText3(scope.vpsCapabilityId),
     vpsImpactScope: normalizeText3(scope.vpsImpactScope),
-    vpsExpiresAt: normalizeText3(scope.vpsExpiresAt)
+    vpsExpiresAt: normalizeText3(scope.vpsExpiresAt),
+    ...scope.highRiskKind?.startsWith("executor_failover") ? {
+      executorFrom: normalizeText3(scope.executorFrom),
+      executorTo: normalizeText3(scope.executorTo),
+      executorGeneration: normalizeText3(scope.executorGeneration),
+      executorCodexVersion: normalizeText3(scope.executorCodexVersion),
+      ...scope.highRiskKind === "executor_failover_version" ? { executorPreviousCodexVersion: normalizeText3(scope.executorPreviousCodexVersion) } : {}
+    } : {}
   };
 }
 function dedupePasskeys(records = []) {
@@ -36853,8 +37179,8 @@ function isValidIsoTime(value) {
 function excludeAmbiguousResponseCommentTimes(comments) {
   const counts = /* @__PURE__ */ new Map();
   for (const comment of comments) {
-    const time3 = normalizeText22(comment?.createdAt);
-    counts.set(time3, (counts.get(time3) || 0) + 1);
+    const time4 = normalizeText22(comment?.createdAt);
+    counts.set(time4, (counts.get(time4) || 0) + 1);
   }
   return comments.filter((comment) => counts.get(normalizeText22(comment?.createdAt)) === 1);
 }
@@ -42744,8 +43070,8 @@ async function executePullReadyForReview(input) {
       }
     };
   }
-  const nodeId = normalizeText32(prBody?.node_id);
-  if (!nodeId) {
+  const nodeId2 = normalizeText32(prBody?.node_id);
+  if (!nodeId2) {
     return {
       ok: false,
       status: 422,
@@ -42762,7 +43088,7 @@ async function executePullReadyForReview(input) {
       body: JSON.stringify({
         query: "mutation MarkPullRequestReadyForReview($pullRequestId: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) { pullRequest { isDraft url number } } }",
         variables: {
-          pullRequestId: nodeId
+          pullRequestId: nodeId2
         }
       })
     });
@@ -48521,24 +48847,24 @@ function timeSource(args) {
   const regex = typeof args.precision === "number" ? args.precision === -1 ? `${hhmm}` : args.precision === 0 ? `${hhmm}:[0-5]\\d` : `${hhmm}:[0-5]\\d\\.\\d{${args.precision}}` : `${hhmm}(?::[0-5]\\d(?:\\.\\d+)?)?`;
   return regex;
 }
-function time(args) {
+function time2(args) {
   return new RegExp(`^${timeSource(args)}$`);
 }
 function datetime(args) {
-  const time3 = timeSource({ precision: args.precision });
+  const time4 = timeSource({ precision: args.precision });
   const opts = ["Z"];
   if (args.local)
     opts.push("");
   if (args.offset)
     opts.push(`([+-](?:[01]\\d|2[0-3]):[0-5]\\d)`);
-  const timeRegex2 = `${time3}(?:${opts.join("|")})`;
+  const timeRegex2 = `${time4}(?:${opts.join("|")})`;
   return new RegExp(`^${dateSource}T(?:${timeRegex2})$`);
 }
 var string = (params) => {
   const regex = params ? `[\\s\\S]{${params?.minimum ?? 0},${params?.maximum ?? ""}}` : `[\\s\\S]*`;
   return new RegExp(`^${regex}$`);
 };
-var integer = /^-?\d+$/;
+var integer2 = /^-?\d+$/;
 var number = /^-?\d+(?:\.\d+)?$/;
 var boolean = /^(?:true|false)$/i;
 var _null = /^null$/i;
@@ -48647,7 +48973,7 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
     bag.minimum = minimum;
     bag.maximum = maximum;
     if (isInt)
-      bag.pattern = integer;
+      bag.pattern = integer2;
   });
   inst._zod.check = (payload) => {
     const input = payload.value;
@@ -49243,7 +49569,7 @@ var $ZodISODate = /* @__PURE__ */ $constructor("$ZodISODate", (inst, def) => {
   $ZodStringFormat.init(inst, def);
 });
 var $ZodISOTime = /* @__PURE__ */ $constructor("$ZodISOTime", (inst, def) => {
-  def.pattern ?? (def.pattern = time(def));
+  def.pattern ?? (def.pattern = time2(def));
   $ZodStringFormat.init(inst, def);
 });
 var $ZodISODuration = /* @__PURE__ */ $constructor("$ZodISODuration", (inst, def) => {
@@ -52252,7 +52578,7 @@ __export(iso_exports2, {
   date: () => date2,
   datetime: () => datetime2,
   duration: () => duration2,
-  time: () => time2
+  time: () => time3
 });
 var ZodISODateTime = /* @__PURE__ */ $constructor("ZodISODateTime", (inst, def) => {
   $ZodISODateTime.init(inst, def);
@@ -52272,7 +52598,7 @@ var ZodISOTime = /* @__PURE__ */ $constructor("ZodISOTime", (inst, def) => {
   $ZodISOTime.init(inst, def);
   ZodStringFormat.init(inst, def);
 });
-function time2(params) {
+function time3(params) {
   return _isoTime(ZodISOTime, params);
 }
 var ZodISODuration = /* @__PURE__ */ $constructor("ZodISODuration", (inst, def) => {
@@ -52587,7 +52913,7 @@ var ZodString2 = /* @__PURE__ */ $constructor("ZodString", (inst, def) => {
   inst.e164 = (params) => inst.check(_e164(ZodE164, params));
   inst.datetime = (params) => inst.check(datetime2(params));
   inst.date = (params) => inst.check(date2(params));
-  inst.time = (params) => inst.check(time2(params));
+  inst.time = (params) => inst.check(time3(params));
   inst.duration = (params) => inst.check(duration2(params));
 });
 function string2(params) {
@@ -60462,6 +60788,37 @@ var runtime_default = {
     if (request.method === "GET" && (url.pathname === "/dashboard-icon.png" || url.pathname === DASHBOARD_ICON_PNG_PATH || url.pathname === "/apple-touch-icon.png" || url.pathname === "/apple-touch-icon-precomposed.png")) {
       return png(200, dashboard_butler_icon_512_default);
     }
+    if (url.pathname.startsWith("/v2/executors/")) {
+      const route = url.pathname.slice("/v2/executors/".length);
+      if (!(request.method === "GET" && route === "overview" || request.method === "POST" && ["report", "transition", "bootstrap", "activation/verify", "authorize", "version"].includes(route))) return json(404, { error: "not_found" });
+      const auth = ["report", "activation/verify", "authorize"].includes(route) ? authorizeGatewayRequest({ request, env, apiSuffix: "/executors/" + route }) : await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/" + route });
+      const headers = { "cache-control": "no-store" };
+      if (!auth.ok) return json(auth.status, { error: "unauthorized" }, headers);
+      const store = resolveExecutorStore(env);
+      if (!store) return json(503, { error: "executor_store_unavailable" }, headers);
+      try {
+        if (route === "overview" && auth.authType === "machine") return json(403, { error: "dashboard_owner_required" }, headers);
+        if (route === "overview") return json(200, { ...executorOverview(await store.get()), bootstrapCandidate: await store.getCandidate?.() ?? null }, headers);
+        const body = await readExecutorBody(request);
+        if (route === "report") {
+          const state2 = await store.report(body);
+          return json(state2 ? 200 : 202, { ok: true, initialized: !!state2, bootstrapCandidateStored: !state2 }, headers);
+        }
+        if (route === "authorize") return json(200, authorizeExecutor(await store.get(), body), headers);
+        if (route === "activation/verify") return json(200, verifyLeaseReceipt(await store.get(), body), headers);
+        const bootstrap = route === "bootstrap";
+        strictObject(body, ["approvalGrantId", "expectedGeneration", "executorFrom", "executorTo", "issueNumber", "targetConfirmed", "reason", ...bootstrap ? ["approvedCodexVersion"] : route === "version" ? ["approvedCodexVersion", "previousCodexVersion"] : []]);
+        const scope = route === "version" ? executorVersionScope(body) : executorApprovalScope(body, bootstrap);
+        const resolved = await resolveApprovalGrant({ payload: {}, policyInput: { approvalGrantId: body.approvalGrantId }, env });
+        const grant = resolved.approvalGrant;
+        if (!grant || !Number.isFinite(Date.parse(grant.expiresAt)) || !evaluateApprovalGrant({ approvalGrant: grant, scope }).ok) return json(403, { error: "real_scoped_passkey_required" }, headers);
+        const state = bootstrap ? await store.bootstrap({ primaryExecutor: "mac", standbyExecutor: "vps", approvedCodexVersion: body.approvedCodexVersion, relatedIssue: body.issueNumber }) : route === "version" ? await store.approveVersion(body) : await store.transition(body);
+        if (route === "version") return json(200, { ok: true, overview: auth.authType === "machine" ? void 0 : executorOverview(state), authority: "approved_codex_version_only" }, headers);
+        return json(200, { ok: true, activationPending: !!state.activationPending, leaseReceipt: state.activationReceipt ?? null, overview: auth.authType === "machine" ? void 0 : executorOverview(state), authority: "executor_control_state_only" }, headers);
+      } catch (error2) {
+        return json(error2 instanceof ExecutorInputError ? error2.status : 503, { error: error2 instanceof ExecutorInputError ? error2.message : "executor_store_unavailable" }, headers);
+      }
+    }
     if (request.method === "POST" && url.pathname === "/v2/dashboard/monitors" || request.method === "GET" && url.pathname === "/v2/dashboard/overview") {
       const writing = request.method === "POST";
       const auth = writing ? authorizeGatewayRequest({ request, env, apiSuffix: "/dashboard/monitors" }) : await authorizeDashboardRequest({ request, env, apiSuffix: "/dashboard/overview" });
@@ -60490,7 +60847,14 @@ var runtime_default = {
           } catch {
           }
         }
-        return json(200, { serverTime: new Date(now).toISOString(), monitors, notifications, notificationsAvailable }, headers);
+        let executors;
+        try {
+          const executorStore = resolveExecutorStore(env);
+          executors = auth.authType === "machine" ? { ready: false, ownerAction: "\u5B9F\u884C\u57FA\u76E4\u306E\u8A73\u7D30\u306FDashboard\u3067\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044" } : executorStore ? executorOverview(await executorStore.get(), now) : { initialized: false, ownerAction: "\u5B9F\u884C\u57FA\u76E4\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093", ready: false };
+        } catch {
+          executors = { initialized: false, ownerAction: "\u5B9F\u884C\u57FA\u76E4\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093", ready: false };
+        }
+        return json(200, { serverTime: new Date(now).toISOString(), monitors, notifications, notificationsAvailable, executors }, headers);
       } catch (error2) {
         return json(
           error2 instanceof MonitorInputError ? error2.status : 503,
@@ -67095,6 +67459,11 @@ async function handleCustomGptSetupImportArtifactRequest(url, env) {
 }
 async function handlePasskeyOperatorPageRequest(request, env) {
   const url = new URL(request.url);
+  if (["failover", "failover-bootstrap", "executor-version"].includes(url.searchParams.get("mode"))) {
+    const auth = await authorizeDashboardRequest({ request, env, apiSuffix: "/executors/overview" });
+    if (!auth.ok) return new Response("Dashboard \u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059", { status: auth.status });
+    return new Response(renderExecutorOperatorPage(Object.fromEntries(url.searchParams)), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+  }
   const syncApiBase = normalizeOptionalHttpUrl(url.searchParams.get("syncApiBase"));
   const syncEnabled = Boolean(syncApiBase);
   const requestedActionType = url.searchParams.get("actionType");
@@ -68004,6 +68373,20 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
 }
 async function buildPasskeyApprovalScopeForRequest({ provider, payload }) {
   const highRiskKind = normalizeText34(payload?.highRiskKind || payload?.policyInput?.highRiskKind);
+  if (highRiskKind === "executor_failover_version") {
+    try {
+      return { ok: true, scope: executorVersionScope(payload) };
+    } catch {
+      return { ok: false, issues: ["invalid_version_scope"] };
+    }
+  }
+  if (["executor_failover", "executor_failover_bootstrap"].includes(highRiskKind)) {
+    try {
+      return { ok: true, scope: executorApprovalScope(payload, highRiskKind === "executor_failover_bootstrap") };
+    } catch {
+      return { ok: false, issues: ["invalid_executor_scope"] };
+    }
+  }
   if (highRiskKind === "vps_runner_admin" || highRiskKind === "vps_admin") {
     return resolveVpsMaintenanceApprovalScopeForChallenge({ provider, payload });
   }

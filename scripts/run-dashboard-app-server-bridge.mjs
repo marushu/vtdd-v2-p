@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { authorizeRuntimeExecutor } from "./executor-runtime-fence.mjs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -1990,6 +1991,8 @@ function createAppServerTurnActivityWatchdog({
 }
 
 export async function handleDashboardTurnRequest({
+  authorizeExecutor = authorizeRuntimeExecutor,
+  executorEnv = process.env,
   request,
   appServer,
   sendDashboardEvent,
@@ -2026,6 +2029,11 @@ export async function handleDashboardTurnRequest({
     return;
   }
 
+  const authorization = await authorizeExecutor({purpose:'dashboard_turn',runtimeUrl,token,fetchImpl,env:executorEnv});
+  if (authorization?.allowed !== true) {
+    await sendDashboardEvent({type:'app_server_turn_failed',schema:DEFAULT_SCHEMA,threadId:dashboardThreadId,status:'executor_fenced',text:'実行基盤が未承認・旧世代・待機中です。Butlerで初期化／切替準備と稼働状態を確認してください。'});
+    return;
+  }
   const debugSlowTurn = parseDashboardDebugSlowTurnRequest(request);
   if (debugSlowTurn.enabled) {
     if (!debugSlowTurn.ok) {
@@ -2415,17 +2423,6 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
   if (typeof WebSocket !== "function") {
     throw new Error("global WebSocket is required. Run with Node.js that provides WebSocket.");
   }
-  if (options.repoSyncPreflight !== false) {
-    const repoSync = await ensureDashboardBridgeRepoSynced({
-      repoRoot: options.cwd,
-      baseRef: options.repoSyncBaseRef || DEFAULT_REPO_SYNC_BASE_REF,
-      env: options.env || process.env,
-      run: options.run || runBridgeCommand
-    });
-    if (!repoSync.developmentAllowed) {
-      throw new Error(`Dashboard app-server bridge repo sync preflight blocked startup: ${repoSync.reason}`);
-    }
-  }
   const endpoint = buildDashboardAppServerBridgeEndpoint(options);
   const costBoundary =
     options.costBoundary ||
@@ -2448,8 +2445,7 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
       cwd: options.cwd,
       args: appServerArgs
     });
-  await appServer.initialize();
-  const selectAppServerForRequest = createDashboardAppServerClientSelector({
+  const rawSelector = createDashboardAppServerClientSelector({
     defaultAppServer: appServer,
     staticAppServer: Boolean(options.appServer),
     appServerFactory,
@@ -2458,6 +2454,31 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
     defaultModel: options.appServerModel,
     defaultReasoningEffort: options.appServerReasoningEffort
   });
+  let prepared = false;
+  const prepare = async () => {
+    if (prepared) return;
+  if (options.repoSyncPreflight !== false) {
+    const repoSync = await ensureDashboardBridgeRepoSynced({
+      repoRoot: options.cwd,
+      baseRef: options.repoSyncBaseRef || DEFAULT_REPO_SYNC_BASE_REF,
+      env: options.env || process.env,
+      run: options.run || runBridgeCommand
+    });
+    if (!repoSync.developmentAllowed) {
+      throw new Error(`Dashboard app-server bridge repo sync preflight blocked startup: ${repoSync.reason}`);
+    }
+  }
+    await appServer.initialize();
+    prepared = true;
+  };
+  const selectAppServerForRequest = async request => { await prepare(); return rawSelector(request); };
+  selectAppServerForRequest.fallbackForUnsupportedModel = async (...args) => {
+    const auth = await (options.authorizeExecutor || authorizeRuntimeExecutor)({purpose:'dashboard_turn',runtimeUrl:options.runtimeUrl,token:options.token,fetchImpl:options.fetchImpl,env:options.executorEnv || process.env});
+    if (auth?.allowed !== true) throw Error('executor_fenced');
+    return rawSelector.fallbackForUnsupportedModel(...args);
+  };
+  const startupAuthorization = await (options.authorizeExecutor || authorizeRuntimeExecutor)({purpose:'dashboard_turn',runtimeUrl:options.runtimeUrl,token:options.token,fetchImpl:options.fetchImpl,env:options.executorEnv || process.env});
+  if (startupAuthorization?.allowed === true) await prepare();
   let reconnects = 0;
   for (;;) {
     await connectDashboardAppServerBridgeOnce({
@@ -2871,6 +2892,8 @@ export function buildDashboardBridgeTurnStartedStatusEvent({
 }
 
 export async function connectDashboardAppServerBridgeOnce({
+  authorizeExecutor = authorizeRuntimeExecutor,
+  executorEnv = process.env,
   endpoint,
   token,
   appServer,
@@ -2963,12 +2986,18 @@ export async function connectDashboardAppServerBridgeOnce({
       turnQueue = turnQueue
         .catch(() => {})
         .then(async () => {
+          const authorization = await authorizeExecutor({purpose:'dashboard_turn',runtimeUrl,token,fetchImpl,env:executorEnv});
+          if (authorization?.allowed !== true) {
+            safeSend({type:'app_server_turn_failed',schema:DEFAULT_SCHEMA,threadId:payload.threadId,status:'executor_fenced',text:'実行基盤が待機中または旧世代のため、この依頼は実行できません。稼働状態と承認を確認してください。'});
+            return;
+          }
           const selected =
             typeof selectAppServerForRequest === "function"
               ? await selectAppServerForRequest(payload)
               : { appServer, usageProfile: payload.usageProfile || null, costBoundary: payload.costBoundary || null };
           const runSelectedTurn = (turnSelection, turnPayload = payload) =>
             handleDashboardTurnRequest({
+              authorizeExecutor, executorEnv,
               request: turnPayload,
               appServer: turnSelection.appServer || appServer,
               usageProfile: turnSelection.usageProfile || turnPayload.usageProfile || null,

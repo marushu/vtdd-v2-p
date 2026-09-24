@@ -1553,6 +1553,7 @@ test("dashboard app-server bridge handles a fresh dashboard turn through thread/
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       codexThreadId: null,
@@ -1627,6 +1628,7 @@ test("dashboard app-server bridge carries Business Mission through handleDashboa
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main-issue845",
       codexThreadId: null,
@@ -1721,6 +1723,7 @@ test("dashboard app-server bridge resumes an existing Codex thread and reports r
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main-unresolved",
       codexThreadId: "codex-thread-existing",
@@ -1801,6 +1804,7 @@ test("dashboard app-server bridge posts owner-action-required when app-server re
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       codexThreadId: null,
@@ -1879,6 +1883,7 @@ test("dashboard app-server bridge records owner-action notification failure in d
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -1950,6 +1955,7 @@ test("dashboard app-server bridge drains real client approval notification tasks
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -2022,6 +2028,7 @@ test("dashboard app-server bridge passes traffic-control context to codex app-se
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       codexThreadId: null,
@@ -2103,6 +2110,7 @@ test("dashboard app-server bridge passes materialized media paths to codex app-s
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       codexThreadId: null,
@@ -2183,6 +2191,7 @@ test("dashboard app-server bridge keeps listening for async turn notifications a
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       codexThreadId: null,
@@ -2230,6 +2239,7 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
       request: {
         threadId: "dashboard-main",
         repository: "marushu/vtdd-v2-p",
@@ -2283,6 +2293,7 @@ test("dashboard app-server bridge sends recoverable timeout when thread start st
 
   await assert.rejects(
     handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
       request: {
         threadId: "dashboard-main-unresolved",
         repository: null,
@@ -2346,6 +2357,7 @@ test("dashboard app-server bridge sends recoverable timeout when turn start stal
 
   await assert.rejects(
     handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
       request: {
         threadId: "dashboard-main-unresolved",
         repository: null,
@@ -2420,6 +2432,7 @@ test("dashboard app-server bridge runs Issue #590 debug slow turn without starti
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -2485,6 +2498,7 @@ test("dashboard app-server bridge emits fallback live progress before a quiet lo
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       text: "Issue #590 の production progress fallback を確認して"
@@ -2548,6 +2562,7 @@ test("dashboard app-server bridge does not suppress live fallback after low-info
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       text: "Issue #590 の低情報 progress 後 fallback を確認して"
@@ -2568,6 +2583,7 @@ test("dashboard app-server bridge does not suppress live fallback after low-info
 test("dashboard app-server bridge rejects out-of-range Issue #590 debug slow turn duration", async () => {
   const events = [];
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -2640,6 +2656,7 @@ test("dashboard app-server bridge repeats quiet status before hard stalled timeo
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -2689,6 +2706,7 @@ test("dashboard app-server bridge resets stalled timeout when app-server activit
   };
 
   const pending = handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -2765,6 +2783,7 @@ test("dashboard app-server bridge treats active thread status as activity", asyn
   };
 
   const pending = handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -2843,6 +2862,7 @@ test("dashboard app-server bridge does not reset stalled timeout for non-progres
   };
 
   const pending = handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -2903,6 +2923,7 @@ test("dashboard app-server bridge keeps approval wait status from becoming stall
   };
 
   const pending = handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -2981,6 +3002,7 @@ test("dashboard app-server bridge persists late completion after timeout instead
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       repository: "marushu/vtdd-v2-p",
@@ -3077,6 +3099,7 @@ test("dashboard app-server bridge ignores notifications for a different Codex tu
   };
 
   await handleDashboardTurnRequest({
+    authorizeExecutor: async () => ({allowed:true}),
     request: {
       threadId: "dashboard-main",
       codexThreadId: null,
@@ -3151,6 +3174,7 @@ test("dashboard app-server bridge sends one Japanese failure for app-server erro
   };
 
   const once = connectDashboardAppServerBridgeOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
     token: "secret-token",
     appServer,
@@ -3280,6 +3304,7 @@ test("dashboard app-server bridge retries unsupported ChatGPT account model with
   });
 
   const once = connectDashboardAppServerBridgeOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
     token: "secret-token",
     appServer: defaultAppServer,
@@ -3439,6 +3464,7 @@ test("dashboard app-server bridge drops stale backend thread when unsupported mo
   });
 
   const once = connectDashboardAppServerBridgeOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
     token: "secret-token",
     appServer: defaultAppServer,
@@ -3587,6 +3613,7 @@ test("dashboard app-server bridge retries unsupported default model when request
   });
 
   const once = connectDashboardAppServerBridgeOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
     token: "secret-token",
     appServer: defaultAppServer,
@@ -3732,6 +3759,7 @@ test("dashboard app-server bridge retries unsupported model reported as app-serv
   });
 
   const once = connectDashboardAppServerBridgeOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
     token: "secret-token",
     appServer: defaultAppServer,
@@ -3853,6 +3881,7 @@ test("dashboard app-server bridge does not loop when model-less fallback also fa
   });
 
   const once = connectDashboardAppServerBridgeOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
     token: "secret-token",
     appServer: defaultAppServer,
@@ -3921,6 +3950,7 @@ test("dashboard app-server bridge args preserve explicit disabled turn timeout",
 test("dashboard app-server bridge refuses to connect without a dashboard thread id", async () => {
   await assert.rejects(
     runDashboardAppServerBridge({
+    authorizeExecutor: async () => ({allowed:true}),
       runtimeUrl: "https://runtime.example",
       token: "secret-token",
       threadId: "",
@@ -4029,6 +4059,7 @@ test("dashboard app-server bridge args read app-server usage tuning from env and
 test("dashboard app-server bridge creates app-server client with usage tuning args", async () => {
   const created = [];
   await runDashboardAppServerBridge({
+    authorizeExecutor: async () => ({allowed:true}),
     runtimeUrl: "https://runtime.example",
     token: "secret-token",
     threadId: "dashboard-main",
@@ -4300,6 +4331,7 @@ test("dashboard app-server bridge repo sync preflight blocks app-server initiali
 
   await assert.rejects(
     runDashboardAppServerBridge({
+    authorizeExecutor: async () => ({allowed:true}),
       runtimeUrl: "https://runtime.example",
       token: "secret-token",
       threadId: "dashboard-main",
@@ -4373,6 +4405,7 @@ test("dashboard app-server bridge resolves one connection when the WebSocket clo
   };
 
   const once = connectDashboardAppServerBridgeOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
     token: "secret-token",
     appServer,
@@ -4428,6 +4461,7 @@ test("dashboard app-server bridge reconnects the dashboard WebSocket without rei
   };
 
   const running = runDashboardAppServerBridge({
+    authorizeExecutor: async () => ({allowed:true}),
     runtimeUrl: "https://runtime.example",
     token: "secret-token",
     threadId: "dashboard-main",
@@ -4492,6 +4526,7 @@ test("dashboard app-server bridge sends heartbeat pings and records pong-confirm
   };
 
   const once = connectDashboardAppServerBridgeOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
     token: "secret-token",
     appServer,
