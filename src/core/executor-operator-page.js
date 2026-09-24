@@ -58,3 +58,25 @@ button.onclick=async()=>{button.disabled=true;try{
 }catch(e){status.textContent=e.message;}finally{button.disabled=false;}};
 </script></body></html>`,{active:'home',layout:'home'});
 }
+
+// Digest-only operator: raw credentials never enter the browser.
+export function renderExecutorTransportEnrollmentPage(params={}) {
+  const executorId = ['mac','vps'].includes(params.executorId) ? params.executorId : null;
+  const issueNumber = /^[1-9]\d{0,9}$/.test(params.issueNumber || '') ? Number(params.issueNumber) : null;
+  return renderButlerDocument(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>実行ノード通信の承認</title><style>.transport-main{max-width:640px;margin:0 auto;padding:20px;box-sizing:border-box}.transport-main h1{font-size:1.5rem}.transport-main label{display:block;margin:18px 0}.transport-main textarea{display:block;width:100%;box-sizing:border-box;padding:12px;margin-top:8px;font:16px monospace;overflow-wrap:anywhere;resize:vertical}.transport-main button{width:100%;min-height:48px}.transport-main p{overflow-wrap:anywhere}</style></head><body><main class="transport-main"><h1>${executorId?.toUpperCase() || 'ノード未指定'} 通信の登録・更新</h1><p>Issue #${issueNumber ?? '未指定'}。端末helperが出力したSHA-256 digestだけを入力してください。raw tokenは入力・送信しないでください。PRIMARY・generation・公開鍵・承認済み版・merge/deploy権限は変更しません。misumiと共有gateway credentialには触れません。</p><p id="enrolled"></p><label>新しいdigest（sha256:…）<textarea id="newDigest" rows="3" autocomplete="off" spellcheck="false" autocapitalize="off"></textarea></label><label>現在のdigest（初回登録は空欄）<textarea id="previousDigest" rows="3" autocomplete="off" spellcheck="false" autocapitalize="off"></textarea></label><button id="approve" disabled>表示したdigestをパスキーで承認</button><p id="status" role="status"></p><a href="/dashboard">ホームへ</a></main><script>
+${passkeyAuthenticationScript}
+const config=${JSON.stringify({executorId,issueNumber})};
+const button=document.getElementById('approve'), status=document.getElementById('status');let enrolled;
+(async()=>{try{const r=await fetch('/v2/executors/overview',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('登録状態を取得できません');const v=await r.json();enrolled=v.transportEnrolled?.[config.executorId]===true;document.getElementById('enrolled').textContent=enrolled?'登録済み：現在と新しいdigestを指定してください':'未登録：新しいdigestを指定してください';button.disabled=!config.executorId||!config.issueNumber;}catch(e){status.textContent=e.message;}})();
+async function post(path,body){const r=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw Error(v.error||'承認失敗');return v;}
+button.onclick=async()=>{button.disabled=true;try{
+ const newDigest=document.getElementById('newDigest').value.trim(), previousDigest=document.getElementById('previousDigest').value.trim();
+ if(!/^sha256:[a-f0-9]{64}$/.test(newDigest)||!(enrolled?/^sha256:[a-f0-9]{64}$/.test(previousDigest):previousDigest==='')||newDigest===previousDigest)throw Error('helperのdigestと現在の登録状態を確認してください');
+ const body={...config,newDigest,previousDigest,targetConfirmed:true};
+ const c=await post('/v2/approval/passkey/challenge',{...body,highRiskKind:'executor_transport_enroll',policyInput:{actionType:'destructive',highRiskKind:'executor_transport_enroll'}});
+ const assertion=await navigator.credentials.get({publicKey:decodeAuthenticationOptions(c.optionsJSON)});
+ const v=await post('/v2/approval/passkey/verify',{sessionId:c.sessionId,response:encodeAuthenticationAssertion(assertion)});
+ await post('/v2/executors/transport/enroll',{...body,approvalGrantId:v.approvalGrant?.approvalId||v.approvalGrantId});enrolled=true;document.getElementById('previousDigest').value=newDigest;document.getElementById('newDigest').value='';document.getElementById('enrolled').textContent='登録済み';status.textContent='通信digestを登録しました。署名付きreportの確認へ進めます。';
+}catch(e){status.textContent=e.message;}finally{button.disabled=!config.executorId||!config.issueNumber;}};
+</script></body></html>`,{active:'home',layout:'home'});
+}

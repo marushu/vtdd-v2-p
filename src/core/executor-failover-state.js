@@ -1,3 +1,4 @@
+import { transportEnrollmentScope, verifyTransportDigest, transportEnrollmentStatus } from './executor-transport-credential.js';
 import { enrollmentScope, verifyNodeRequest } from './executor-node-identity.js';
 // Issue #858: control-plane state only. Never starts/stops a runner.
 export class ExecutorInputError extends Error {
@@ -165,7 +166,12 @@ export function verifyLeaseReceipt(state, receipt, now = Date.now()) {
   if (!state?.activationPending || !expected || Object.keys(receipt).some(k => receipt[k] !== expected[k]) || now < Date.parse(receipt.issuedAt)-120000 || now >= Date.parse(receipt.expiresAt)) fail('lease_receipt_mismatch_or_expired',409);
   return { valid: true, receipt: structuredClone(expected) };
 }
-async function reduceEnvelope(envelope, kind, p, now) {
+async function reduceEnvelope(envelope, kind, p, now, transportDigest = null) {
+  if (kind === 'enrollTransport') {
+    transportEnrollmentScope(p);
+    if ((envelope.transports?.[p.executorId]?.digest || '') !== p.previousDigest) fail('transport_digest_conflict',409);
+    return {...envelope,transports:{...envelope.transports,[p.executorId]:{digest:p.newDigest,issueNumber:p.issueNumber,enrolledAt:new Date(now).toISOString()}}};
+  }
   if (kind === 'enroll') {
     enrollmentScope(p);
     if ((envelope.identities?.[p.executorId] || '') !== p.previousPublicKey) fail('node_key_conflict',409);
@@ -175,6 +181,7 @@ async function reduceEnvelope(envelope, kind, p, now) {
     return {...envelope,control,candidate:envelope.candidate?.executorId === p.executorId ? null : envelope.candidate,identities:{...envelope.identities,[p.executorId]:p.publicKey}};
   }
   if (kind === 'signedReport' || kind === 'signedAuthorize') {
+    if (transportDigest !== null) verifyTransportDigest(envelope,p?.payload?.executorId,transportDigest);
     envelope = await verifyNodeRequest(envelope,kind === 'signedReport' ? 'report' : 'authorize',p,now);
     p = p.payload;
     if (envelope.control && p.generation !== envelope.control.generation) fail('node_generation_conflict',409);
@@ -201,24 +208,24 @@ async function reduceEnvelope(envelope, kind, p, now) {
 export function createInMemoryExecutorStore() {
   let envelope = { control: null, candidate: null };
   let serial = Promise.resolve();
-  const mutate = (kind,p,now=Date.now()) => { const task = serial.then(async () => { envelope=await reduceEnvelope(envelope,kind,p,now); return structuredClone(kind === 'signedAuthorize' ? envelope.decision : envelope.control); }); serial = task.catch(()=>{}); return task; };
-  return { enroll:(p,n)=>mutate('enroll',p,n), signedReport:(p,n)=>mutate('signedReport',p,n), signedAuthorize:(p,n)=>mutate('signedAuthorize',p,n), async getIdentities() {return structuredClone(envelope.identities || {});}, async get() { return structuredClone(envelope.control); }, async getCandidate() { return structuredClone(envelope.candidate); }, bootstrap: (p,n)=>mutate('bootstrap',p,n), report:(p,n)=>mutate('report',p,n), approveVersion:(p,n)=>mutate('version',p,n), transition:(p,n)=>mutate('transition',p,n) };
+  const mutate = (kind,p,now=Date.now(),transportDigest=null) => { const task = serial.then(async () => { envelope=await reduceEnvelope(envelope,kind,p,now,transportDigest); return structuredClone(kind === 'signedAuthorize' ? envelope.decision : envelope.control); }); serial = task.catch(()=>{}); return task; };
+  return { enrollTransport:(p,n)=>mutate('enrollTransport',p,n), async getTransportStatus() {return transportEnrollmentStatus(envelope);}, enroll:(p,n)=>mutate('enroll',p,n), signedReport:(p,n,d)=>mutate('signedReport',p,n,d), signedAuthorize:(p,n,d)=>mutate('signedAuthorize',p,n,d), async getIdentities() {return structuredClone(envelope.identities || {});}, async get() { return structuredClone(envelope.control); }, async getCandidate() { return structuredClone(envelope.candidate); }, bootstrap: (p,n)=>mutate('bootstrap',p,n), report:(p,n)=>mutate('report',p,n), approveVersion:(p,n)=>mutate('version',p,n), transition:(p,n)=>mutate('transition',p,n) };
 }
 export function createD1ExecutorStore(db) {
   let schema;
   const ready = () => schema ??= db.prepare('CREATE TABLE IF NOT EXISTS vtdd_executor_control (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, payload TEXT NOT NULL)').run();
   const read = async () => { await ready(); return db.prepare('SELECT revision,payload FROM vtdd_executor_control WHERE id=1').first(); };
   const decode = row => { const p=row ? JSON.parse(row.payload) : null; const e = p?.primaryExecutor ? {control:p,candidate:null} : p ?? {control:null,candidate:null}; if(e.control)validateControlState(e.control); return e; };
-  async function mutate(kind, p, now = Date.now()) {
+  async function mutate(kind, p, now = Date.now(), transportDigest = null) {
     for (let attempt = 0; attempt < 8; attempt++) {
       const row = await read();
-      const next = await reduceEnvelope(decode(row),kind,p,now);
+      const next = await reduceEnvelope(decode(row),kind,p,now,transportDigest);
       const result = row ? await db.prepare('UPDATE vtdd_executor_control SET revision=revision+1,payload=? WHERE id=1 AND revision=?').bind(JSON.stringify(next),row.revision).run() : await db.prepare('INSERT OR IGNORE INTO vtdd_executor_control (id,revision,payload) VALUES (1,1,?)').bind(JSON.stringify(next)).run();
       if (result.meta?.changes === 1) return kind === 'signedAuthorize' ? next.decision : next.control;
     }
     fail('generation_conflict',409);
   }
-  return { enroll:(p,n)=>mutate('enroll',p,n), signedReport:(p,n)=>mutate('signedReport',p,n), signedAuthorize:(p,n)=>mutate('signedAuthorize',p,n), async getIdentities() {return decode(await read()).identities || {};}, async get() { return decode(await read()).control; }, async getCandidate() { return decode(await read()).candidate; }, bootstrap: (p,n) => mutate('bootstrap',p,n), report: (p,n) => mutate('report',p,n), approveVersion: (p,n) => mutate('version',p,n), transition: (p,n) => mutate('transition',p,n) };
+  return { enrollTransport:(p,n)=>mutate('enrollTransport',p,n), async getTransportStatus() {return transportEnrollmentStatus(decode(await read()));}, enroll:(p,n)=>mutate('enroll',p,n), signedReport:(p,n,d)=>mutate('signedReport',p,n,d), signedAuthorize:(p,n,d)=>mutate('signedAuthorize',p,n,d), async getIdentities() {return decode(await read()).identities || {};}, async get() { return decode(await read()).control; }, async getCandidate() { return decode(await read()).candidate; }, bootstrap: (p,n) => mutate('bootstrap',p,n), report: (p,n) => mutate('report',p,n), approveVersion: (p,n) => mutate('version',p,n), transition: (p,n) => mutate('transition',p,n) };
 }
 const stores = new WeakMap();
 export function resolveExecutorStore(env) {
