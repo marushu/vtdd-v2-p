@@ -97,8 +97,29 @@ test("E2E-845 owner goal survives Dashboard Mission runtime into VPS prompt with
   assert.match(vpsPrompt, /businessMission/);
   assert.match(vpsPrompt, /TOMIO を売れる状態まで持っていって/);
   assert.match(vpsPrompt, /"role":"research"/);
+  assert.match(vpsPrompt, /businessMissionResultTarget/);
+  assert.match(vpsPrompt, /VTDD_BUSINESS_WORKSTREAM_RESULT/);
   assert.match(vpsPrompt, /Agent \/ subagent の内部交通整理を owner に戻さず/);
   assert.match(vpsPrompt, /merge \/ deploy \/ spend \/ external publish/);
+
+  const researchWorkstream = missionTurn.businessMissionSummary.nextAutomaticWork[0];
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "business_mission_workstream_result",
+      threadId,
+      missionId,
+      workstreamId: researchWorkstream.workstreamId,
+      status: "completed",
+      outcome: "市場・競合・技術制約を整理",
+      evidence: ["research-evidence"]
+    })
+  );
+
+  const reconciledMission = storage.values.get(`business_mission_active:${threadId}`);
+  assert.equal(reconciledMission.workstreams[0].status, "completed");
+  assert.equal(reconciledMission.workstreams[1].role, "product");
+  assert.equal(reconciledMission.workstreams[1].status, "ready");
 
   await room.webSocketMessage(
     dashboardSocket,
@@ -129,6 +150,8 @@ test("E2E-845 owner goal survives Dashboard Mission runtime into VPS prompt with
   const followupTurn = lastBridgeTurn(bridgeSocket);
   assert.equal(followupTurn.businessMission.missionId, missionId);
   assert.equal(followupTurn.businessMission.ownerGoal, "TOMIO を売れる状態まで持っていって");
+  assert.equal(followupTurn.businessMissionSummary.progress.completed, 1);
+  assert.equal(followupTurn.businessMissionSummary.nextAutomaticWork[0].role, "product");
 
   await room.webSocketMessage(
     dashboardSocket,

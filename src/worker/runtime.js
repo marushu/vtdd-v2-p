@@ -12,6 +12,7 @@ import {
   CustomGptSetupChannel,
   MemoryRecordType,
   BusinessMissionStatus,
+  applyBusinessWorkstreamResult,
   buildBusinessMissionOwnerSummary,
   createBusinessMission,
   appendDecisionLogFromGateway,
@@ -685,6 +686,102 @@ export class DashboardChatRoom {
     ].filter(Boolean);
   }
 
+  async acceptBusinessMissionWorkstreamResult({ socket, attachment, payload } = {}) {
+    const threadId = normalizeDashboardThreadId(payload?.threadId || payload?.thread_id || attachment?.threadId);
+    const attachmentThreadId = normalizeDashboardThreadId(attachment?.threadId);
+    const missionId = normalizeDashboardEventText(payload?.missionId || payload?.mission_id);
+    const workstreamId = normalizeDashboardEventText(payload?.workstreamId || payload?.workstream_id);
+    const status = normalizeDashboardEventText(payload?.status).toLowerCase();
+    const outcome = sanitizeDashboardChatText(payload?.outcome);
+    const blocker = sanitizeDashboardChatText(payload?.blocker);
+    const requiredAction = sanitizeDashboardChatText(payload?.requiredAction || payload?.required_action);
+    const evidence = Array.isArray(payload?.evidence)
+      ? payload.evidence.map((item) => sanitizeDashboardChatText(item)).filter(Boolean)
+      : [];
+    const createdAt = normalizeIsoTimestamp(payload?.createdAt || payload?.created_at) || new Date().toISOString();
+
+    const reject = (reason) => {
+      this.sendSocket(socket, {
+        type: "business_mission_workstream_result_rejected",
+        ok: false,
+        threadId: threadId || null,
+        missionId: missionId || null,
+        workstreamId: workstreamId || null,
+        reason
+      });
+    };
+
+    if (!threadId || !missionId || !workstreamId) {
+      reject("threadId, missionId, and workstreamId are required");
+      return;
+    }
+    if (attachmentThreadId && attachmentThreadId !== threadId) {
+      reject("bridge threadId does not match Mission result threadId");
+      return;
+    }
+    if (!["completed", "blocked"].includes(status)) {
+      reject("Mission result status must be completed or blocked");
+      return;
+    }
+    if (status === "completed" && evidence.length === 0) {
+      reject("completed Mission result requires evidence");
+      return;
+    }
+    if (status === "blocked" && !blocker) {
+      reject("blocked Mission result requires blocker");
+      return;
+    }
+
+    const currentMission = await this.readBusinessMission(threadId);
+    if (!currentMission || normalizeDashboardEventText(currentMission.missionId) !== missionId) {
+      reject("Mission result is stale or does not match the active Mission");
+      return;
+    }
+
+    const workstream = Array.isArray(currentMission.workstreams)
+      ? currentMission.workstreams.find((item) => normalizeDashboardEventText(item?.workstreamId) === workstreamId)
+      : null;
+    if (!workstream) {
+      reject("Mission result workstreamId is not part of the active Mission");
+      return;
+    }
+    const currentStatus = normalizeDashboardEventText(workstream.status).toLowerCase();
+    if (!["ready", "running"].includes(currentStatus)) {
+      reject("Mission result workstream is no longer ready/running");
+      return;
+    }
+
+    let updatedMission;
+    try {
+      updatedMission = applyBusinessWorkstreamResult(currentMission, {
+        workstreamId,
+        status,
+        outcome,
+        blocker,
+        requiredAction,
+        evidence,
+        resultSource: "dashboard_app_server_bridge",
+        reconciledAt: createdAt
+      });
+    } catch (error) {
+      reject(sanitizeDashboardChatText(error?.message || "Mission result reconciliation failed"));
+      return;
+    }
+
+    await this.writeBusinessMission(threadId, updatedMission);
+    const summary = buildBusinessMissionOwnerSummary(updatedMission);
+    await this.broadcastThread({ threadId });
+    this.sendSocket(socket, {
+      type: "business_mission_workstream_result_accepted",
+      ok: true,
+      threadId,
+      missionId,
+      workstreamId,
+      status,
+      businessMissionSummary: summary
+    });
+  }
+
   async acceptAppServerBridgeMessage({ socket, attachment, payload }) {
     if (normalizeDashboardEventText(payload?.type).toLowerCase() === "deploy_bridge_sync_restart_result") {
       await this.acceptDeployBridgeSyncRestartResult({ socket, attachment, payload });
@@ -692,6 +789,10 @@ export class DashboardChatRoom {
     }
     if (normalizeDashboardEventText(payload?.type).toLowerCase() === "vps_local_helper_queue_enqueue_result") {
       await this.acceptVpsLocalHelperQueueEnqueueResult({ socket, attachment, payload });
+      return;
+    }
+    if (normalizeDashboardEventText(payload?.type).toLowerCase() === "business_mission_workstream_result") {
+      await this.acceptBusinessMissionWorkstreamResult({ socket, attachment, payload });
       return;
     }
     const normalized = normalizeDashboardAppServerBridgeEvent(payload, {

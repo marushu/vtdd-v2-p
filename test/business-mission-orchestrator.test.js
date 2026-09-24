@@ -239,9 +239,15 @@ test("completed workstream unlocks its dependent workstream", () => {
   mission = applyBusinessWorkstreamResult(mission, {
     workstreamId: first.workstreamId,
     status: BusinessWorkstreamStatus.COMPLETED,
-    outcome: "research complete"
+    outcome: "research complete",
+    evidence: ["docs/research.md"],
+    resultSource: "dashboard_app_server_bridge",
+    reconciledAt: "2026-09-23T11:30:00Z"
   });
 
+  assert.deepEqual(mission.workstreams[0].evidence, ["docs/research.md"]);
+  assert.equal(mission.workstreams[0].resultSource, "dashboard_app_server_bridge");
+  assert.equal(mission.workstreams[0].reconciledAt, "2026-09-23T11:30:00Z");
   assert.equal(mission.workstreams[1].status, BusinessWorkstreamStatus.READY);
   assert.deepEqual(getReadyBusinessWorkstreams(mission).map((item) => item.workstreamId), [
     mission.workstreams[1].workstreamId

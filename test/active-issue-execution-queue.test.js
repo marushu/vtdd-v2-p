@@ -85,9 +85,8 @@ test("active issue execution queue names current open PR hygiene", () => {
 });
 
 test("active issue execution queue names the next automatic implementation lane", () => {
-  assert.equal(sectionBody("Now").includes("Issue #849: Lean Butler Execution Contract"), true);
-  assert.equal(sectionBody("Now").includes("small/normal/root planning tiers"), true);
-  assert.equal(sectionBody("Next").includes("Issue #845: resume Business Mission Orchestrator"), true);
+  assert.equal(sectionBody("Now").includes("Issue #845: Mission Workstream Reconciliation"), true);
+  assert.equal(sectionBody("Now").includes("updates durable Mission state"), true);
   assert.equal(sectionBody("Next").includes("Issue #741: resume the existing VPS local helper queue"), true);
   assert.equal(doc.includes("2026-06-06 owner input classified Issue #811 as `ROOT`"), true);
   assert.equal(doc.includes("2026-06-06 owner input classified Issue #814 as `ROOT` support for Issue"), true);

@@ -33,6 +33,7 @@ import {
   executeDeployBridgeSyncRestartRequest,
   executeVpsLocalHelperQueueEnqueueRequest,
   executeVpsRunnerWakeup,
+  extractBusinessMissionWorkstreamResult,
   extractDashboardAppServerUnsupportedModel,
   extractAppServerNotificationTurnId,
   formatDashboardMediaReferenceLines,
@@ -745,6 +746,47 @@ test("dashboard app-server bridge includes Business Mission coordination context
   assert.match(text, /Issue traceability/);
   assert.match(text, /merge \/ deploy \/ spend \/ external publish/);
   assert.match(text, /Owner message:\nTOMIO を売れる状態まで持っていって/);
+});
+
+test("dashboard app-server bridge validates and strips Business Mission workstream result marker", () => {
+  const missionId = "mission:dashboard-main:tomio";
+  const workstreamId = `${missionId}:ws:01:research`;
+  const parsed = extractBusinessMissionWorkstreamResult(
+    `調査を完了しました。\n<!-- VTDD_BUSINESS_WORKSTREAM_RESULT {"missionId":"${missionId}","workstreamId":"${workstreamId}","status":"completed","outcome":"競合と技術制約を整理","evidence":["docs/research.md","test evidence"]} -->`,
+    {
+      businessMission: { missionId },
+      businessMissionSummary: {
+        nextAutomaticWork: [{ workstreamId, role: "research" }]
+      }
+    }
+  );
+
+  assert.equal(parsed.reason, null);
+  assert.equal(parsed.cleanText, "調査を完了しました。");
+  assert.equal(parsed.result.missionId, missionId);
+  assert.equal(parsed.result.workstreamId, workstreamId);
+  assert.equal(parsed.result.status, "completed");
+  assert.deepEqual(parsed.result.evidence, ["docs/research.md", "test evidence"]);
+
+  const missingEvidence = extractBusinessMissionWorkstreamResult(
+    `完了。\n<!-- VTDD_BUSINESS_WORKSTREAM_RESULT {"missionId":"${missionId}","workstreamId":"${workstreamId}","status":"completed","evidence":[]} -->`,
+    {
+      businessMission: { missionId },
+      businessMissionSummary: { nextAutomaticWork: [{ workstreamId }] }
+    }
+  );
+  assert.equal(missingEvidence.result, null);
+  assert.equal(missingEvidence.reason, "completed_evidence_required");
+
+  const stale = extractBusinessMissionWorkstreamResult(
+    `完了。\n<!-- VTDD_BUSINESS_WORKSTREAM_RESULT {"missionId":"old-mission","workstreamId":"${workstreamId}","status":"completed","evidence":["x"]} -->`,
+    {
+      businessMission: { missionId },
+      businessMissionSummary: { nextAutomaticWork: [{ workstreamId }] }
+    }
+  );
+  assert.equal(stale.result, null);
+  assert.equal(stale.reason, "mission_mismatch");
 });
 
 test("dashboard app-server bridge keeps ordinary usage metadata out of turn prompt", () => {
@@ -1609,7 +1651,7 @@ test("dashboard app-server bridge carries Business Mission through handleDashboa
             params: {
               threadId: "codex-thread-mission-845",
               turnId: "turn-mission-845",
-              delta: "Mission を受け取りました。"
+              delta: '調査を完了しました。\n<!-- VTDD_BUSINESS_WORKSTREAM_RESULT {"missionId":"mission-dashboard-main-issue845-tomio","workstreamId":"mission-dashboard-main-issue845-tomio:ws:01:research","status":"completed","outcome":"市場と技術制約を整理","evidence":["docs/research.md"]} -->'
             }
           });
           handler({
@@ -1672,8 +1714,18 @@ test("dashboard app-server bridge carries Business Mission through handleDashboa
   assert.match(inputText, /TOMIO を売れる状態まで持っていって/);
   assert.match(inputText, /"role":"research"/);
   assert.match(inputText, /businessMissionCoordinationRule/);
+  assert.match(inputText, /businessMissionResultTarget/);
+  assert.match(inputText, /VTDD_BUSINESS_WORKSTREAM_RESULT/);
   assert.match(inputText, /merge \/ deploy \/ spend \/ external publish/);
-  assert.ok(events.find((event) => event.type === "app_server_reply"));
+  const reply = events.find((event) => event.type === "app_server_reply");
+  const result = events.find((event) => event.type === "business_mission_workstream_result");
+  assert.ok(reply);
+  assert.equal(reply.text, "調査を完了しました。");
+  assert.ok(result);
+  assert.equal(result.missionId, "mission-dashboard-main-issue845-tomio");
+  assert.equal(result.workstreamId, "mission-dashboard-main-issue845-tomio:ws:01:research");
+  assert.equal(result.status, "completed");
+  assert.deepEqual(result.evidence, ["docs/research.md"]);
 });
 
 test("dashboard app-server bridge resumes an existing Codex thread and reports resume state", async () => {
