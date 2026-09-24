@@ -1,6 +1,6 @@
 ## This PR satisfies Intent
 
-- Issue #858 のMac PRIMARY / VPS STANDBY手動切替で、短いheartbeat途絶だけの昇格と共有bearerによる別ノードの偽装を拒否する。現PR用のローカル本文候補。GitHubへは未反映。
+- Issue #858 のMac PRIMARY / VPS STANDBY手動切替で、短いheartbeat途絶だけの昇格と共有bearerによる別ノードの偽装を拒否する。review #3 と operator 監査を反映したPR本文。
 
 ## Satisfied Success Criteria
 
@@ -32,11 +32,11 @@ None.
 - 既に通っている経路: 既存passkey provider、D1 CAS、private config。
 - 未確認の境界: 実ブラウザとliveノードへの配備。
 - 穴が出そうな箇所: 既発行の外部副作用は取消不可。quiesce/隔離は実運用の前提。
-- PR 前に確認すること: 対象source/docs/testsを照合。remote PR状態は本作業で未照会。
+- PR 前に確認すること: 対象source/docs/testsを照合。GitHub Issue #858 はopen、branchはoperator監査後にpush済み。
 - 実装候補と捨てた案: heartbeatだけの隔離推測、共有bearerをattestationとみなす案、自動切替を不採用。
 - merge 後に通す E2E: 本作業ではmerge禁止。将来のscoped承認下でlive E2Eが必要。
 - 次の PR を増やさない理由: 署名と登録、transitionとpasskey/UIを同一PRの範囲で揃え、予測可能な接続漏れを残さない。live境界は未完として残す。
-- 停止条件: network mutation、実credentials、install、services、push/merge/deployは禁止。
+- 停止条件: review task自体ではnetwork mutation、実credentials、install、services、push/merge/deployを禁止。operator監査後はbranch pushのみ実施し、merge/deployは未実施。
 
 ## Dry-run Impact Report
 
@@ -45,7 +45,7 @@ None.
 - Explicit Non-goals: 自動切替、本番操作、他Issueへの拡張。
 - Expected touched files/routes/workflows: executor関連source/scripts/tests/docs、worker.js。
 - Affected Issues: Issue #858のみ。
-- Affected PRs: 現PRブランチのみ。remote状態は未照会。
+- Affected PRs: 本PRのみ。branch issue-858-mac-primary-vps-standby はGitHubへpush済み。
 - Affected workflows: 変更なし。
 - Affected runtime/operator surfaces: executor API、passkey operator、reporter、bridge/runner fence。
 - What may break if we patch narrowly: scopeとUI/signersの不一致で承認・reportが切れる。
@@ -113,11 +113,11 @@ None.
 
 ## Out-of-scope but NOT implemented
 
-- push/merge/deploy/install/services/live monitors/実credentials。
+- merge/deploy/install/services/live monitors/実credentials。branch pushのみoperator監査後に実施。
 
 ## Extra changes (if any)
 
-checkpoint-sync-004で同期拒否の24テストとsynthetic unsynced画面fixtureを追加。80 focused成功、clean全体1410件中1409成功・1skip。実ブラウザは引き続きsandbox起動拒否で未検証。既存.localは未変更・commit対象外。commit/pushなし。PR本文はローカル候補のみ。
+checkpoint-sync-004で同期拒否の24テストとsynthetic unsynced画面fixtureを追加。80 focused成功、clean全体1410件中1409成功・1skip。実ブラウザは引き続きsandbox起動拒否で未検証。既存.localは未変更・commit対象外。operator監査後にcommit/push済み。merge/deploy/live操作は未実施。
 
 <!-- VTDD metadata -->
 - Issue: Issue #858
