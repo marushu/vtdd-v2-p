@@ -11,9 +11,16 @@ preemption decisions, blockers, and evidence gaps.
 
 Last rebuilt from GitHub runtime truth: 2026-09-23
 
-## Owner instruction delta — Issue #858
+## Owner instruction delta — Issue #862
 
-Issue #858 は ROOT / Now。owner の明示指示に基づき Mac PRIMARY / VPS STANDBY
+2026-09-24: owner指示により#862をROOT / Nowへ戻す。native desktop scheduler依存と診断だけのPRを撤回し、
+既存DashboardChatRoom DO alarm→既存Mac bridge→既存Codex thread resumeを実接続する。
+#858はNextに保持し、全active Issueの成功条件は縮小しない。Macの新規cron/LaunchAgent、別ブラウザ、
+独自watcherは作らない。Worker/bridgeのコードとmapped integration E2Eまで進め、merge/deployはGO境界。
+
+## Previous owner instruction delta — Issue #858
+
+当時のIssue #858 は ROOT / Now。owner の明示指示に基づき Mac PRIMARY / VPS STANDBY
 へ切り替える。#741 の always-on 前提のまま進むと authority drift を生むため preempt する。
 #741 は recovery / standby lifecycle 作業として active/incomplete のまま再分類し、
 close・downscope はしない。他の active Issues の成功条件も変更しない。
@@ -234,11 +241,19 @@ threadLocalAssumptionsPromoted=true: この判断を作戦図と現行契約の�
 
 ## Now
 
+- Issue #862: 既存Codexブラウザスレッドの定期再開。ROOT / new_issue_now、owner明示指示。
+  Issue #845の継続実行とIssue #853のfresh監視証跡のruntime connection / E2Eを阻害するためpreempt。
+  DO alarm→既存bridge→同一Codex threadを実装。durable run lease・Mac generation fence・fresh結果照合・Butler操作を接続。
+  mapped integration E2Eは初回＋2周期。live Apple E2Eは反映後の証拠待ち。merge/deploy/credential/permission mutationは範囲外。
+
+## Next
+
+### Previous Now（Issue #862によりpreempt、active / Next）
+
 - Issue #858: Mac PRIMARY / VPS STANDBY authority / persistence slice。
   ROOT preemption、owner explicit instruction。手動 passkey 切替、報告、readiness、
   exact-version policy を実装・検証する。live 切替や deploy は別承認。
 
-## Next
 
 ### Previous Now（#858 により preempt、active / Next）
 

@@ -2014,6 +2014,8 @@ export async function handleDashboardTurnRequest({
 }) {
   const dashboardThreadId = String(request.threadId || "");
   const text = String(request.text || "");
+  let monitorBrowserRead = false;
+  let monitorFinalText = '';
   const turnUsageProfile = normalizeDashboardAppServerUsageProfile(usageProfile || request.usageProfile || "conversation");
   const turnCostBoundary =
     costBoundary && typeof costBoundary === "object"
@@ -2029,7 +2031,7 @@ export async function handleDashboardTurnRequest({
     return;
   }
 
-  const authorization = await authorizeExecutor({purpose:'dashboard_turn',runtimeUrl,token,fetchImpl,env:executorEnv});
+  const authorization = await authorizeExecutor({purpose:'dashboard_turn',runtimeUrl,token,fetchImpl,env:executorEnv, ...(request.browserMonitor ? {expectedExecutor:{executorId:'mac',generation:request.browserMonitor.generation}} : {})});
   if (authorization?.allowed !== true) {
     await sendDashboardEvent({type:'app_server_turn_failed',schema:DEFAULT_SCHEMA,threadId:dashboardThreadId,status:'executor_fenced',text:'実行基盤が未承認・旧世代・待機中です。Butlerで初期化／切替準備と稼働状態を確認してください。'});
     return;
@@ -2212,6 +2214,13 @@ export async function handleDashboardTurnRequest({
     if (isAppServerActivityNotification(message)) {
       markAppServerActivity();
     }
+    if (request.browserMonitor && message.method === 'item/completed') {
+      const item = message.params?.item;
+      const tool = `${item?.server || item?.namespace || ''} ${item?.tool || ''}`;
+      if (['mcpToolCall','dynamicToolCall'].includes(item?.type) && item.status === 'completed' && !item.error && item.success !== false && /(?:cua|computer.?use|browser.?use)/i.test(tool)) monitorBrowserRead = true;
+      // Commentary deltas are not part of the machine-readable final answer.
+      if (item?.type === 'agentMessage' && item.phase !== 'commentary') monitorFinalText = String(item.text || '');
+    }
     const event = mapAppServerNotificationToDashboardEvent(message, {
       dashboardThreadId,
       codexThreadId,
@@ -2234,6 +2243,7 @@ export async function handleDashboardTurnRequest({
     if (event.type === "app_server_status" && event.status === "replied") {
       event.type = "app_server_reply";
       event.text = accumulatedText || event.text;
+      if (request.browserMonitor) { event.browserRead = monitorBrowserRead; event.text = monitorFinalText || accumulatedText; }
       if (timedOut) {
         event.lateCompletion = true;
         event.text = `遅れて返信が届きました。\n\n${event.text}`;
@@ -2271,6 +2281,7 @@ export async function handleDashboardTurnRequest({
   const restoreApprovalRequestHandler =
     typeof appServer.setApprovalRequestHandler === "function"
       ? appServer.setApprovalRequestHandler(async ({ message, approvalResponse }) => {
+          if (request.browserMonitor) return; // Only verified Apple authentication results may notify.
           const payload = buildOwnerActionRequiredPayloadForAppServerApproval({
             message,
             request,
@@ -2891,6 +2902,29 @@ export function buildDashboardBridgeTurnStartedStatusEvent({
   };
 }
 
+// Separate from conversational retries: an uncertain booking must never start a new thread.
+export async function runBrowserMonitorTurn({ request, appServer, selectAppServerForRequest, authorizeExecutor = authorizeRuntimeExecutor, executorEnv = process.env, runtimeUrl, token, fetchImpl = globalThis.fetch, cwd, sandboxMode, turnTimeoutMs, activityQuietMs, send }) {
+  const run = request.browserMonitor;
+  const base = { type: 'browser_monitor_result', threadId: request.threadId, codexThreadId: request.codexThreadId, runId: run.runId, generation: run.generation };
+  try {
+    if (!request.codexThreadId || request.codexThreadId !== run.definition?.codexThreadId) throw Error('existing_thread_required');
+    const auth = await authorizeExecutor({ purpose: 'dashboard_turn', runtimeUrl, token, fetchImpl, env: executorEnv, expectedExecutor: { executorId: 'mac', generation: run.generation } });
+    if (auth?.allowed !== true) throw Error('executor_fenced');
+    const response = await fetchImpl(new URL('/v2/dashboard/browser-monitor/claim', runtimeUrl), { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ runId: run.runId, generation: run.generation, codexThreadId: request.codexThreadId }) });
+    if (!response.ok || (await response.json()).allowed !== true) return; // duplicate/late/stopped request
+    const selected = typeof selectAppServerForRequest === 'function' ? await selectAppServerForRequest(request) : { appServer };
+    const client = selected.appServer || appServer;
+    const existing = await client.request({ id: client.nextRequestId(), method: 'thread/read', params: { threadId: request.codexThreadId, includeTurns: true } });
+    if (!Array.isArray(existing?.thread?.turns) || existing.thread.turns.some(t => t.status === 'inProgress')) throw Error('thread_activity_unresolved');
+    await handleDashboardTurnRequest({ request, appServer: client, authorizeExecutor, executorEnv, runtimeUrl, token, fetchImpl, cwd, sandboxMode, turnTimeoutMs, activityQuietMs,
+      sendDashboardEvent: async event => {
+        if (event.type === 'app_server_reply') send({ ...base, terminal: true, text: event.text, browserRead: event.browserRead === true });
+        if (event.type === 'app_server_turn_failed') send({ ...base, terminal: false });
+      }
+    });
+  } catch { send({ ...base, terminal: false }); }
+}
+
 export async function connectDashboardAppServerBridgeOnce({
   authorizeExecutor = authorizeRuntimeExecutor,
   executorEnv = process.env,
@@ -2986,6 +3020,9 @@ export async function connectDashboardAppServerBridgeOnce({
       turnQueue = turnQueue
         .catch(() => {})
         .then(async () => {
+          if (payload.browserMonitor) {
+            return runBrowserMonitorTurn({ request: payload, appServer, selectAppServerForRequest, authorizeExecutor, executorEnv, runtimeUrl, token, fetchImpl, cwd, sandboxMode, turnTimeoutMs, activityQuietMs, send: safeSend });
+          }
           const authorization = await authorizeExecutor({purpose:'dashboard_turn',runtimeUrl,token,fetchImpl,env:executorEnv});
           if (authorization?.allowed !== true) {
             safeSend({type:'app_server_turn_failed',schema:DEFAULT_SCHEMA,threadId:payload.threadId,status:'executor_fenced',text:'実行基盤が待機中または旧世代のため、この依頼は実行できません。稼働状態と承認を確認してください。'});
