@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
+import { buildButlerUiClient } from "./build-butler-ui-client.mjs";
 import { build } from "esbuild";
-import { buildDashboardMonitorClient } from "./build-dashboard-monitor-client.mjs";
 
+
+await buildButlerUiClient();
+const { buildDashboardMonitorClient } = await import("./build-dashboard-monitor-client.mjs");
 await buildDashboardMonitorClient();
 
 await build({

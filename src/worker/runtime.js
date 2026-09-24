@@ -1,3 +1,4 @@
+import { renderButlerDocument, butlerActivePage } from '../core/butler-ui-shell.js';
 import {
   normalizeMonitorSnapshot, computeMonitorView, readMonitorBody,
   resolveDashboardMonitorStore, MonitorInputError
@@ -1506,6 +1507,7 @@ export default {
       return html(
         200,
         renderVtddHelpGuidePage({
+          pagePath: url.pathname,
           runtimeOrigin: url.origin,
           mcpPath: MCP_PATH
         })
@@ -4354,6 +4356,7 @@ async function handleCustomGptSetupDiagnosticsPageRequest(url, env) {
   return html(
     200,
     renderCustomGptSetupDiagnosticsPage({
+      pagePath: url.pathname,
       repository,
       ref,
       issueNumber,
@@ -8979,6 +8982,7 @@ async function handleCustomGptRecoveryPageRequest(url, env) {
   return html(
     200,
     renderCustomGptRecoveryPage({
+      pagePath: url.pathname,
       runtimeOrigin: url.origin,
       channel,
       ref,
@@ -16161,6 +16165,7 @@ function renderDashboardNotificationEvent(event) {
     return "";
   }
   const conclusion = normalizeDashboardEventText(event.conclusion) || normalizeDashboardEventText(event.status) || "unknown";
+  const statusLabel = ({ success: "完了", failure: "失敗", cancelled: "中止", action_required: "対応が必要", in_progress: "進行中", running: "進行中", queued: "待機中", completed: "完了", unknown: "未確認" })[conclusion] || "状態を確認";
   const badgeClass = conclusion === "success" ? "success" : conclusion === "failure" || conclusion === "cancelled" ? "danger" : "";
   const updatedAt = normalizeDashboardEventText(event.updatedAt);
   const relativeUpdatedAt = formatDashboardRelativeTime(updatedAt);
@@ -16181,10 +16186,15 @@ function renderDashboardNotificationEvent(event) {
     shortSha ? `sha ${shortSha}` : ""
   ].filter(Boolean).join(" / ");
   return `<div class="deploy-event">
-            <div class="lane-title"><strong>${escapeDashboardHtml(title)}</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
-            <p>${escapeDashboardHtml(meta)}</p>
-            ${notificationTruth}
-            <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "時刻未受信")} ・ ${escapeDashboardHtml(updatedAt || "updatedAt 未受信")} ・ ${runLabel}</p>
+            <div class="lane-title"><strong>${escapeDashboardHtml(title)}</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(statusLabel)}</span></div>
+            <p>${runLabel}</p>
+            <details class="notification-diagnostics" data-notification-diagnostics>
+              <summary>通知の記録</summary>
+              <p>${escapeDashboardHtml(meta)}</p>
+              <p>状態の記録: <code>${escapeDashboardHtml(conclusion)}</code></p>
+              ${notificationTruth}
+              <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "時刻未受信")} ・ ${escapeDashboardHtml(updatedAt || "updatedAt 未受信")}</p>
+            </details>
           </div>`;
 }
 
@@ -16352,6 +16362,7 @@ async function renderDashboardGitHubTruthPage({ url, env } = {}) {
   ]);
   const failures = [issues, pulls, workflowRuns].filter((item) => !item.ok);
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/github",
     title: "GitHub runtime truth",
     subtitle: repository,
     backHref: `${origin}/dashboard`,
@@ -16386,6 +16397,7 @@ async function renderDashboardPreflightPage({ url, env } = {}) {
     env
   });
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/preflight",
     title: "Startup preflight",
     subtitle: repository,
     backHref: `${origin}/dashboard`,
@@ -16423,6 +16435,7 @@ async function renderDashboardProgressPage({ url, env } = {}) {
     env
   });
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/progress",
     title: "Execution progress",
     subtitle: repository,
     backHref: `${origin}/dashboard`,
@@ -16446,6 +16459,7 @@ async function renderDashboardVpsRunnerPage({ url, env } = {}) {
     env
   });
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/vps-runner",
     title: "VPS runner status",
     subtitle: repository,
     backHref: `${origin}/dashboard`,
@@ -16469,6 +16483,7 @@ async function renderDashboardMemoryPage({ url, env } = {}) {
     runtimeTruth: buildRetrieveRuntimeTruth(url)
   });
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/memory",
     title: "Operational RAG",
     subtitle: repository,
     backHref: `${origin}/dashboard`,
@@ -16493,6 +16508,7 @@ async function renderDashboardSelfParityPage({ url, env } = {}) {
     env
   });
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/self-parity",
     title: "Self parity",
     subtitle: repository,
     backHref: `${origin}/dashboard`,
@@ -16514,8 +16530,10 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
   const visibleRecentEvents = collapseDashboardNotificationEvents(attachDashboardPushReceiveTruth(recentEvents));
   const publicKey = normalizeDashboardEventText(env?.[WEB_PUSH_PUBLIC_KEY_ENV]);
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/notifications",
     title: "通知センター",
-    subtitle: "dashboard events",
+    active: "notifications",
+    subtitle: "届いたお知らせと、あなたの対応が必要なことを確認できます。",
     backHref: `${origin}/dashboard`,
     body: `
       <div class="grid single">
@@ -17065,25 +17083,6 @@ function summarizeObjectValue(value) {
   return String(value);
 }
 
-function renderDashboardUtilityNavLinks() {
-  const items = [
-    ["ホーム", "/dashboard"],
-    ["チャット", "/dashboard/chat"],
-    ["通知センター", "/dashboard/notifications"],
-    ["AI news", "/dashboard/news"],
-    ["GitHub truth", "/dashboard/github"],
-    ["Startup preflight", "/dashboard/preflight"],
-    ["Execution progress", "/dashboard/progress"],
-    ["VPS runner", "/dashboard/vps-runner"],
-    ["Operational RAG", "/dashboard/memory"],
-    ["Voice handoff", "/dashboard/handoff"],
-    ["Self parity", "/dashboard/self-parity"]
-  ];
-  return items
-    .map(([label, href]) => `<a class="dashboard-nav-link" href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(label)}</a>`)
-    .join("");
-}
-
 function renderDashboardDrawerResizeScript({ drawerSelector, handleSelector, storageKey, cssVariable }) {
   return `<script>
     (() => {
@@ -17140,54 +17139,39 @@ function renderDashboardDrawerResizeScript({ drawerSelector, handleSelector, sto
   </script>`;
 }
 
-function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
-  const navLinks = renderDashboardUtilityNavLinks();
-  return `<!doctype html>
+function renderDashboardUtilityPage({ title, subtitle, backHref, body, active = "", pagePath = "" }) {
+  return renderButlerDocument(`<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="/dashboard.webmanifest">
   ${DASHBOARD_ICON_LINKS}
-  <meta name="theme-color" content="#050505">
+  <meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1d1c1b" media="(prefers-color-scheme: dark)">
   <title>${escapeDashboardHtml(title)} - VTDD Butler</title>
   <style>
-    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg: #f7f7f4; --panel: #fff; --text: #151515; --muted: #62625d; --border: #deded6; --soft: #f0f0eb; --dashboard-utility-drawer-width: min(86vw, 360px); }
-    @media (prefers-color-scheme: dark) { :root { --bg: #050505; --panel: #101010; --text: #f7f7f4; --muted: #a0a09a; --border: #2b2b2b; --soft: #1b1b1b; } }
+    :root { color-scheme: light dark; font-family:var(--butler-font); --bg:var(--butler-bg); --panel:var(--butler-card); --text:var(--butler-ink); --muted:var(--butler-muted); --border:var(--butler-line); --soft:var(--butler-bg); }
+    @media (prefers-color-scheme: dark) { :root { --bg:var(--butler-bg); --panel:var(--butler-card); --text:var(--butler-ink); --muted:var(--butler-muted); --border:var(--butler-line); --soft:var(--butler-bg); } }
     * { box-sizing: border-box; }
     html, body { max-width: 100%; overflow-x: hidden; }
     body { margin: 0; background: var(--bg); color: var(--text); }
-    body:has(.dashboard-nav-toggle:checked) { overflow: hidden; }
-    main { width: min(1280px, 100vw); margin: 0 auto; padding: 16px; overflow-x: hidden; }
-    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
-    h1 { font-size: 24px; margin: 0 0 4px; }
+    main { width: min(1280px, 100vw); margin: 0 auto; padding: var(--butler-gutter); overflow-x: hidden; }
+    .utility-content > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+    h1 { font-size: var(--butler-heading-size); line-height: 1.4; margin: 0 0 4px; }
     h2 { font-size: 18px; margin: 0; }
     p { line-height: 1.6; margin: 0 0 10px; }
     a { color: inherit; text-underline-offset: 4px; }
-    .back, .actions a, .dashboard-action, .menu-button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
-    .menu-button { width: 42px; height: 42px; padding: 0; font-size: 22px; cursor: pointer; flex: 0 0 auto; }
-    .utility-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; align-items: start; }
+    .back, .actions a, .dashboard-action { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .utility-shell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
     .utility-content { min-width: 0; }
     .utility-title-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .desktop-nav { position: sticky; top: 16px; display: grid; gap: 8px; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); padding: 12px; }
-    .desktop-nav-title { color: var(--muted); font-size: 12px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; padding: 4px 8px 8px; }
-    .dashboard-nav-link { display: flex; align-items: center; min-height: 38px; border-radius: 10px; padding: 8px 10px; color: var(--text); text-decoration: none; font-weight: 750; }
-    .dashboard-nav-link:hover, .dashboard-nav-link:focus-visible { background: var(--soft); outline: none; }
-    .dashboard-nav-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-    .dashboard-nav-backdrop, .dashboard-nav-drawer { display: none; }
-    .dashboard-nav-backdrop { position: fixed; inset: 0; z-index: 20; max-width: 100vw; overflow: hidden; background: rgba(0, 0, 0, .36); backdrop-filter: blur(2px); }
-    .dashboard-nav-drawer { position: fixed; inset: 0 auto 0 0; z-index: 21; width: min(var(--dashboard-utility-drawer-width), 92vw); max-width: 92vw; overflow: auto; overflow-x: hidden; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px rgba(0, 0, 0, .22); }
-    .dashboard-nav-toggle:checked ~ .dashboard-nav-backdrop, .dashboard-nav-toggle:checked ~ .dashboard-nav-drawer { display: block; }
-    .drawer-resize-handle { display: none; }
-    .drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
-    .drawer-header strong { display: block; }
-    .drawer-nav { display: grid; gap: 8px; }
-    .dashboard-action:disabled { opacity: .45; }
-    .hero, .lane, .notice { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); padding: 14px; margin-bottom: 14px; }
+    .dashboard-action:disabled { color: var(--butler-muted); background: var(--butler-card); cursor: not-allowed; }
+    .hero, .lane, .notice { border: 1px solid var(--border); border-radius: var(--butler-card-radius); background: var(--panel); padding: var(--butler-card-padding); margin-bottom: 16px; }
     .actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
     .grid.single { grid-template-columns: minmax(0, 1fr); }
-    .lane-title, .truth-card-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .lane-title, .truth-card-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
     .truth-card { border-top: 1px solid var(--border); padding: 11px 0; }
     .truth-card:first-of-type { border-top: 0; }
     .truth-card p, .muted { color: var(--muted); }
@@ -17200,53 +17184,29 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     .setting-block { border-top: 1px solid var(--border); padding-top: 12px; }
     .setting-block:first-child { border-top: 0; padding-top: 0; }
     .pill { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: var(--soft); font-size: 12px; white-space: nowrap; }
-    .pill.success { border-color: #7fb797; background: #e7f5ec; color: #145c34; }
-    .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }
-    .deploy-event { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
+    .pill.success { border-color: var(--butler-green); background: var(--butler-green-bg); color: var(--butler-green); }
+    .pill.danger { border-color: var(--butler-red); background: var(--butler-red-bg); color: var(--butler-red); }
+    .deploy-event { border: 1px solid var(--border); border-radius: var(--butler-card-radius); padding: var(--butler-card-padding); margin: 16px 0; background: var(--soft); }
     .deploy-event p { margin-bottom: 6px; font-size: 13px; }
     code { overflow-wrap: anywhere; }
+    .notification-diagnostics { margin-top: 12px; }
+    .notification-diagnostics summary { color: var(--muted); cursor: pointer; }
     @media (max-width: 760px) {
-      main { padding: 12px; }
-      header { align-items: flex-start; }
+      main { padding: var(--butler-gutter); }
+      .utility-content > header { align-items: flex-start; }
       .utility-shell { display: block; }
-      .desktop-nav { display: none; }
       .back { display: none; }
       .grid { grid-template-columns: minmax(0, 1fr); }
       .summary-list div { grid-template-columns: minmax(0, 1fr); }
-    }
-    @media (min-width: 761px) {
-      .utility-title-row .menu-button { display: none; }
-      .drawer-resize-handle { display: block; position: absolute; top: 0; right: -6px; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; }
-      .drawer-resize-handle::after { content: ""; position: absolute; top: 18px; bottom: 18px; left: 5px; width: 2px; border-radius: 999px; background: transparent; }
-      .drawer-resize-handle:hover::after, .drawer-resize-handle:focus-visible::after, .dashboard-drawer-resizing .drawer-resize-handle::after { background: var(--border); }
-      .dashboard-drawer-resizing, .dashboard-drawer-resizing * { cursor: ew-resize !important; user-select: none; }
     }
   </style>
 </head>
 <body>
   <main>
-    <input class="dashboard-nav-toggle" type="checkbox" id="dashboard-nav-toggle" aria-hidden="true">
-    <label class="dashboard-nav-backdrop" for="dashboard-nav-toggle" aria-label="メニューを閉じる"></label>
-    <aside class="dashboard-nav-drawer" aria-label="Dashboard メニュー">
-      <div class="drawer-header">
-        <span>
-          <span class="desktop-nav-title">Dashboard</span>
-          <strong>メニュー</strong>
-        </span>
-        <label class="menu-button" for="dashboard-nav-toggle" aria-label="メニューを閉じる">×</label>
-      </div>
-      <nav class="drawer-nav" aria-label="Dashboard メニュー項目">${navLinks}</nav>
-      <div class="drawer-resize-handle" data-drawer-resize-handle="dashboard-utility" role="separator" aria-orientation="vertical" aria-label="メニュー幅を変更"></div>
-    </aside>
     <div class="utility-shell">
-      <nav class="desktop-nav" aria-label="Dashboard メニュー">
-        <span class="desktop-nav-title">Dashboard</span>
-        ${navLinks}
-      </nav>
       <section class="utility-content" aria-label="${escapeDashboardHtml(title)}">
         <header>
           <div class="utility-title-row">
-            <label class="menu-button" for="dashboard-nav-toggle" aria-label="メニューを開く">≡</label>
             <div>
               <h1>${escapeDashboardHtml(title)}</h1>
               <p class="muted">${escapeDashboardHtml(subtitle || "")}</p>
@@ -17258,14 +17218,8 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
       </section>
     </div>
   </main>
-  ${renderDashboardDrawerResizeScript({
-    drawerSelector: ".dashboard-nav-drawer",
-    handleSelector: '[data-drawer-resize-handle="dashboard-utility"]',
-    storageKey: "vtdd.dashboard.utilityDrawer.width",
-    cssVariable: "--dashboard-utility-drawer-width"
-  })}
 </body>
-</html>`;
+</html>`, { active, pagePath });
 }
 
 function renderDashboardHandoffPage({ url } = {}) {
@@ -17498,6 +17452,7 @@ function renderDashboardHandoffPage({ url } = {}) {
     </script>
   `;
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/handoff",
     title: "Voice handoff",
     subtitle: "Custom GPT 音声会話から Dashboard へ渡された内容を、読み上げと音声指示で保存・開発待ち化します。",
     backHref: "/dashboard",
@@ -17541,6 +17496,7 @@ function renderDashboardNewsPage({ runtimeOrigin, env } = {}) {
     </article>`)
     .join("");
   return renderDashboardUtilityPage({
+    pagePath: "/dashboard/news",
     title: "AI news",
     subtitle: "OpenAI / Codex / Skills / Claude Code / Cloudflare などを VTDD 目線で読む入口",
     backHref: `${origin}/dashboard`,
@@ -17761,39 +17717,40 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     : `<p>はい。ここは repo-less main chat です。repo を固定しなくても、まず普通に会話できます。</p>
           <p>Issue / PR / deploy など repo 境界が必要な作業に入る時だけ、対象 repo、Issue、deploy 先を会話の中で確認してから進めます。</p>`;
 
-  return `<!doctype html>
+  return renderButlerDocument(`<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="/dashboard.webmanifest">
   ${DASHBOARD_ICON_LINKS}
-  <meta name="theme-color" content="#050505">
+  <meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1d1c1b" media="(prefers-color-scheme: dark)">
   <title>VTDD v2 Dashboard</title>
   <style>
     :root {
       color-scheme: light dark;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --page-bg: #f7f7f4;
-      --text: #151515;
-      --muted: #64645f;
-      --soft: #f0f0eb;
-      --panel: #ffffff;
-      --panel-strong: #fbfbf7;
-      --border: #ddddd5;
-      --button: #f4f4ef;
-      --owner-bubble: #171717;
-      --owner-text: #f7f7f4;
-      --link: #0b6b65;
-      --owner-link: #9ee7ff;
-      --code-bg: #fbfbf7;
-      --code-text: #151515;
-      --owner-code-bg: #2a2a2a;
-      --owner-code-text: #f7f7f4;
-      --owner-code-border: #4a4a4a;
+      font-family:var(--butler-font);
+      --page-bg:var(--butler-bg);
+      --text:var(--butler-ink);
+      --muted:var(--butler-muted);
+      --soft:var(--butler-bg);
+      --panel:var(--butler-card);
+      --panel-strong:var(--butler-card);
+      --border:var(--butler-line);
+      --button:var(--butler-card);
+      --owner-bubble:var(--butler-red-bg);
+      --owner-text:var(--butler-ink);
+      --link:var(--butler-accent);
+      --owner-link:var(--butler-accent);
+      --code-bg:var(--butler-bg);
+      --code-text:var(--butler-ink);
+      --owner-code-bg:var(--butler-card);
+      --owner-code-text:var(--butler-ink);
+      --owner-code-border:var(--butler-line);
       --shadow: rgba(20, 20, 20, .12);
-      --floating-bg: rgba(247, 247, 244, .82);
-      --drawer-bg: rgba(255, 255, 255, .92);
+      --floating-bg:var(--butler-card);
+      --drawer-bg:var(--butler-card);
       --dashboard-drawer-width: min(86vw, 380px);
       --dashboard-side-width: clamp(228px, 21vw, 286px);
       --topbar-reserve: 88px;
@@ -17802,40 +17759,40 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --page-bg: #050505;
-        --text: #f7f7f4;
-        --muted: #9d9d98;
-        --soft: #202020;
-        --panel: #101010;
-        --panel-strong: #171717;
-        --border: #2a2a2a;
-        --button: #171717;
-        --owner-bubble: #f2f2ee;
-        --owner-text: #111;
-        --link: #90cdf4;
-        --owner-link: #075985;
-        --code-bg: #171717;
-        --code-text: #f7f7f4;
-        --owner-code-bg: #ffffff;
-        --owner-code-text: #111111;
-        --owner-code-border: #cfcfc8;
+        --page-bg:var(--butler-bg);
+        --text:var(--butler-ink);
+        --muted:var(--butler-muted);
+        --soft:var(--butler-bg);
+        --panel:var(--butler-card);
+        --panel-strong:var(--butler-card);
+        --border:var(--butler-line);
+        --button:var(--butler-card);
+        --owner-bubble:var(--butler-red-bg);
+        --owner-text:var(--butler-ink);
+        --link:var(--butler-accent);
+        --owner-link:var(--butler-accent);
+        --code-bg:var(--butler-bg);
+        --code-text:var(--butler-ink);
+        --owner-code-bg:var(--butler-card);
+        --owner-code-text:var(--butler-ink);
+        --owner-code-border:var(--butler-line);
         --shadow: rgba(0, 0, 0, .42);
-        --floating-bg: rgba(5, 5, 5, .74);
-        --drawer-bg: rgba(16, 16, 16, .92);
+        --floating-bg:var(--butler-card);
+        --drawer-bg:var(--butler-card);
       }
     }
     * { box-sizing: border-box; min-width: 0; }
     html, body { width: 100%; max-width: 100%; height: 100%; overflow: hidden; overscroll-behavior-x: none; }
     body { margin: 0; background: var(--page-bg); position: fixed; inset: 0; touch-action: pan-y; }
-    main { width: 100%; max-width: 100vw; height: 100dvh; min-height: 0; display: block; padding: 16px; overflow: hidden; overscroll-behavior-x: none; }
+    main { width: 100%; max-width: 100vw; height: calc(var(--butler-viewport-height, 100dvh) - var(--butler-header-reserve, var(--butler-header-height)) - var(--butler-nav-height)); min-height: 0; display: block; padding: 16px; overflow: hidden; overscroll-behavior-x: none; }
     h1, h2, h3, p { margin-top: 0; }
     h1 { font-size: 22px; line-height: 1.1; margin-bottom: 4px; }
     h2 { font-size: 19px; margin-bottom: 12px; }
     h3 { font-size: 15px; margin-bottom: 8px; }
     p { line-height: 1.65; color: var(--text); }
     a { color: inherit; }
-    .app-shell { position: relative; width: 100%; max-width: 100%; height: calc(100dvh - 32px); min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; overscroll-behavior-x: none; }
-    .topbar { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 16px; right: 16px; z-index: 9; display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 58px; padding: 8px 10px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border), transparent 32%); border-radius: 999px; background: var(--floating-bg); box-shadow: 0 14px 48px var(--shadow); backdrop-filter: blur(18px) saturate(1.15); -webkit-backdrop-filter: blur(18px) saturate(1.15); overscroll-behavior-x: none; touch-action: pan-y; }
+    .app-shell { position: relative; width: 100%; max-width: 100%; height: calc(var(--butler-viewport-height, 100dvh) - var(--butler-header-reserve, var(--butler-header-height)) - var(--butler-nav-height) - 32px); min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; overscroll-behavior-x: none; }
+    .topbar { position: fixed; top: calc(var(--butler-viewport-top, 0px) + var(--butler-header-reserve, var(--butler-header-height)) + 12px); left: 16px; right: 16px; z-index: 9; display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 58px; padding: 8px 10px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border), transparent 32%); border-radius: 20px; background: var(--panel); overscroll-behavior-x: none; touch-action: pan-y; }
     .top-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
@@ -17867,7 +17824,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body code { color: var(--code-text); font-size: .94em; }
     .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; overflow-y: auto; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; white-space: pre-wrap; max-width: 100%; max-height: min(58dvh, 620px); }
     .bubble .message-body pre.wrap-code { overflow-x: hidden; white-space: pre-wrap; }
-    .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family:var(--butler-font); }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .progress-summary { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; color: var(--muted); font-size: .88em; }
@@ -17916,7 +17873,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @keyframes pulseProgress { 0%, 100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
-    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 8; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--page-bg) 72%, transparent); overflow: visible; overscroll-behavior-x: none; touch-action: pan-y; }
+    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 8; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--butler-card); overflow: visible; overscroll-behavior-x: none; touch-action: pan-y; }
     .composer-box { width: 100%; max-width: 100%; display: flex; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
     textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; touch-action: pan-y; }
     textarea::placeholder { color: var(--muted); }
@@ -17942,7 +17899,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-box[data-running="true"] .voice-button, .composer-box[data-can-send="true"] .voice-button { display: none; }
     .followup-queue { display: grid; gap: 8px; padding: 0 10px; }
     .followup-queue[hidden], .followup-draft[hidden] { display: none; }
-    .followup-chip, .followup-draft { width: fit-content; max-width: min(720px, 100%); justify-self: end; border: 1px solid var(--border); border-radius: 18px; background: var(--floating-bg); box-shadow: 0 10px 34px var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text); }
+    .followup-chip, .followup-draft { width: fit-content; max-width: min(720px, 100%); justify-self: end; border: 1px solid var(--border); border-radius: 20px; background: var(--floating-bg); box-shadow: 0 10px 34px var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text); }
     .followup-chip { display: grid; gap: 3px; padding: 9px 12px; font-size: 13px; line-height: 1.42; }
     .followup-chip small { color: var(--muted); font-weight: 800; }
     .followup-draft { display: grid; gap: 8px; padding: 10px; }
@@ -17954,22 +17911,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-progress { display: grid; gap: 4px; min-height: 0; padding: 0 16px; color: var(--muted); font-size: 13px; line-height: 1.5; overflow: hidden; }
     .composer-progress[hidden] { display: none; }
     .composer-progress .progress-title { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 850; }
-    .composer-progress .progress-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--link); box-shadow: 0 0 0 4px rgba(11, 107, 101, .12); }
+    .composer-progress .progress-title::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: var(--link); box-shadow: 0 0 0 4px color-mix(in srgb, var(--butler-accent) 12%, transparent); }
     .composer-progress .progress-text { display: -webkit-box; margin: 0; max-height: 3lh; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: var(--muted); white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
     .composer-progress.thinking .progress-title::before { animation: pulseProgress 1.25s ease-in-out infinite; }
-    .media-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 76px; height: 76px; min-width: 76px; border: 1px solid var(--border); border-radius: 8px; padding: 0; color: var(--text); background: var(--soft); font: inherit; font-size: 12px; text-decoration: none; overflow: hidden; cursor: pointer; }
+    .media-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 76px; height: 76px; min-width: 76px; border: 1px solid var(--border); border-radius: 20px; padding: 0; color: var(--text); background: var(--soft); font: inherit; font-size: 12px; text-decoration: none; overflow: hidden; cursor: pointer; }
     .media-chip:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .media-thumb { width: 100%; height: 100%; flex: 0 0 auto; border-radius: 7px; object-fit: cover; background: var(--border); }
     .media-chip video.media-thumb { pointer-events: none; }
-    .media-fallback-label { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 999px; background: rgba(0, 0, 0, .62); color: #fff; font-weight: 800; text-align: center; line-height: 1.25; }
-    .media-remove { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 999px; background: rgba(0, 0, 0, .68); color: #fff; font: inherit; font-weight: 900; line-height: 1; padding: 0; cursor: pointer; }
+    .media-fallback-label { position: absolute; left: 6px; right: 6px; bottom: 6px; padding: 3px 5px; border-radius: 999px; background: rgba(0, 0, 0, .62); color: var(--butler-media-ink); font-weight: 800; text-align: center; line-height: 1.25; }
+    .media-remove { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 999px; background: rgba(0, 0, 0, .68); color: var(--butler-media-ink); font: inherit; font-weight: 900; line-height: 1; padding: 0; cursor: pointer; }
     .media-lightbox[hidden] { display: none; }
-    .media-lightbox { position: fixed; inset: 0; z-index: 30; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); background: rgba(0, 0, 0, .88); color: #fff; }
+    .media-lightbox { position: fixed; inset: 0; z-index: 30; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); background: rgba(0, 0, 0, .88); color: var(--butler-media-ink); }
     .media-lightbox-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-    .media-lightbox-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: 14px; font-weight: 800; }
-    .media-lightbox-close { width: 42px; height: 42px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .32); border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font: inherit; font-size: 24px; line-height: 1; cursor: pointer; }
+    .media-lightbox-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--butler-media-ink); font-size: 14px; font-weight: 800; }
+    .media-lightbox-close { width: 42px; height: 42px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .32); border-radius: 999px; background: rgba(255, 255, 255, .12); color: var(--butler-media-ink); font: inherit; font-size: 24px; line-height: 1; cursor: pointer; }
     .media-lightbox-body { min-width: 0; min-height: 0; width: 100%; height: 100%; display: grid; place-items: center; overflow: auto; overscroll-behavior: contain; }
-    .media-lightbox-body img, .media-lightbox-body video { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; background: #111; }
+    .media-lightbox-body img, .media-lightbox-body video { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 20px; background: var(--butler-card); }
     .media-lightbox-body video { max-width: min(100%, 960px); }
     .media-lightbox-meta { min-height: 20px; color: rgba(255, 255, 255, .74); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
     .passkey-modal[hidden] { display: none; }
@@ -17987,11 +17944,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .lane, details { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-strong); }
     .lane-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
     .pill { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; color: var(--text); background: var(--soft); font-size: 12px; white-space: nowrap; }
-    .pill.success { border-color: #7fb797; background: #e7f5ec; color: #145c34; }
-    .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }
-    .deploy-event { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
+    .pill.success { border-color: var(--butler-green); background: var(--butler-green-bg); color: var(--butler-green); }
+    .pill.danger { border-color: var(--butler-red); background: var(--butler-red-bg); color: var(--butler-red); }
+    .deploy-event { border: 1px solid var(--border); border-radius: 20px; padding: 10px; margin: 10px 0; background: var(--soft); }
     .deploy-event p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
-    .freshness-panel { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
+    .freshness-panel { border: 1px solid var(--border); border-radius: 20px; padding: 10px; margin: 10px 0; background: var(--soft); }
     .freshness-panel p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
     .freshness-panel button { min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); background: var(--button); font: inherit; font-size: 13px; font-weight: 750; }
     .freshness-panel button:disabled { opacity: .55; }
@@ -18020,10 +17977,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
     .mobile-drawer-content { display: grid; gap: 12px; }
     .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
-    .desktop-side-nav { display: none; }
     @media (max-width: 900px) {
       main { padding: 14px 14px 0; }
-      .app-shell { height: calc(100dvh - 14px); }
+      .app-shell { height: calc(var(--butler-viewport-height, 100dvh) - var(--butler-header-reserve, var(--butler-header-height)) - var(--butler-nav-height) - 14px); }
       .chat-scroll { padding-bottom: 28px; }
       .bubble { max-width: 100%; font-size: 16px; }
       .bubble.owner { max-width: min(82%, calc(100vw - 56px)); }
@@ -18031,20 +17987,19 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     }
     @media (min-width: 900px) {
       main { padding: 18px; }
-      .app-shell { grid-template-columns: var(--dashboard-side-width) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 20px; height: calc(100dvh - 36px); }
-      .desktop-side-nav { display: block; grid-row: 1 / span 2; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 18px 14px; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
-      .topbar { left: calc(18px + var(--dashboard-side-width) + 20px); right: 18px; top: 18px; }
-      .mobile-backdrop, .mobile-drawer, .menu-open { display: none !important; }
-      .chat-scroll, .composer { grid-column: 2; }
+      .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 20px; height: calc(var(--butler-viewport-height, 100dvh) - var(--butler-header-reserve, var(--butler-header-height)) - var(--butler-nav-height) - 36px); }
+      .topbar { left: 18px; right: 18px; top: calc(var(--butler-viewport-top, 0px) + var(--butler-header-reserve, var(--butler-header-height)) + 18px); }
+
+      .chat-scroll, .composer { grid-column: 1; }
       .chat-scroll { padding-left: clamp(22px, 4vw, 72px); padding-right: clamp(22px, 4vw, 72px); }
     }
     @media (max-width: 460px) {
       main { padding: 12px 10px 0; }
-      .app-shell { height: calc(100dvh - 12px); }
+      .app-shell { height: calc(var(--butler-viewport-height, 100dvh) - var(--butler-header-reserve, var(--butler-header-height)) - var(--butler-nav-height) - 12px); }
       .composer-box { border-radius: 24px; }
-      .round-button { width: 40px; height: 40px; }
+      .round-button { width: 44px; height: 44px; }
       .tool-button { min-height: 38px; padding: 0 10px; font-size: 13px; }
-      .media-button, .voice-button, .send-button { width: 40px; height: 40px; flex-basis: 40px; }
+      .media-button, .voice-button, .send-button { width: 44px; height: 44px; flex-basis: 44px; }
     }
     @media (min-width: 761px) {
       .drawer-resize-handle { display: block; position: absolute; top: 0; right: -6px; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; }
@@ -18052,29 +18007,24 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       .drawer-resize-handle:hover::after, .drawer-resize-handle:focus-visible::after, .dashboard-drawer-resizing .drawer-resize-handle::after { background: var(--border); }
       .dashboard-drawer-resizing, .dashboard-drawer-resizing * { cursor: ew-resize !important; user-select: none; }
     }
+    body[data-butler-compact="true"] .app-shell { grid-template-rows: auto minmax(0, 1fr) auto; }
+    body[data-butler-compact="true"] .topbar { position: static; min-height: 44px; padding: 0 4px; border: 0; border-radius: 0; background: transparent; }
+    body[data-butler-compact="true"] .thread-title h1 { font-size: 18px; margin: 0; }
+    body[data-butler-compact="true"] .thread-title span { display: none; }
+    body[data-butler-compact="true"] .chat-scroll { padding: 8px 12px; scroll-padding: 8px; gap: 12px; }
+    body[data-butler-compact="true"] .composer { padding: 4px 0; gap: 4px; }
+    body[data-butler-compact="true"] .composer-box { min-height: 54px; padding: 4px; }
+    body[data-butler-compact="true"] .composer-status { max-height: 1lh; overflow-y: auto; }
+    body[data-butler-compact="true"] textarea { max-height: 72px; }
   </style>
 </head>
 <body>
   <main>
     <section class="app-shell" aria-label="Butler chat shell">
       <input class="menu-toggle" type="checkbox" id="mobile-menu-toggle" aria-hidden="true">
-      <nav class="desktop-side-nav" aria-label="Dashboard メニュー">
-        <span class="eyebrow">Dashboard</span>
-        <div class="surface-list">
-          ${renderDashboardActionList([
-            { label: "ホーム", href: `${origin}/dashboard` },
-            { label: "通知センター", href: `${origin}/dashboard/notifications` },
-            { label: "AI news", href: `${origin}/dashboard/news` },
-            { label: "Execution progress", href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "", disabledReason: "repo 設定後" },
-            { label: "GitHub truth", href: canonicalRepositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "", disabledReason: "repo 設定後" },
-            { label: "VPS runner", href: canonicalRepositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "", disabledReason: "repo 設定後" }
-          ])}
-        </div>
-        <p class="menu-callout">通知タップ時は通知センターを直接開きます。通常チャットの返信 stream は背後で継続します。</p>
-      </nav>
       <header class="topbar">
         <div class="top-left">
-          <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを開く">≡</label>
+          <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="チャット設定を開く">≡</label>
           <div class="thread-title">
             <h1>VTDD Butler</h1>
             <span>${escapeDashboardHtml(dashboardTargetLabel)} ・ main chat</span>
@@ -18082,14 +18032,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
       </header>
 
-      <label class="mobile-backdrop" for="mobile-menu-toggle" aria-label="管理メニューを閉じる"></label>
-      <aside class="mobile-drawer" aria-label="モバイル管理メニュー">
+      <label class="mobile-backdrop" for="mobile-menu-toggle" aria-label="チャット設定を閉じる"></label>
+      <aside class="mobile-drawer" aria-label="チャット設定">
         <div class="mobile-drawer-header">
           <span>
-            <span class="eyebrow">管理メニュー</span>
+            <span class="eyebrow">チャット設定</span>
             <strong>必要な時だけ開く</strong>
           </span>
-          <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを閉じる">×</label>
+          <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="チャット設定を閉じる">×</label>
         </div>
         <div class="mobile-drawer-content">
           <p class="menu-callout">通知、進捗、repo が必要な開発/運用確認はここから開きます。通常チャットは repo 未指定のまま始められます。</p>
@@ -18151,7 +18101,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             <p>v3 Worker prototype の削除や移行は destructive operation 扱いです。必要になった時だけ、対象 runtime と scope を明示した passkey approval で扱います。</p>
           </details>
         </div>
-        <div class="drawer-resize-handle" data-drawer-resize-handle="dashboard-main" role="separator" aria-orientation="vertical" aria-label="管理メニュー幅を変更"></div>
+        <div class="drawer-resize-handle" data-drawer-resize-handle="dashboard-main" role="separator" aria-orientation="vertical" aria-label="チャット設定幅を変更"></div>
       </aside>
 
       <div class="chat-scroll" id="butler-chat-log" data-thread-id="${escapeDashboardHtml(chatThreadId)}">
@@ -20103,6 +20053,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (!(target instanceof Element)) return;
         const link = target.closest("a[href]");
         if (!link) return;
+        // Global shell links explicitly leave an embedded operator surface.
+        if (link.closest("[data-butler-header], [data-butler-primary-nav]")) return;
         const href = link.getAttribute("href") || "";
         if (!href.includes("/v2/approval/passkey/operator")) return;
         if (openPasskeyModal(href)) {
@@ -21214,7 +21166,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     cssVariable: "--dashboard-drawer-width"
   })}
 </body>
-</html>`;
+</html>`, { active: "chat", layout: "chat" });
 }
 
 function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
@@ -21225,28 +21177,28 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   const passkeyButtonLabel = "Passkey で開く";
   const passkeyReturnNote =
     dashboardAccessReturnPath === "/dashboard/notifications" ? "認証後は通知センターへ戻ります。" : "";
-  return `<!doctype html>
+  return renderButlerDocument(`<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   ${DASHBOARD_ICON_LINKS}
   <title>Dashboard auth required</title>
   <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17211d; background: #f8faf8; }
+    :root { --butler-content-width: 720px; color-scheme: light dark; font-family:var(--butler-font); color: var(--butler-ink); background: var(--butler-card); }
     body { margin: 0; }
-    main { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0; }
-    .panel { background: #fff; border: 1px solid #d8e2dc; border-radius: 8px; padding: 24px; box-shadow: 0 12px 32px rgba(24, 37, 31, .08); }
-    h1 { margin: 0 0 12px; font-size: 30px; }
-    p { line-height: 1.7; color: #4d5c56; }
-    a { color: #176b4d; font-weight: 750; }
+    main { box-sizing: border-box; width: min(var(--butler-content-width), 100%); margin: 0 auto; padding: 32px var(--butler-gutter); }
+    .panel { background: var(--butler-card); border: 1px solid var(--butler-line); border-radius: var(--butler-card-radius); padding: var(--butler-card-padding); box-shadow: 0 12px 32px rgba(24, 37, 31, .08); }
+    h1 { margin: 0 0 12px; font-size: var(--butler-heading-size); }
+    p { line-height: 1.7; color: var(--butler-ink); }
+    a { color: var(--butler-ink); font-weight: 750; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 10px; }
-    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; text-decoration: none; background: #f8fbf8; }
-    .primary { background: #247a5b; color: #fff; border-color: #247a5b; }
-    .entry-note { margin: 0 0 14px; font-size: 15px; color: #5f6c66; }
-    details { margin-top: 16px; border-top: 1px solid #e2e9e4; padding-top: 14px; }
-    summary { cursor: pointer; font-weight: 800; color: #24342e; }
-    code { color: #5f6c66; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid var(--butler-line); border-radius: 7px; padding: 9px 12px; color: var(--butler-ink); text-decoration: none; background: var(--butler-card); }
+    .primary { background: var(--butler-accent); color: var(--butler-on-accent); border-color: var(--butler-accent); }
+    .entry-note { margin: 0 0 14px; font-size: 15px; color: var(--butler-ink); }
+    details { margin-top: 16px; border-top: 1px solid var(--butler-line); padding-top: 14px; }
+    summary { cursor: pointer; font-weight: 800; color: var(--butler-ink); }
+    code { color: var(--butler-ink); }
   </style>
 </head>
 <body>
@@ -21269,7 +21221,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
     </section>
   </main>
 </body>
-</html>`;
+</html>`, { active: butlerActivePage(returnPath), pagePath: returnPath });
 }
 
 function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = {}) {
@@ -21344,32 +21296,32 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
     ["Passkey", "same-origin", "高リスク操作は scope 明示済み passkey approval の後ろです。"]
   ];
 
-  return `<!doctype html>
+  return renderButlerDocument(`<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>VTDD v2 Status</title>
   <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
+    :root { --butler-content-width: 1040px; color-scheme: light dark; font-family:var(--butler-font); color: var(--butler-ink); background: var(--butler-card); }
     body { margin: 0; }
-    main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
-    header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
-    h1 { font-size: clamp(32px, 6vw, 52px); line-height: 1; margin: 8px 0; }
+    main { box-sizing: border-box; width: min(var(--butler-content-width), 100%); margin: 0 auto; padding: 28px var(--butler-gutter) 48px; }
+    main > header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
+    h1 { font-size: var(--butler-heading-size); line-height: 1.4; margin: 8px 0; }
     h2 { font-size: 24px; margin: 0 0 14px; }
     h3 { margin: 0 0 8px; font-size: 19px; }
-    p { line-height: 1.7; color: #4d5c56; }
-    .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-    .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
+    p { line-height: 1.7; color: var(--butler-ink); }
+    .eyebrow { color: var(--butler-ink); font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .panel { background: var(--butler-card); border: 1px solid var(--butler-line); border-radius: var(--butler-card-radius); padding: var(--butler-card-padding); box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
-    .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
-    .badge { display: inline-flex; align-items: center; border: 1px solid #c8d8cc; border-radius: 999px; padding: 4px 9px; color: #315245; background: #f7faf7; font-size: 13px; font-weight: 750; }
-    a.button, .card a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; background: #f8fbf8; }
-    a.primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    .card { border: 1px solid var(--butler-line); border-radius: var(--butler-card-radius); padding: var(--butler-card-padding); background: var(--butler-card); }
+    .badge { display: inline-flex; align-items: center; border: 1px solid var(--butler-line); border-radius: 999px; padding: 4px 9px; color: var(--butler-ink); background: var(--butler-card); font-size: 13px; font-weight: 750; }
+    a.button, .card a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--butler-line); border-radius: 7px; padding: 9px 12px; color: var(--butler-ink); font-weight: 750; text-decoration: none; background: var(--butler-card); }
+    a.primary { background: var(--butler-accent); color: var(--butler-on-accent); border-color: var(--butler-accent); }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-    .notice { border-color: #d8e6d5; background: #f7fcf8; }
-    code { color: #596860; }
-    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1040px); padding-top: 16px; } .actions a { width: 100%; } }
+    .notice { border-color: var(--butler-line); background: var(--butler-card); }
+    code { color: var(--butler-ink); }
+    @media (max-width: 640px) { main > header { display: block; } main { width: min(100%, var(--butler-content-width)); padding-top: 16px; } .actions a { width: 100%; } }
   </style>
 </head>
 <body>
@@ -21405,7 +21357,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
     </section>
   </main>
 </body>
-</html>`;
+</html>`, { pagePath: "/status" });
 }
 
 function escapeDashboardHtml(value) {

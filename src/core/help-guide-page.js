@@ -1,3 +1,4 @@
+import { renderButlerDocument } from './butler-ui-shell.js';
 export function renderVtddHelpGuidePage(input = {}) {
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
   const mcpPath = normalizePath(input.mcpPath || "/mcp");
@@ -6,35 +7,35 @@ export function renderVtddHelpGuidePage(input = {}) {
   const setupKnownGoodHref = "/setup/known-good";
   const passkeyOperatorHref = "/v2/approval/passkey/operator";
 
-  return `<!doctype html>
+  return renderButlerDocument(`<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VTDD help guide</title>
   <style>
-    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: Canvas; color: CanvasText; }
-    main { width: min(100% - 24px, 1120px); margin: 0 auto; padding: 24px 0 56px; }
-    h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 10px; }
+    :root { --butler-content-width: 1120px; color-scheme: light dark; font-family:var(--butler-font); }
+    body { margin: 0; background: var(--butler-bg); color: var(--butler-ink); }
+    main { box-sizing: border-box; width: min(100%, var(--butler-content-width)); margin: 0 auto; padding: 24px var(--butler-gutter) 56px; }
+    h1 { font-size: var(--butler-heading-size); line-height: 1.4; margin: 0 0 10px; }
     h2 { font-size: 1.08rem; margin: 30px 0 10px; }
     h3 { font-size: .96rem; margin: 18px 0 8px; }
     p, li { line-height: 1.6; }
-    a { color: LinkText; }
+    a { color: var(--butler-accent); }
     code { font: .92em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .lede { max-width: 860px; opacity: .9; }
-    .nav, .notice, .panel, .route { border: 1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius: 8px; }
+    .nav, .notice, .panel, .route { border: 1px solid color-mix(in srgb, var(--butler-ink) 16%, transparent); border-radius: 20px; }
     .nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; margin: 18px 0 22px; }
     .nav strong { margin-right: auto; }
-    .nav a, .button { display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px; border: 1px solid color-mix(in srgb, CanvasText 20%, transparent); border-radius: 6px; background: ButtonFace; color: ButtonText; text-decoration: none; }
+    .nav a, .button { display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--butler-ink) 20%, transparent); border-radius: 6px; background: var(--butler-card); color: var(--butler-ink); text-decoration: none; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 10px; }
     .panel, .notice { padding: 14px; }
     .panel strong { display: block; margin-bottom: 4px; }
-    .notice { background: color-mix(in srgb, CanvasText 4%, Canvas); margin: 14px 0; }
+    .notice { background: color-mix(in srgb, var(--butler-ink) 4%, var(--butler-bg)); margin: 14px 0; }
     .route { padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
     .route strong { display: block; margin-bottom: 4px; }
     .flow { display: grid; gap: 8px; margin: 12px 0; }
-    .flow div { padding: 10px 12px; border-left: 4px solid color-mix(in srgb, CanvasText 32%, transparent); background: color-mix(in srgb, CanvasText 5%, Canvas); }
+    .flow div { padding: 10px 12px; border-left: 4px solid color-mix(in srgb, var(--butler-ink) 32%, transparent); background: color-mix(in srgb, var(--butler-ink) 5%, var(--butler-bg)); }
     .small { font-size: .88rem; opacity: .82; }
   </style>
 </head>
@@ -141,7 +142,7 @@ export function renderVtddHelpGuidePage(input = {}) {
     </section>
   </main>
 </body>
-</html>`;
+</html>`, { pagePath: input.pagePath || "/help" });
 }
 
 export function buildVtddCloudflarePageDirectory(input = {}) {

@@ -18,7 +18,7 @@ function browser(fetcher, renderer = renderDashboardMonitorHome) {
   const document = { hidden: false, getElementById(id) { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); }, createElement: tag => new Element(tag, document), addEventListener: (name, fn) => { events[name] = fn; } };
   const navigator = { onLine: true };
   const context = { document, navigator, window: { addEventListener: (name, fn) => { events[name] = fn; } }, fetch: fetcher, performance: { now: () => elapsed }, AbortController, Date, setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; }, clearInterval() {}, setTimeout(fn) { timeouts.push(fn); return timeouts.length; }, clearTimeout() {} };
-  vm.runInNewContext(renderer().match(/<script>([\s\S]*)<\/script>/)[1], context);
+  vm.runInNewContext(renderer().match(/<script>([\s\S]*?)<\/script>/)[1], context);
   return { nodes, events, intervals, timeouts, document, navigator, advance(ms) { elapsed += ms; intervals.find(t => t.ms === 5000).fn(); } };
 }
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };

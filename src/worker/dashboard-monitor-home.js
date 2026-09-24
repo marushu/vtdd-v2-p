@@ -1,3 +1,4 @@
+import { renderButlerDocument } from '../core/butler-ui-shell.js';
 import { dashboardMonitorClientScript } from './dashboard-monitor-client.generated.js';
 
 // All remote strings enter the DOM through textContent, including notification history.
@@ -124,23 +125,23 @@ export function mountMonitorHome(computeView) {
   render(); refresh();
 }
 export function renderDashboardMonitorHome() {
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#faf8f4"><title>Butler — ホーム</title><link rel="manifest" href="/dashboard.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>
-:root{color-scheme:light dark;--bg:#faf8f4;--card:#fffefa;--ink:#282725;--muted:#68645f;--line:#e5e0d9;--accent:#9f3935;--green-bg:#e6f1e9;--green:#285c3d;--amber-bg:#fbefd5;--amber:#795514;--red-bg:#f9e5e1;--red:#94352f}
+  return renderButlerDocument(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#faf8f4"><title>Butler — ホーム</title><link rel="manifest" href="/dashboard.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>
+:root{--butler-content-width:760px;color-scheme:light dark;--bg:var(--butler-bg);--card:var(--butler-card);--ink:var(--butler-ink);--muted:var(--butler-muted);--line:var(--butler-line);--accent:var(--butler-accent);--green-bg:var(--butler-green-bg);--green:var(--butler-green);--amber-bg:var(--butler-amber-bg);--amber:var(--butler-amber);--red-bg:var(--butler-red-bg);--red:var(--butler-red)}
 
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-wrap:anywhere}
-main{max-width:760px;margin:auto;padding:40px 20px calc(110px + env(safe-area-inset-bottom))}
-header{margin-bottom:32px}
+main{max-width:var(--butler-content-width);margin:auto;padding:0 var(--butler-gutter) calc(110px + env(safe-area-inset-bottom))}
+main > header{margin-bottom:32px}
 .brand{display:flex;align-items:center;gap:10px;color:var(--accent);font-weight:750;letter-spacing:.19em;font-size:14px}
 .brand img{width:36px;height:36px;border-radius:10px}
-h1{font-size:clamp(23px,6vw,32px);letter-spacing:.02em;line-height:1.4;margin:20px 0 12px}
+h1{font-size:var(--butler-heading-size);letter-spacing:.02em;line-height:1.4;margin:20px 0 12px}
 h2{font-size:18px;margin:30px 0 14px}
 h3{font-size:16px;margin:0}
 p{margin:8px 0}
 .muted,time,#today,#connection{color:var(--muted);font-size:13px}
 #connection{min-height:24px}
 #counts{margin-top:20px;font-size:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--butler-card-radius);padding:var(--butler-card-padding);margin-bottom:16px}
 .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .card-head h3{min-width:0}
 .chip{flex-shrink:0;font-size:12px;font-weight:650;border-radius:20px;padding:3px 10px}
@@ -162,15 +163,12 @@ a.action{display:inline-flex;align-items:center;min-height:44px}
 .history{padding:16px 0;border-bottom:1px solid var(--line)}
 .history p{font-size:14px;white-space:pre-wrap}
 .empty{padding:24px 0;color:var(--muted)}
-nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:8px 12px calc(8px + env(safe-area-inset-bottom));gap:12px}
-nav a{display:flex;align-items:center;justify-content:center;min-height:48px;max-width:200px;flex:1;text-decoration:none;font-size:14px;color:var(--muted);border-radius:12px}
-nav a[aria-current]{background:var(--red-bg);color:var(--accent);font-weight:700}
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 [hidden]{display:none!important}
-@media(prefers-color-scheme:dark){:root{--bg:#1d1c1b;--card:#282624;--ink:#f4efe8;--muted:#bdb5ab;--line:#45403b;--accent:#eeaaa1;--green-bg:#243e2e;--green:#afe0bc;--amber-bg:#463a22;--amber:#efcf91;--red-bg:#4a2c29;--red:#f2b0a8}
+@media(prefers-color-scheme:dark){:root{--bg:var(--butler-bg);--card:var(--butler-card);--ink:var(--butler-ink);--muted:var(--butler-muted);--line:var(--butler-line);--accent:var(--butler-accent);--green-bg:var(--butler-green-bg);--green:var(--butler-green);--amber-bg:var(--butler-amber-bg);--amber:var(--butler-amber);--red-bg:var(--butler-red-bg);--red:var(--butler-red)}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
 
-</style></head><body><main><header><div class="brand"><img src="/dashboard-icon.png" alt="">BUTLER</div><h1>任せたことを、ひと目で。</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">接続を確認しています…</p><p id="counts">状態を取得しています…</p></header><section id="attention-section" hidden><h2>対応が必要</h2><div id="attention"></div></section><section><h2>監視・実行中</h2><div id="monitors" aria-label="現在の監視状態"></div></section><section><h2>最近の通知</h2><p class="muted">届いた通知の履歴です。現在の状態は上のカードで確認できます。</p><div id="notifications"></div></section><noscript>現在の状態を表示するには JavaScript を有効にしてください。</noscript></main><nav aria-label="メインナビゲーション"><a href="/dashboard" aria-current="page">ホーム</a><a href="/dashboard/notifications">通知</a><a href="/dashboard/chat">チャット</a></nav><script>${dashboardMonitorClientScript}</script></body></html>`;
+</style></head><body><main><header><h1>任せたことを、ひと目で。</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">接続を確認しています…</p><p id="counts">状態を取得しています…</p></header><section id="attention-section" hidden><h2>対応が必要</h2><div id="attention"></div></section><section><h2>監視・実行中</h2><div id="monitors" aria-label="現在の監視状態"></div></section><section><h2>最近の通知</h2><p class="muted">届いた通知の履歴です。現在の状態は上のカードで確認できます。</p><div id="notifications"></div></section><noscript>現在の状態を表示するには JavaScript を有効にしてください。</noscript></main><script>${dashboardMonitorClientScript}</script></body></html>`, { active: "home", layout: "home" });
 }
