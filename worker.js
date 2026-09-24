@@ -11210,6 +11210,358 @@ var require_dist = __commonJS({
   }
 });
 
+// src/core/dashboard-monitor-state.js
+var MonitorInputError = class extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+};
+var fail = (message, status) => {
+  throw new MonitorInputError(message, status);
+};
+var statuses = ["unknown", "checking", "no_slots", "available", "error", "action_required", "completed", "stopped"];
+var modes = ["monitoring", "executing", "paused"];
+function monitorText(value, max = 500) {
+  if (value == null) return "";
+  if (typeof value !== "string" || value.length > max) fail("invalid summary");
+  if (/[/\\]/.test(value)) fail("private machine paths are not allowed");
+  if (/[\x00-\x1f\x7f]|(?:https?:\/\/|(?:^|\s)[/~\\]|[A-Za-z]:\\)|\b(?:bearer|password|secret|token|pid)\s*[:= ]|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[a-z0-9-]+\.(?:[a-z]{2,})(?:\b|\/)/i.test(value)) fail("private machine details are not allowed");
+  return value.trim();
+}
+function timestamp(value, now, future = false) {
+  if (value == null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(value)) fail("invalid timestamp");
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString().replace(".000Z", "Z") !== value.replace(".000Z", "Z")) fail("invalid timestamp");
+  if (!future && parsed > now + 12e4) fail("future observation");
+  return new Date(parsed).toISOString();
+}
+function normalizeMonitorSnapshot(input, now = Date.now()) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) fail("invalid monitor");
+  const out = {};
+  for (const key of ["source", "id"]) {
+    if (typeof input[key] !== "string" || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(input[key])) fail(`invalid ${key}`);
+    out[key] = input[key];
+  }
+  out.type = input.type ?? "monitor";
+  if (!["monitor", "task"].includes(out.type)) fail("invalid type");
+  out.status = input.status ?? "unknown";
+  if (!statuses.includes(out.status)) fail("invalid status");
+  out.mode = input.mode ?? "monitoring";
+  if (!modes.includes(out.mode)) fail("invalid mode");
+  for (const key of ["title", "description", "resultSummary", "automationScope", "requiredAction", "evidenceSummary"]) out[key] = monitorText(input[key], key === "title" ? 100 : 500);
+  if (!out.title) fail("title required");
+  for (const key of ["processAlive", "automaticBookingEnabled"]) {
+    if (input[key] != null && typeof input[key] !== "boolean") fail(`invalid ${key}`);
+    out[key] = input[key] ?? null;
+  }
+  out.intervalSeconds = input.intervalSeconds ?? null;
+  if (out.intervalSeconds !== null && (!Number.isInteger(out.intervalSeconds) || out.intervalSeconds < 1 || out.intervalSeconds > 86400)) fail("invalid interval");
+  out.consecutiveFailures = input.consecutiveFailures ?? 0;
+  if (!Number.isInteger(out.consecutiveFailures) || out.consecutiveFailures < 0 || out.consecutiveFailures > 1e6) fail("invalid failure count");
+  for (const key of ["observedAt", "lastAttemptAt", "lastSuccessAt", "completedAt", "nextCheckAt"]) out[key] = timestamp(input[key], now, key === "nextCheckAt");
+  for (const key of ["lastAttemptAt", "lastSuccessAt", "completedAt"]) {
+    if (out[key] && out.observedAt && out[key] > out.observedAt) fail("event after observation");
+  }
+  out.actionURL = input.actionURL ?? null;
+  if (out.actionURL !== null && !["/dashboard/chat", "/dashboard/notifications", "/dashboard"].includes(out.actionURL)) fail("invalid action path");
+  out.receivedAt = new Date(now).toISOString();
+  return out;
+}
+function computeMonitorView(snapshot, now = Date.now(), connected = true) {
+  const m = snapshot;
+  const age = (value) => value && Number.isFinite(Date.parse(value)) ? (now - Date.parse(value)) / 1e3 : Infinity;
+  let state = m.status;
+  const documentedCompletion = m.status === "completed" && Boolean(m.observedAt && m.completedAt && m.evidenceSummary) && !m.consecutiveFailures;
+  const reporterState = !connected ? "unknown" : age(m.receivedAt) > 120 || age(m.observedAt) > 120 ? "sync_stale" : "connected";
+  if (documentedCompletion) state = "completed";
+  else if (!connected) state = "unknown";
+  else if (!m.observedAt || !m.receivedAt || m.processAlive == null || !m.intervalSeconds) state = "unknown";
+  else if (age(m.receivedAt) > 120 || age(m.observedAt) > 120) state = "sync_stale";
+  else if (m.processAlive === false || m.mode === "paused" || m.status === "stopped") state = "stopped";
+  else if (m.status === "error" || m.consecutiveFailures > 0) state = "error";
+  else if (m.status === "action_required") state = "action_required";
+  else if (!m.lastAttemptAt || !m.lastSuccessAt) state = "unknown";
+  else if (age(m.lastSuccessAt) > Math.max(2 * m.intervalSeconds + 60, 180)) state = "checking_unverified";
+  else if (m.status === "completed") state = "unknown";
+  const needsAction = ["error", "action_required", "stopped", "sync_stale", "checking_unverified"].includes(state);
+  return { ...m, currentState: state, reporterState, documentedCompletion, needsAction, healthy: ["no_slots", "available", "checking"].includes(state) };
+}
+async function readMonitorBody(request) {
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) fail("JSON required", 415);
+  if (Number(request.headers.get("content-length")) > 16384) fail("body too large", 413);
+  const reader = request.body?.getReader();
+  if (!reader) fail("body required");
+  let size = 0;
+  const chunks = [];
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 16384) {
+        await reader.cancel();
+        fail("body too large", 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    fail("invalid JSON");
+  }
+}
+function createD1DashboardMonitorStore(d1) {
+  let schema;
+  const ready = () => schema ??= d1.prepare(`CREATE TABLE IF NOT EXISTS vtdd_dashboard_monitors (
+    source TEXT NOT NULL, id TEXT NOT NULL, observed_at TEXT, payload_json TEXT NOT NULL,
+    PRIMARY KEY (source, id))`).run().catch((error2) => {
+    schema = null;
+    throw error2;
+  });
+  return {
+    async list() {
+      await ready();
+      const rows = await d1.prepare("SELECT payload_json FROM vtdd_dashboard_monitors ORDER BY source, id LIMIT 100").all();
+      return (rows.results ?? []).map((row) => JSON.parse(row.payload_json));
+    },
+    async put(m) {
+      await ready();
+      const result = await d1.prepare(`INSERT INTO vtdd_dashboard_monitors (source, id, observed_at, payload_json)
+        SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM vtdd_dashboard_monitors) < 100
+          OR EXISTS (SELECT 1 FROM vtdd_dashboard_monitors WHERE source = ? AND id = ?)
+        ON CONFLICT(source, id) DO UPDATE SET observed_at = excluded.observed_at, payload_json = excluded.payload_json
+        WHERE excluded.observed_at IS NOT NULL AND (vtdd_dashboard_monitors.observed_at IS NULL OR excluded.observed_at > vtdd_dashboard_monitors.observed_at)`).bind(m.source, m.id, m.observedAt, JSON.stringify(m), m.source, m.id).run();
+      if (!result.meta?.changes) fail("out-of-order observation or monitor limit reached", 409);
+    }
+  };
+}
+var stores = /* @__PURE__ */ new WeakMap();
+function resolveDashboardMonitorStore(env) {
+  if (env.DASHBOARD_MONITOR_STORE) return env.DASHBOARD_MONITOR_STORE;
+  const d1 = env.VTDD_MEMORY_D1 ?? env.MEMORY_D1;
+  if (!d1?.prepare) return null;
+  if (!stores.has(d1)) stores.set(d1, createD1DashboardMonitorStore(d1));
+  return stores.get(d1);
+}
+
+// src/worker/dashboard-monitor-home.js
+function mountMonitorHome(computeView) {
+  const byId = (id) => document.getElementById(id);
+  const labels = { unknown: "\u672A\u78BA\u8A8D", checking: "\u76E3\u8996\u4E2D", no_slots: "\u7A7A\u304D\u306A\u3057", available: "\u5019\u88DC\u3042\u308A", error: "\u78BA\u8A8D\u30A8\u30E9\u30FC", action_required: "\u5BFE\u5FDC\u304C\u5FC5\u8981", stopped: "\u505C\u6B62", sync_stale: "\u540C\u671F\u304C\u53E4\u3044", checking_unverified: "\u78BA\u8A8D\u7D50\u679C\u304C\u53E4\u3044", completed: "\u5B8C\u4E86\uFF08\u8A18\u9332\uFF09" };
+  const cards = /* @__PURE__ */ new Map();
+  let notificationSignature = null;
+  let lastRender = "";
+  let snapshot = null, connected = false, controller = null, serverTime = 0, loadedAt = 0, loadedWallTime = 0;
+  const localTime = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "\u672A\u78BA\u8A8D";
+  const element = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text != null) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  };
+  const interval = (seconds) => seconds % 3600 === 0 ? `${seconds / 3600}\u6642\u9593` : seconds % 60 === 0 ? `${seconds / 60}\u5206` : `${Math.floor(seconds / 60) ? Math.floor(seconds / 60) + "\u5206" : ""}${seconds % 60}\u79D2`;
+  function card(m) {
+    const node = element("article", null, "card");
+    const head = element("div", null, "card-head");
+    head.append(element("h3", m.title), element("span", labels[m.currentState] || "\u672A\u78BA\u8A8D", "chip " + (m.documentedCompletion ? "neutral" : m.healthy ? "green" : ["error", "stopped", "action_required"].includes(m.currentState) ? "red" : "amber")));
+    node.append(head);
+    if (m.description) node.append(element("p", m.description, "muted"));
+    node.append(element("p", (m.documentedCompletion ? "\u5B8C\u4E86\u306E\u8A18\u9332\uFF1A" : m.healthy ? "\u78BA\u8A8D\u7D50\u679C\uFF1A" : "\u524D\u56DE\u306E\u8A18\u9332\uFF08\u73FE\u5728\u306E\u6B63\u5E38\u6027\u306F\u672A\u78BA\u8A8D\uFF09\uFF1A") + (m.resultSummary || "\u307E\u3060\u78BA\u8A8D\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093"), "result"));
+    const facts = element("dl");
+    for (const [label, value] of [
+      ["\u6700\u7D42\u6210\u529F", localTime(m.lastSuccessAt)],
+      ...m.documentedCompletion ? [["\u5B8C\u4E86\u65E5\u6642", localTime(m.completedAt)]] : [["\u6B21\u306E\u78BA\u8A8D", localTime(m.nextCheckAt) + (m.intervalSeconds ? ` \xB7 ${interval(m.intervalSeconds)}\u3054\u3068` : " \xB7 \u9593\u9694\u672A\u78BA\u8A8D")]],
+      ["\u4EFB\u305B\u3066\u3044\u308B\u7BC4\u56F2", m.automationScope || "\u672A\u8A2D\u5B9A"],
+      ...m.type !== "task" && typeof m.automaticBookingEnabled === "boolean" ? [["\u81EA\u52D5\u4E88\u7D04", m.automaticBookingEnabled ? "\u8A2D\u5B9A\u3042\u308A\uFF08\u8868\u793A\u306E\u307F\uFF09" : "\u8A2D\u5B9A\u306A\u3057"]] : [],
+      ["\u3042\u306A\u305F\u306E\u5BFE\u5FDC", m.needsAction ? m.requiredAction || "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044" : "\u73FE\u5728\u306E\u5BFE\u5FDC\u4F9D\u983C\u306F\u3042\u308A\u307E\u305B\u3093"]
+    ]) facts.append(element("dt", label), element("dd", value));
+    node.append(facts);
+    const details = element("details");
+    const key = m.source + ":" + m.id;
+    const previous = cards.get(key);
+    details.open = previous?.details.open || false;
+    const summary = element("summary", "\u78BA\u8A8D\u306E\u8A18\u9332");
+    const focus = previous && (document.activeElement === previous.summary ? "summary" : previous.link && document.activeElement === previous.link ? "link" : null);
+    details.append(summary, element("p", "\u6700\u7D42\u8A66\u884C\uFF1A" + localTime(m.lastAttemptAt)), element("p", "\u89B3\u6E2C\uFF1A" + localTime(m.observedAt)), element("p", "\u53D7\u4FE1\uFF1A" + localTime(m.receivedAt)), element("p", `\u9023\u7D9A\u5931\u6557\uFF1A${m.consecutiveFailures}\u56DE`));
+    if (m.evidenceSummary) details.append(element("p", "\u5B8C\u4E86\u306E\u6839\u62E0\uFF1A" + m.evidenceSummary));
+    node.append(details);
+    let link;
+    if (m.needsAction && ["/dashboard/chat", "/dashboard/notifications", "/dashboard"].includes(m.actionURL)) {
+      link = element("a", "\u5BFE\u5FDC\u3092\u78BA\u8A8D", "action");
+      link.href = m.actionURL;
+      node.append(link);
+    }
+    cards.set(key, { node, details, summary, link, focus });
+    return node;
+  }
+  function render() {
+    byId("today").textContent = (/* @__PURE__ */ new Date()).toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "long" });
+    if (!snapshot) return;
+    const now = serverTime + Math.max(0, performance.now() - loadedAt, Date.now() - loadedWallTime);
+    const freshConnection = connected && now - serverTime <= 12e4;
+    if (connected && !freshConnection) byId("connection").textContent = "\u66F4\u65B0\u304C\u9014\u7D76\u3048\u3066\u3044\u307E\u3059 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D";
+    const views = snapshot.monitors.map((m) => computeView(m, now, freshConnection));
+    const signature = JSON.stringify([snapshot, freshConnection, views.map((m) => m.currentState)]);
+    if (signature === lastRender) return;
+    lastRender = signature;
+    const problems = views.filter((m) => m.needsAction);
+    byId("attention-section").hidden = problems.length === 0;
+    byId("attention").replaceChildren(...problems.map((m) => {
+      const node = element("p", null, "attention-item");
+      node.append(element("strong", m.title), element("span", " \u2014 " + (labels[m.currentState] || "\u672A\u78BA\u8A8D")));
+      return node;
+    }));
+    byId("counts").textContent = !freshConnection ? "\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D" : `${views.filter((m) => m.processAlive && m.currentState !== "completed" && m.currentState !== "unknown" && m.currentState !== "sync_stale" && m.currentState !== "stopped").length}\u4EF6 \u76E3\u8996\u30FB\u5B9F\u884C\u4E2D\u3000 /\u3000${problems.length}\u4EF6 \u8981\u78BA\u8A8D${views.some((m) => m.currentState === "unknown") ? " \xB7 \u672A\u78BA\u8A8D\u306E\u9805\u76EE\u3042\u308A" : ""}`;
+    byId("monitors").replaceChildren(...views.map(card));
+    const keys = new Set(views.map((m) => m.source + ":" + m.id));
+    for (const [key, entry] of cards) {
+      if (!keys.has(key)) {
+        cards.delete(key);
+        continue;
+      }
+      if (entry.focus) (entry[entry.focus] || entry.summary).focus({ preventScroll: true });
+    }
+    if (!views.length) byId("monitors").append(element("p", freshConnection ? "\u63A5\u7D9A\u3055\u308C\u305F\u76E3\u8996\u306F\u307E\u3060\u3042\u308A\u307E\u305B\u3093\u3002\u63A5\u7D9A\u3059\u308B\u3068\u3001\u3053\u3053\u306B\u73FE\u5728\u306E\u72B6\u614B\u304C\u5C4A\u304D\u307E\u3059\u3002" : "\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u306E\u56DE\u5FA9\u3092\u304A\u5F85\u3061\u304F\u3060\u3055\u3044\u3002", "empty"));
+    const historySignature = JSON.stringify([snapshot.notifications, snapshot.notificationsAvailable, freshConnection]);
+    if (historySignature === notificationSignature) return;
+    notificationSignature = historySignature;
+    byId("notifications").replaceChildren(...snapshot.notifications.map((n) => {
+      const node = element("article", null, "history");
+      node.append(element("h3", n.title || "\u901A\u77E5"), element("p", n.message || "\u672C\u6587\u306A\u3057"), element("time", localTime(n.createdAt)));
+      return node;
+    }));
+    if (!snapshot.notifications.length) byId("notifications").append(element("p", !freshConnection || snapshot.notificationsAvailable === false ? "\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u901A\u77E5\u30DA\u30FC\u30B8\u3067\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002" : "\u6700\u8FD1\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002", "muted"));
+  }
+  function unavailable(message) {
+    connected = false;
+    byId("connection").textContent = message;
+    if (!snapshot) {
+      byId("monitors").replaceChildren(element("p", "\u76E3\u8996\u72B6\u614B\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002", "empty"));
+      byId("notifications").replaceChildren(element("p", "\u901A\u77E5\u5C65\u6B74\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3002\u63A5\u7D9A\u307E\u305F\u306F\u8A8D\u8A3C\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002", "muted"));
+    }
+    byId("counts").textContent = "\u73FE\u5728\u306E\u72B6\u614B\u306F\u672A\u78BA\u8A8D";
+    render();
+  }
+  async function refresh() {
+    if (document.hidden || controller) return;
+    if (navigator.onLine === false) {
+      unavailable("\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
+      return;
+    }
+    const current = new AbortController();
+    controller = current;
+    const timeout = setTimeout(() => current.abort(), 1e4);
+    try {
+      const response = await fetch("/v2/dashboard/overview", { credentials: "same-origin", cache: "no-store", signal: current.signal });
+      if (!response.ok) {
+        unavailable(response.status === 401 || response.status === 403 ? "\u8A8D\u8A3C\u304C\u5FC5\u8981\u3067\u3059 \xB7 \u30DB\u30FC\u30E0\u3092\u958B\u304D\u76F4\u3057\u3066\u304F\u3060\u3055\u3044" : "\u63A5\u7D9A\u3092\u78BA\u8A8D\u3067\u304D\u307E\u305B\u3093 \xB7 \u518D\u8A66\u884C\u3057\u307E\u3059");
+        return;
+      }
+      const data = await response.json();
+      if (!Array.isArray(data.monitors) || data.monitors.length > 100 || !Array.isArray(data.notifications) || !Number.isFinite(Date.parse(data.serverTime))) throw new Error("invalid overview");
+      if (current.signal.aborted || navigator.onLine === false) throw new Error("request cancelled");
+      snapshot = data;
+      loadedWallTime = Date.now();
+      serverTime = Date.parse(data.serverTime);
+      loadedAt = performance.now();
+      connected = true;
+      byId("connection").textContent = "\u63A5\u7D9A\u4E2D \xB7 " + localTime(data.serverTime) + " \u66F4\u65B0";
+      render();
+    } catch {
+      unavailable(navigator.onLine === false ? "\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D" : "\u66F4\u65B0\u3067\u304D\u307E\u305B\u3093 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
+    } finally {
+      clearTimeout(timeout);
+      controller = null;
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+  window.addEventListener("pageshow", refresh);
+  window.addEventListener("online", refresh);
+  window.addEventListener("offline", () => {
+    controller?.abort();
+    unavailable("\u30AA\u30D5\u30E9\u30A4\u30F3 \xB7 \u73FE\u5728\u306F\u672A\u78BA\u8A8D");
+  });
+  const polling = setInterval(refresh, 3e4);
+  const freshness = setInterval(() => {
+    if (!document.hidden) render();
+  }, 5e3);
+  window.addEventListener("pagehide", (event) => {
+    controller?.abort();
+    if (!event.persisted) {
+      clearInterval(polling);
+      clearInterval(freshness);
+    }
+  });
+  if (navigator.serviceWorker) navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard/" }).catch(() => {
+  });
+  render();
+  refresh();
+}
+function renderDashboardMonitorHome() {
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#faf8f4"><title>Butler \u2014 \u30DB\u30FC\u30E0</title><link rel="manifest" href="/dashboard.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>
+:root{color-scheme:light dark;--bg:#faf8f4;--card:#fffefa;--ink:#282725;--muted:#68645f;--line:#e5e0d9;--accent:#9f3935;--green-bg:#e6f1e9;--green:#285c3d;--amber-bg:#fbefd5;--amber:#795514;--red-bg:#f9e5e1;--red:#94352f}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-wrap:anywhere}
+main{max-width:760px;margin:auto;padding:40px 20px calc(110px + env(safe-area-inset-bottom))}
+header{margin-bottom:32px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--accent);font-weight:750;letter-spacing:.19em;font-size:14px}
+.brand img{width:36px;height:36px;border-radius:10px}
+h1{font-size:clamp(23px,6vw,32px);letter-spacing:.02em;line-height:1.4;margin:20px 0 12px}
+h2{font-size:18px;margin:30px 0 14px}
+h3{font-size:16px;margin:0}
+p{margin:8px 0}
+.muted,time,#today,#connection{color:var(--muted);font-size:13px}
+#connection{min-height:24px}
+#counts{margin-top:20px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:16px}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.card-head h3{min-width:0}
+.chip{flex-shrink:0;font-size:12px;font-weight:650;border-radius:20px;padding:3px 10px}
+.green{background:var(--green-bg);color:var(--green)}
+.neutral{background:var(--line);color:var(--ink)}
+.amber{background:var(--amber-bg);color:var(--amber)}
+.red{background:var(--red-bg);color:var(--red)}
+.result{font-size:15px;margin:18px 0}
+dl{display:grid;grid-template-columns:100px minmax(0,1fr);font-size:13px;gap:8px;margin:18px 0}
+dt{color:var(--muted)}
+dd{margin:0}
+details{border-top:1px solid var(--line);font-size:13px}
+summary{min-height:44px;cursor:pointer;padding:12px 0;color:var(--muted)}
+details p{color:var(--muted)}
+a{color:var(--accent)}
+a.action{display:inline-flex;align-items:center;min-height:44px}
+#attention{border-left:3px solid var(--accent);padding-left:16px}
+.attention-item{font-size:14px;margin:12px 0}
+.history{padding:16px 0;border-bottom:1px solid var(--line)}
+.history p{font-size:14px;white-space:pre-wrap}
+.empty{padding:24px 0;color:var(--muted)}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:8px 12px calc(8px + env(safe-area-inset-bottom));gap:12px}
+nav a{display:flex;align-items:center;justify-content:center;min-height:48px;max-width:200px;flex:1;text-decoration:none;font-size:14px;color:var(--muted);border-radius:12px}
+nav a[aria-current]{background:var(--red-bg);color:var(--accent);font-weight:700}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+[hidden]{display:none!important}
+@media(prefers-color-scheme:dark){:root{--bg:#1d1c1b;--card:#282624;--ink:#f4efe8;--muted:#bdb5ab;--line:#45403b;--accent:#eeaaa1;--green-bg:#243e2e;--green:#afe0bc;--amber-bg:#463a22;--amber:#efcf91;--red-bg:#4a2c29;--red:#f2b0a8}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+
+</style></head><body><main><header><div class="brand"><img src="/dashboard-icon.png" alt="">BUTLER</div><h1>\u4EFB\u305B\u305F\u3053\u3068\u3092\u3001\u3072\u3068\u76EE\u3067\u3002</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u2026</p><p id="counts">\u72B6\u614B\u3092\u53D6\u5F97\u3057\u3066\u3044\u307E\u3059\u2026</p></header><section id="attention-section" hidden><h2>\u5BFE\u5FDC\u304C\u5FC5\u8981</h2><div id="attention"></div></section><section><h2>\u76E3\u8996\u30FB\u5B9F\u884C\u4E2D</h2><div id="monitors" aria-label="\u73FE\u5728\u306E\u76E3\u8996\u72B6\u614B"></div></section><section><h2>\u6700\u8FD1\u306E\u901A\u77E5</h2><p class="muted">\u5C4A\u3044\u305F\u901A\u77E5\u306E\u5C65\u6B74\u3067\u3059\u3002\u73FE\u5728\u306E\u72B6\u614B\u306F\u4E0A\u306E\u30AB\u30FC\u30C9\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</p><div id="notifications"></div></section><noscript>\u73FE\u5728\u306E\u72B6\u614B\u3092\u8868\u793A\u3059\u308B\u306B\u306F JavaScript \u3092\u6709\u52B9\u306B\u3057\u3066\u304F\u3060\u3055\u3044\u3002</noscript></main><nav aria-label="\u30E1\u30A4\u30F3\u30CA\u30D3\u30B2\u30FC\u30B7\u30E7\u30F3"><a href="/dashboard" aria-current="page">\u30DB\u30FC\u30E0</a><a href="/dashboard/notifications">\u901A\u77E5</a><a href="/dashboard/chat">\u30C1\u30E3\u30C3\u30C8</a></nav><script>(${mountMonitorHome.toString()})(${computeMonitorView.toString()});<\/script></body></html>`;
+}
+
 // src/core/types.js
 var ActionType = Object.freeze({
   READ: "read",
@@ -32576,8 +32928,8 @@ function normalizeProposalEntry(content) {
   }
   return null;
 }
-function makeRecordId2({ issuePart, timestamp }) {
-  const timestampPart = normalizeTag2(String(timestamp).replaceAll(":", "").replaceAll("-", ""));
+function makeRecordId2({ issuePart, timestamp: timestamp2 }) {
+  const timestampPart = normalizeTag2(String(timestamp2).replaceAll(":", "").replaceAll("-", ""));
   const randomPart = Math.random().toString(36).slice(2, 8);
   return `proposal_${issuePart}_${timestampPart}_${randomPart}`;
 }
@@ -60174,6 +60526,43 @@ var runtime_default = {
     if (request.method === "GET" && (url.pathname === "/dashboard-icon.png" || url.pathname === DASHBOARD_ICON_PNG_PATH || url.pathname === "/apple-touch-icon.png" || url.pathname === "/apple-touch-icon-precomposed.png")) {
       return png(200, dashboard_butler_icon_512_default);
     }
+    if (request.method === "POST" && url.pathname === "/v2/dashboard/monitors" || request.method === "GET" && url.pathname === "/v2/dashboard/overview") {
+      const writing = request.method === "POST";
+      const auth = writing ? authorizeGatewayRequest({ request, env, apiSuffix: "/dashboard/monitors" }) : await authorizeDashboardRequest({ request, env, apiSuffix: "/dashboard/overview" });
+      const headers = { "cache-control": "no-store" };
+      if (!auth.ok) return json(auth.status, { error: "unauthorized" }, headers);
+      const store = resolveDashboardMonitorStore(env);
+      if (!store) return json(503, { error: "monitor_store_unavailable" }, headers);
+      try {
+        if (writing) {
+          const snapshot = normalizeMonitorSnapshot(await readMonitorBody(request));
+          await store.put(snapshot);
+          return json(200, { ok: true, receivedAt: snapshot.receivedAt }, headers);
+        }
+        const now = Date.now();
+        const monitors = (await store.list()).slice(0, 100).map((m) => computeMonitorView(m, now));
+        const events = resolveDashboardEventStore(env);
+        let notifications = [], notificationsAvailable = false;
+        if (events?.listRecent) {
+          try {
+            notifications = (await events.listRecent({ limit: 100 })).filter((event) => event.kind !== "dashboard_push_received").slice(0, 12).map((event) => ({
+              title: String((event.kind === "owner_action_required" ? event.changeSummary : event.title) || "\u901A\u77E5").slice(0, 200),
+              message: String(event.kind === "owner_action_required" ? event.title || event.message || "" : event.message || event.changeSummary || "").slice(0, 1e3),
+              createdAt: event.createdAt || event.updatedAt || null
+            }));
+            notificationsAvailable = true;
+          } catch {
+          }
+        }
+        return json(200, { serverTime: new Date(now).toISOString(), monitors, notifications, notificationsAvailable }, headers);
+      } catch (error2) {
+        return json(
+          error2 instanceof MonitorInputError ? error2.status : 503,
+          { error: error2 instanceof MonitorInputError ? error2.message : "monitor_store_unavailable" },
+          headers
+        );
+      }
+    }
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
@@ -60188,7 +60577,7 @@ var runtime_default = {
         );
       }
     }
-    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
+    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/dashboard/chat" || url.pathname === "/orchestrator")) {
       const dashboardAuth = await authorizeDashboardRequest({
         request,
         env,
@@ -60201,12 +60590,12 @@ var runtime_default = {
       });
       return html(
         200,
-        await renderV2DashboardPage({
+        url.pathname === "/dashboard" && !["threadId", "thread_id", "repository", "repositoryInput", "issueNumber"].some((key) => url.searchParams.has(key)) ? renderDashboardMonitorHome() : await renderV2DashboardPage({
           runtimeOrigin: url.origin,
           url,
           dashboardEventStore: resolveDashboardEventStore(env)
         }),
-        dashboardSessionHeaders
+        { ...dashboardSessionHeaders, "cache-control": "no-store" }
       );
     }
     if (request.method === "GET" && url.pathname === "/dashboard/github") {
@@ -62301,7 +62690,7 @@ function buildMemoryWriteRecord(payload = {}) {
   }
   const relatedIssue = normalizeIssue6(payload.relatedIssue);
   const repository = normalizeText34(payload.repository) || null;
-  const timestamp = normalizeText34(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
+  const timestamp2 = normalizeText34(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
   const metadata = {
     ...normalizeObject12(payload.metadata),
     relatedIssue,
@@ -62320,11 +62709,11 @@ function buildMemoryWriteRecord(payload = {}) {
           rationale: normalizeText34(payload.rationale),
           relatedIssue,
           decidedBy: normalizeText34(payload.decidedBy) || "butler_with_owner_go",
-          timestamp,
+          timestamp: timestamp2,
           supersededBy: normalizeText34(payload.supersededBy) || null
         },
         metadata,
-        timestamp,
+        timestamp: timestamp2,
         priority: normalizeMemoryPriority(payload.priority, 90),
         tags: buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repository, extraTags: payload.tags })
       }
@@ -62344,10 +62733,10 @@ function buildMemoryWriteRecord(payload = {}) {
           unresolvedQuestions: normalizeStringArray4(payload.unresolvedQuestions),
           relatedIssue,
           proposedBy: normalizeText34(payload.proposedBy) || "butler_with_owner_go",
-          timestamp
+          timestamp: timestamp2
         },
         metadata,
-        timestamp,
+        timestamp: timestamp2,
         priority: normalizeMemoryPriority(payload.priority, 80),
         tags: buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repository, extraTags: payload.tags })
       }
@@ -62395,10 +62784,10 @@ function buildMemoryWriteRecord(payload = {}) {
         captureBoundary: normalizeText34(payload.captureBoundary) || (normalizeText34(payload.checkpointReason) ? "judgment_log_not_chain_of_thought" : null),
         relatedIssue,
         repository,
-        timestamp
+        timestamp: timestamp2
       },
       metadata,
-      timestamp,
+      timestamp: timestamp2,
       priority: normalizeMemoryPriority(payload.priority, recordType2 === MemoryRecordType.REPAIR_CASE ? 85 : 60),
       tags: buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repository, extraTags: payload.tags })
     }
@@ -71687,10 +72076,10 @@ function attachGatewayWarning(gatewayOutcome, warning) {
     }
   };
 }
-function buildGuardedAbsenceExecutionLogId({ actionType, timestamp }) {
+function buildGuardedAbsenceExecutionLogId({ actionType, timestamp: timestamp2 }) {
   const actionPart = normalizeTag3(actionType || "unknown");
   const timestampPart = normalizeTag3(
-    String(timestamp || "").replaceAll(":", "").replaceAll("-", "").replaceAll(".", "")
+    String(timestamp2 || "").replaceAll(":", "").replaceAll("-", "").replaceAll(".", "")
   );
   const randomPart = Math.random().toString(36).slice(2, 8);
   return `guarded_absence_${actionPart}_${timestampPart}_${randomPart}`;
@@ -72829,11 +73218,11 @@ function normalizeIsoTimestamp(value) {
   if (!text) {
     return "";
   }
-  const timestamp = new Date(text);
-  if (Number.isNaN(timestamp.getTime())) {
+  const timestamp2 = new Date(text);
+  if (Number.isNaN(timestamp2.getTime())) {
     return "";
   }
-  return timestamp.toISOString();
+  return timestamp2.toISOString();
 }
 async function retrieveLatestDashboardEvent({ store, kind, repository, workflowName } = {}) {
   if (!store || typeof store.latest !== "function") {
@@ -73081,12 +73470,12 @@ function buildDashboardEventSubject(event, { limit = 80 } = {}) {
   );
 }
 function formatDashboardRelativeTime(value, now = /* @__PURE__ */ new Date()) {
-  const timestamp = new Date(normalizeText34(value));
+  const timestamp2 = new Date(normalizeText34(value));
   const nowTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
-  if (Number.isNaN(timestamp.getTime()) || Number.isNaN(nowTime)) {
+  if (Number.isNaN(timestamp2.getTime()) || Number.isNaN(nowTime)) {
     return "";
   }
-  const diffMs = Math.max(0, nowTime - timestamp.getTime());
+  const diffMs = Math.max(0, nowTime - timestamp2.getTime());
   const seconds = Math.floor(diffMs / 1e3);
   if (seconds < 60) {
     return "\u305F\u3063\u305F\u4ECA";
@@ -73827,10 +74216,11 @@ function summarizeObjectValue(value) {
 }
 function renderDashboardUtilityNavLinks() {
   const items = [
-    ["Dashboard", "/dashboard"],
+    ["\u30DB\u30FC\u30E0", "/dashboard"],
+    ["\u30C1\u30E3\u30C3\u30C8", "/dashboard/chat"],
     ["\u901A\u77E5\u30BB\u30F3\u30BF\u30FC", "/dashboard/notifications"],
     ["AI news", "/dashboard/news"],
-    ["GitHub truth", "/dashboard/github-truth"],
+    ["GitHub truth", "/dashboard/github"],
     ["Startup preflight", "/dashboard/preflight"],
     ["Execution progress", "/dashboard/progress"],
     ["VPS runner", "/dashboard/vps-runner"],
@@ -74007,7 +74397,7 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
               <p class="muted">${escapeDashboardHtml(subtitle || "")}</p>
             </div>
           </div>
-          <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">Dashboard</a>
+          <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">\u30DB\u30FC\u30E0</a>
         </header>
         ${body}
       </section>
@@ -74774,7 +75164,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <span class="eyebrow">Dashboard</span>
         <div class="surface-list">
           ${renderDashboardActionList([
-    { label: "Dashboard", href: `${origin}/dashboard` },
+    { label: "\u30DB\u30FC\u30E0", href: `${origin}/dashboard` },
     { label: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC", href: `${origin}/dashboard/notifications` },
     { label: "AI news", href: `${origin}/dashboard/news` },
     { label: "Execution progress", href: canonicalRepositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "", disabledReason: "repo \u8A2D\u5B9A\u5F8C" },
@@ -78078,7 +78468,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
         <h1>Runtime Status</h1>
         <p>\u30D6\u30E9\u30A6\u30B6\u3067\u898B\u308B\u305F\u3081\u306E health summary \u3067\u3059\u3002</p>
       </div>
-      <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">Dashboard</a>
+      <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">\u30DB\u30FC\u30E0</a>
     </header>
 
     <section class="panel notice">

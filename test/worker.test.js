@@ -1085,7 +1085,7 @@ test("worker serves v2 dashboard for valid dashboard passkey session", async () 
 
   assert.equal(response.status, 200);
   const body = await response.text();
-  assert.equal(body.includes("VTDD v2 Dashboard"), true);
+  assert.equal(body.includes("任せたことを、ひと目で。"), true);
 });
 
 test("worker serves v2 dashboard from dashboard read session after source passkey grant expires", async () => {
@@ -1148,7 +1148,7 @@ test("worker serves v2 dashboard from dashboard read session after source passke
 
   assert.equal(response.status, 200);
   const body = await response.text();
-  assert.equal(body.includes("VTDD v2 Dashboard"), true);
+  assert.equal(body.includes("任せたことを、ひと目で。"), true);
 });
 
 test("worker rejects stale dashboard passkey session cookies", async () => {
@@ -1268,7 +1268,7 @@ test("worker ignores stale dashboard passkey cookie when Cloudflare Access owner
   assert.match(response.headers.get("set-cookie"), /vtdd_dashboard_session=dashboard-session%3A/);
   assert.match(response.headers.get("set-cookie"), /Max-Age=28800/);
   const body = await response.text();
-  assert.equal(body.includes("VTDD v2 Dashboard"), true);
+  assert.equal(body.includes("任せたことを、ひと目で。"), true);
   assert.equal(body.includes("dashboard session was not found"), false);
 });
 
@@ -1316,7 +1316,7 @@ test("worker rejects dashboard access when identity header does not match verifi
 
 test("worker serves v2 dashboard for allowed owner identity without exposing secrets", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/dashboard", {
+    new Request("https://example.com/dashboard/chat", {
       headers: dashboardAccessHeaders
     }),
     dashboardAccessEnv
@@ -1892,7 +1892,7 @@ test("worker accepts Access-backed dashboard read session cookie for dashboard c
 
 test("served dashboard inline chat renderer executes decode, link, wrap, and copy behavior", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/dashboard", {
+    new Request("https://example.com/dashboard/chat", {
       headers: dashboardAccessHeaders
     }),
     dashboardAccessEnv
@@ -2120,7 +2120,7 @@ test("worker decodes dashboard encoded repository and issue text before traffic 
 
 test("worker serves dashboard media add controls for iPhone-first upload", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/dashboard", {
+    new Request("https://example.com/dashboard/chat", {
       headers: dashboardAccessHeaders
     }),
     dashboardAccessEnv
@@ -2192,7 +2192,7 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
 
 test("dashboard stalled recovery unlocks follow-up composer after saved sends only", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/dashboard", {
+    new Request("https://example.com/dashboard/chat", {
       headers: dashboardAccessHeaders
     }),
     dashboardAccessEnv
@@ -8338,7 +8338,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(runtimeSource.includes("INSERT OR REPLACE INTO vtdd_dashboard_chat_messages"), true);
 
   const dashboardResponse = await worker.fetch(
-    new Request("https://example.com/dashboard", {
+    new Request("https://example.com/dashboard/chat", {
       headers: dashboardAccessHeaders
     }),
     {
