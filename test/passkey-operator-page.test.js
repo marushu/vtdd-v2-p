@@ -138,12 +138,12 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
   assert.equal(
     html.includes(
-      "このページは production deploy を承認して、そのまま反映を開始するためのパスキー確認です。"
+      "対象と変更内容を確認し、パスキーで本番への反映を承認します。承認すると反映を開始し、進捗は Butler のチャットで確認できます。"
     ),
     true
   );
-  assert.equal(html.includes("反映開始後は Dashboard Butler のチャットへ戻り"), true);
-  assert.equal(html.includes("内部の承認IDや workflow 入力は通常操作では扱いません。"), true);
+  assert.equal(html.includes("進捗は Butler のチャットで確認できます。"), true);
+  assert.equal(html.includes("内部の承認IDや設定値を入力する必要はありません。"), true);
   assert.equal(html.includes("最終的に <code>approvalGrantId</code> を取得できます。"), false);
   assert.equal(html.includes('id="approve-button">パスキー</button>'), true);
   assert.equal(html.includes("production deploy を承認して、そのまま反映を開始します。"), true);
@@ -327,10 +327,10 @@ test("passkey operator page shows registration only for full or explicit registr
   });
   assert.equal(dashboardHtml.includes('<section data-operator-section="registration" hidden>'), true);
   assert.equal(dashboardHtml.includes('<section data-operator-section="approval">'), true);
-  assert.equal(dashboardHtml.includes("<h1>Dashboard Passkey</h1>"), true);
+  assert.equal(dashboardHtml.includes("<h1>Butler にログイン</h1>"), true);
   assert.equal(dashboardHtml.includes("<h2>Dashboard を開く</h2>"), true);
   assert.equal(dashboardHtml.includes('id="approve-button">パスキーで開く</button>'), true);
-  assert.equal(dashboardHtml.includes("読み取り専用パスキー確認"), true);
+  assert.equal(dashboardHtml.includes("読み取り専用のログインで、操作の実行を承認するものではありません。"), true);
   assert.equal(dashboardHtml.includes("Copy approvalGrantId"), false);
   assert.equal(dashboardHtml.includes("Auto-copy approvalGrantId after approval"), false);
   assert.equal(dashboardHtml.includes("Approve high-risk action"), false);
@@ -957,7 +957,7 @@ test("passkey operator page exposes safe issue link from issue close response", 
 
 function loadOperatorPageHelpers(overrides = {}, pageInput = {}) {
   const html = renderPasskeyOperatorPage(pageInput);
-  const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
   assert.ok(script);
 
   const elements = new Map();
@@ -985,7 +985,7 @@ function loadOperatorPageHelpers(overrides = {}, pageInput = {}) {
 }
 
 function evaluateApproveOutputPolicy(html, operatorMode) {
-  const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
+  const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
   assert.ok(script);
   const approveOutput = {
     hidden: true,

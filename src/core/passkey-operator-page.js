@@ -1,3 +1,4 @@
+import { renderButlerDocument } from './butler-ui-shell.js';
 export function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
   const deployOneTapMode = operatorMode === "deploy";
@@ -65,18 +66,18 @@ export function renderPasskeyOperatorPage(input = {}) {
     ? "パスキー"
     : dashboardMode
         ? "パスキーで開く"
-        : "Approve high-risk action";
-  const heroTitle = dashboardMode ? "Dashboard Passkey" : "VTDD Passkey Operator";
+        : "操作を確認して承認";
+  const heroTitle = dashboardMode ? "Butler にログイン" : deployOneTapMode ? "本番への反映" : operatorMode === "merge" ? "変更の取り込みを確認" : "操作の確認";
   const heroDescription = dashboardMode
-    ? "このページは Dashboard Butler を開くための読み取り専用パスキー確認です。Cloudflare Access が使えない時だけ、同一 origin の passkey で dashboard session を更新します。"
+    ? "Butler を開くため、パスキーで本人確認します。読み取り専用のログインで、操作の実行を承認するものではありません。"
     : deployOneTapMode
-      ? "このページは production deploy を承認して、そのまま反映を開始するためのパスキー確認です。反映開始後は Dashboard Butler のチャットへ戻り、内部の承認IDや workflow 入力は通常操作では扱いません。"
-      : "このページは real WebAuthn/passkey approval 用の operator helper です。登録と high-risk approval の両方を same-origin で実行し、最終的に <code>approvalGrantId</code> を取得できます。";
+      ? "対象と変更内容を確認し、パスキーで本番への反映を承認します。承認すると反映を開始し、進捗は Butler のチャットで確認できます。内部の承認IDや設定値を入力する必要はありません。"
+      : "操作の対象と範囲を確認してから、パスキーで承認してください。承認は表示された操作にだけ適用されます。";
   const approvalHeading = deployOneTapMode
     ? "本番反映の承認"
     : dashboardMode
         ? "Dashboard を開く"
-        : "2. High-risk Approval";
+        : "操作の承認";
   const deployScopeSummary = renderDeployScopeSummary({
     repositoryInput: repoDefault,
     issueNumber: issueDefault,
@@ -84,34 +85,36 @@ export function renderPasskeyOperatorPage(input = {}) {
     highRiskKind: highRiskKindDefault
   });
 
-  return `<!doctype html>
+  return renderButlerDocument(`<!doctype html>
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VTDD Passkey Operator</title>
+    <title>${heroTitle} — Butler</title>
     <style>
       :root {
-        color-scheme: light;
-        --bg: #f3efe6;
-        --panel: #fffdf7;
-        --ink: #17212b;
-        --muted: #5e6b75;
-        --line: #d9d0c1;
-        --accent: #0f5f4b;
-        --accent-2: #b66a24;
+        --butler-content-width: 980px;
+        color-scheme: light dark;
+        --bg:var(--butler-bg);
+        --panel:var(--butler-card);
+        --ink:var(--butler-ink);
+        --muted:var(--butler-muted);
+        --line:var(--butler-line);
+        --accent:var(--butler-accent);
+        --accent-2:var(--butler-accent);
       }
       body {
         margin: 0;
-        font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
-        background: linear-gradient(180deg, #f6f0e3 0%, #ebe4d6 100%);
+        font-family:var(--butler-font);
+        background: var(--butler-card);
         color: var(--ink);
       }
       main {
-        max-width: 980px;
+        box-sizing: border-box; max-width: var(--butler-content-width);
         margin: 0 auto;
-        padding: 32px 20px 48px;
+        padding: 32px var(--butler-gutter) 48px;
       }
+      h1 { font-size: var(--butler-heading-size); line-height: 1.4; }
       h1, h2 {
         margin: 0 0 12px;
       }
@@ -119,10 +122,10 @@ export function renderPasskeyOperatorPage(input = {}) {
         line-height: 1.6;
       }
       .hero {
-        background: radial-gradient(circle at top left, #fff7dc 0%, var(--panel) 60%);
+        background: var(--butler-card);
         border: 1px solid var(--line);
-        border-radius: 20px;
-        padding: 24px;
+        border-radius: var(--butler-card-radius);
+        padding: var(--butler-card-padding);
         margin-bottom: 24px;
         box-shadow: 0 14px 30px rgba(23, 33, 43, 0.08);
       }
@@ -138,8 +141,8 @@ export function renderPasskeyOperatorPage(input = {}) {
       section {
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 18px;
-        padding: 20px;
+        border-radius: var(--butler-card-radius);
+        padding: var(--butler-card-padding);
         box-shadow: 0 10px 24px rgba(23, 33, 43, 0.06);
       }
       label {
@@ -157,7 +160,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         border: 1px solid var(--line);
         margin-bottom: 12px;
         font: inherit;
-        background: #fff;
+        background: var(--butler-card);
       }
       button {
         appearance: none;
@@ -167,24 +170,25 @@ export function renderPasskeyOperatorPage(input = {}) {
         font: inherit;
         cursor: pointer;
         background: var(--accent);
-        color: white;
+        color: var(--butler-on-accent);
       }
       button.secondary {
         background: var(--accent-2);
+        color: var(--butler-on-accent);
       }
       button.ghost {
-        background: #eef3ef;
+        background: var(--butler-card);
         color: var(--accent);
-        border: 1px solid #b8cec3;
+        border: 1px solid var(--butler-line);
       }
       .button-link {
         display: inline-flex;
         align-items: center;
         border-radius: 999px;
         padding: 11px 16px;
-        background: #eef3ef;
+        background: var(--butler-card);
         color: var(--accent);
-        border: 1px solid #b8cec3;
+        border: 1px solid var(--butler-line);
         text-decoration: none;
       }
       [hidden] {
@@ -193,7 +197,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       pre {
         white-space: pre-wrap;
         word-break: break-word;
-        background: #f7f4ed;
+        background: var(--butler-card);
         border: 1px solid var(--line);
         border-radius: 12px;
         padding: 12px;
@@ -227,7 +231,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       <div class="hero">
         <h1>${heroTitle}</h1>
         <p>${heroDescription}</p>
-        <p class="muted">origin: ${origin || "[same-origin]"}</p>
+        <details class="muted"><summary>接続先の確認</summary><p>origin: ${origin || "[same-origin]"}</p></details>
       </div>
 
       <div class="grid">
@@ -1432,7 +1436,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       }
     </script>
   </body>
-</html>`;
+</html>`, { pagePath: "/v2/approval/passkey/operator" + (dashboardMode ? "?mode=dashboard" : "") });
 }
 
 export function resolvePasskeyOperatorMode(input = {}) {

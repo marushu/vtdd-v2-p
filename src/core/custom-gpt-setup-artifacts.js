@@ -1,3 +1,4 @@
+import { renderButlerDocument } from './butler-ui-shell.js';
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
 
 const GITHUB_API_BASE_URL = "https://api.github.com";
@@ -597,26 +598,26 @@ export function renderCustomGptSetupDiagnosticsPage(input = {}) {
   const latestHref = buildSetupPageHref({ path: "/setup/latest", ref, issueNumber });
   const knownGoodHref = buildSetupPageHref({ path: "/setup/known-good", issueNumber });
 
-  return `<!doctype html>
+  return renderButlerDocument(`<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VTDD setup diagnostics</title>
   <style>
-    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: Canvas; color: CanvasText; }
-    main { width: min(100% - 24px, 1120px); margin: 0 auto; padding: 24px 0 48px; }
-    h1 { font-size: 1.55rem; line-height: 1.2; margin: 0 0 16px; }
+    :root { --butler-content-width: 1120px; color-scheme: light dark; font-family:var(--butler-font); }
+    body { margin: 0; background: var(--butler-bg); color: var(--butler-ink); }
+    main { box-sizing: border-box; width: min(100%, var(--butler-content-width)); margin: 0 auto; padding: 24px var(--butler-gutter) 48px; }
+    h1 { font-size: var(--butler-heading-size); line-height: 1.4; margin: 0 0 16px; }
     h2 { font-size: 1rem; margin: 24px 0 10px; }
-    .panel, .warning, .nav { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; margin: 14px 0; }
-    .warning { border-color: #b45309; background: color-mix(in srgb, #f59e0b 16%, Canvas); }
+    .panel, .warning, .nav { border: 1px solid color-mix(in srgb, var(--butler-ink) 18%, transparent); border-radius: 20px; padding: 12px; margin: 14px 0; }
+    .warning { border-color: var(--butler-amber); background: color-mix(in srgb, var(--butler-amber-bg) 16%, var(--butler-bg)); }
     .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
-    .meta div { min-width: 0; padding: 10px; border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 8px; overflow-wrap: anywhere; }
+    .meta div { min-width: 0; padding: 10px; border: 1px solid color-mix(in srgb, var(--butler-ink) 14%, transparent); border-radius: 20px; overflow-wrap: anywhere; }
     .nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .nav strong { margin-right: auto; }
-    a.button { display: inline-flex; align-items: center; min-height: 40px; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 6px; padding: 0 12px; background: ButtonFace; color: ButtonText; text-decoration: none; }
-    pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; background: color-mix(in srgb, CanvasText 5%, Canvas); color: CanvasText; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    a.button { display: inline-flex; align-items: center; min-height: 40px; border: 1px solid color-mix(in srgb, var(--butler-ink) 22%, transparent); border-radius: 6px; padding: 0 12px; background: var(--butler-card); color: var(--butler-ink); text-decoration: none; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid color-mix(in srgb, var(--butler-ink) 18%, transparent); border-radius: 20px; padding: 12px; background: color-mix(in srgb, var(--butler-ink) 5%, var(--butler-bg)); color: var(--butler-ink); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .small { font-size: .86rem; opacity: .82; }
   </style>
 </head>
@@ -635,7 +636,7 @@ export function renderCustomGptSetupDiagnosticsPage(input = {}) {
     }
   </main>
 </body>
-</html>`;
+</html>`, { pagePath: input.pagePath || "/setup/diagnostics" });
 }
 
 export function evaluateRuntimeSetupManifestParity(input = {}) {
@@ -855,31 +856,31 @@ export function renderCustomGptRecoveryPage(input = {}) {
     issueNumber
   });
 
-  return `<!doctype html>
+  return renderButlerDocument(`<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VTDD Butler setup recovery</title>
   <style>
-    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: Canvas; color: CanvasText; }
-    main { width: min(100% - 24px, 1120px); margin: 0 auto; padding: 24px 0 48px; }
-    h1 { font-size: 1.55rem; line-height: 1.2; margin: 0 0 16px; }
+    :root { --butler-content-width: 1120px; color-scheme: light dark; font-family:var(--butler-font); }
+    body { margin: 0; background: var(--butler-bg); color: var(--butler-ink); }
+    main { box-sizing: border-box; width: min(100%, var(--butler-content-width)); margin: 0 auto; padding: 24px var(--butler-gutter) 48px; }
+    h1 { font-size: var(--butler-heading-size); line-height: 1.4; margin: 0 0 16px; }
     h2 { font-size: 1rem; margin: 28px 0 10px; }
-    .status, .warning, .nav { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; margin: 14px 0; }
+    .status, .warning, .nav { border: 1px solid color-mix(in srgb, var(--butler-ink) 18%, transparent); border-radius: 20px; padding: 12px; margin: 14px 0; }
     label { display: block; font-size: .9rem; margin: 8px 0 4px; }
-    input { width: 100%; box-sizing: border-box; font: inherit; padding: 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); background: Canvas; color: CanvasText; }
-    button, a.button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 6px; padding: 0 12px; background: ButtonFace; color: ButtonText; font: inherit; text-decoration: none; }
-    pre, textarea { width: 100%; box-sizing: border-box; white-space: pre; overflow: auto; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; background: color-mix(in srgb, CanvasText 5%, Canvas); color: CanvasText; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    input { width: 100%; box-sizing: border-box; font: inherit; padding: 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--butler-ink) 22%, transparent); background: var(--butler-bg); color: var(--butler-ink); }
+    button, a.button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; border: 1px solid color-mix(in srgb, var(--butler-ink) 22%, transparent); border-radius: 6px; padding: 0 12px; background: var(--butler-card); color: var(--butler-ink); font: inherit; text-decoration: none; }
+    pre, textarea { width: 100%; box-sizing: border-box; white-space: pre; overflow: auto; border: 1px solid color-mix(in srgb, var(--butler-ink) 18%, transparent); border-radius: 20px; padding: 12px; background: color-mix(in srgb, var(--butler-ink) 5%, var(--butler-bg)); color: var(--butler-ink); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     textarea { min-height: 320px; resize: vertical; }
     .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
-    .meta div { min-width: 0; padding: 10px; border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 8px; overflow-wrap: anywhere; }
+    .meta div { min-width: 0; padding: 10px; border: 1px solid color-mix(in srgb, var(--butler-ink) 14%, transparent); border-radius: 20px; overflow-wrap: anywhere; }
     .nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .nav strong { margin-right: auto; }
     .channel { text-transform: none; }
     .small { font-size: .86rem; opacity: .82; }
-    .warning { border-color: #b45309; background: color-mix(in srgb, #f59e0b 16%, Canvas); }
+    .warning { border-color: var(--butler-amber); background: color-mix(in srgb, var(--butler-amber-bg) 16%, var(--butler-bg)); }
   </style>
 </head>
 <body>
@@ -925,7 +926,7 @@ export function renderCustomGptRecoveryPage(input = {}) {
     });
   </script>
 </body>
-</html>`;
+</html>`, { pagePath: input.pagePath || "/setup/recovery" });
 }
 
 function renderRecoveryUnavailableSection({ error, channel, latestHref, knownGoodHref }) {
