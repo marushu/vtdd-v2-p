@@ -1,6 +1,6 @@
 ## This PR satisfies Intent
 
-- Issue #858 のMac PRIMARY / VPS STANDBY手動切替で、短いheartbeat途絶だけの昇格と共有bearerによる別ノードの偽装を拒否する。review #3 と operator 監査を反映したPR本文。
+- Issue #858 のMac PRIMARY / VPS STANDBY手動切替で、短いheartbeat途絶だけの昇格と共有bearerによる別ノードの偽装を拒否する。review #4 の検証済み差分を含むPR本文。
 
 ## Satisfied Success Criteria
 
@@ -10,9 +10,12 @@
 
 - checkpoint-sync-004: standby checkpointの欠落・不一致を拒否。plannedはPRIMARY/controlとの一致とfresh、emergencyは最後のcontrolとの一致を要求し、standbyReadyもfalseにする。比較はrepository/branch/baseRef/headSha/issueNumber/pullNumberと世代。nullable IDはnull同値。
 
+- Review #4: emergencyリンクのclient gatingをmode別に修正。server認可は維持。version planner/checkerはVPS専用exact packageSpec/rollbackSpecのみを返し、承認前のrunnable commandを廃止。
+
+- final-e2e-evidence-006: operator/enrollment両文書のUTF-8宣言を維持し回帰テスト追加。operator成功runのWebKit 25/25と25画像を確認し、repo証跡へ保存。
+
 ## Unsatisfied Success Criteria
 
-- synthetic Chromiumはsandbox起動拒否により描画E2E未検証。
 - 実ノード鍵・サービス設定、live PWA、実passkey、自然文quiesce/登録導線、receipt期限切れ回復は未検証または未接続。
 
 ## Non-goal violations
@@ -66,22 +69,22 @@ None.
 - file: `src/core/executor-failover-state.js` / `src/core/executor-node-identity.js`
   - hypothesis: quiesce、10分隔離条件、Ed25519+CASで誤認可を拒否できる。
   - risk if changed narrowly: passkey/UI/signersの不一致。
-  - validation: focused 80件とclean全体1410件。
+  - validation: focused 116件とclean全体1415件。
   - related Issue: #858
 
 ## Hypothesis Retrospective
 
 - expected: 短時間途絶・無隔離・wrong key/replayを拒否。
-- actual: focused成功、実ブラウザ起動はsandboxで拒否。
+- actual: focused 116成功。operatorがHTML charset欠落を修正しWebKit 25/25成功。resultsと25画像を確認して採用。
 - mismatch: emergencyにもcheckpoint鮮度10分を課すと10分待機と両立しないため、指示のfresh要件はplannedに適用。emergencyは最後のclean/pushed checkpointと回復限界表示を採用。
 - lesson: admissionと外部副作用取消、transport authとnode identityを分離して検証する。
 - should become RAG candidate: この境界判断の候補。RAG書込なし。
 
 ## Verification Evidence
 
-- Unit: focused 80成功、0失敗。
-- Integration: clean npm test: 1410件中1409成功、1skip、0失敗。self-parityとgenerated-worker整合成功。
-- E2E: VM操作テスト成功。ChromiumはMachPortRendezvous Permission denied (1100)で起動不可。描画E2E未検証。
+- Unit: focused 116成功、0失敗。
+- Integration: clean npm test: 1415件中1414成功、1skip、0失敗。self-parityとgenerated-worker整合成功。
+- E2E: WebKit synthetic 25/25成功、25画像。operator実行 `/tmp/issue858-browser-9Da294` のresults/画像をrepo証跡へ保存。ChromiumのmacOS/RDC MachPort起動制限のみ残る。
 - Manual: git diff --check成功。実サービス・鍵・本番への操作なし。
 - Evidence path/link: docs/mvp/e2e/e2e-issue858-executor-failover.md
 
@@ -117,9 +120,11 @@ None.
 
 ## Extra changes (if any)
 
-checkpoint-sync-004で同期拒否の24テストとsynthetic unsynced画面fixtureを追加。80 focused成功、clean全体1410件中1409成功・1skip。実ブラウザは引き続きsandbox起動拒否で未検証。既存.localは未変更・commit対象外。operator監査後にcommit/push済み。merge/deploy/live操作は未実施。
+Review #4差分ではoperatorのUTF-8修正を維持し、focused 116成功、
+clean cwdで全体1415件中1414成功・1skip・失敗0。WebKit 25/25成功（25画像）。
+既存.local未変更。merge/deploy/install/services/実credentials/live操作なし。
 
 <!-- VTDD metadata -->
 - Issue: Issue #858
 - Execution ID: task-63e6a1d2fe2774a8ff5190998ed3b232
-- Goal: Review #3: 遷移条件・ノード署名・CI一時領域を修正
+- Goal: Review #4: emergency表示と宣言的version planner境界を修正、WebKit検証

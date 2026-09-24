@@ -18,7 +18,7 @@ export function planCodexVersionSync(mac, vps, control, now = Date.now()) {
   const age = now - Date.parse(mac.observedAt);
   if (!mac.appServerSmokeOk || age < -120000 || age > 120000 || mac.generation !== control.generation) blockers.push('fresh_mac_smoke_required');
   if (mac.codexVersion !== control.approvedCodexVersion) blockers.push('approved_version_update_requires_scoped_contract');
-  return { issueNumber:control.relatedIssue ?? mac.checkpoint?.issueNumber ?? null, approvedCodexVersion:control.approvedCodexVersion, currentVersion:vps.codexVersion, targetVersion:mac.codexVersion, action:blockers.length ? 'blocked' : vps.codexVersion === mac.codexVersion ? 'none' : 'request_exact_version_approval', blockers, liveInvocation:'blocked_until_provider_bound_approval', command: blockers.length ? null : ['npm','install','-g','@openai/codex@'+mac.codexVersion], automatic:false };
+  return { issueNumber:control.relatedIssue ?? mac.checkpoint?.issueNumber ?? null, approvedCodexVersion:control.approvedCodexVersion, currentVersion:vps.codexVersion, targetVersion:mac.codexVersion, action:blockers.length ? 'blocked' : vps.codexVersion === mac.codexVersion ? 'none' : 'request_exact_version_approval', blockers, liveInvocation:'blocked_until_provider_bound_approval', executable:false, requiresScopedApproval:true, packageSpec: blockers.length ? null : {executorId:'vps',packageName:'@openai/codex',exactVersion:mac.codexVersion}, automatic:false };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [mac,vps,control] = await Promise.all(process.argv.slice(2,5).map(async p=>JSON.parse(await readFile(p,'utf8'))));

@@ -140,3 +140,27 @@ emergencyは10分待機のためcheckpointの経過時間を許容するが、�
 仮説: heartbeatとcheckoutの清潔さだけで異なるHEADを昇格できる穴を閉じられる。
 検証: 各比較フィールド・世代・欠落・planned鮮度・emergency年齢許容/不一致拒否をテスト。
 既存root範囲内のreadiness補強のみ。署名/passkey/10分隔離条件や自動切替禁止は維持。
+
+## Review #4 — browser/version-boundary-005
+
+対象: PR #859 head 0e844d4。設計は既存root契約を維持し、Dashboardの表示条件をmode別に
+修正する。plannedはcheckpoint鮮度を要求、emergencyはserver readyとfreshなsnapshot/standbyを
+要求する。serverの同期・10分待機・隔離確認・passkey認可は緩和しない。
+仮説: 一律checkpointFresh判定が正当なemergencyリンクを隠している。
+version planner/checkerはprovider-bound executor未接続のため、command配列を廃止し、
+VPS専用のpackageName/exactVersionによる宣言的packageSpec/rollbackSpecだけを返す。
+検証: mode別DOM gating、version出力・拒否境界、installed WebKitのsynthetic全ケースと
+screenshots/results、focused、build、clean full、self-parity/generated-workerを確認する。
+非対象/停止条件: installer実装、install、実credentials、service/live monitor、commit/push/merge/deploy。
+
+## Review #4 最終確認 — final-e2e-evidence-006
+
+operatorがWebKitで24ケース後の公開鍵登録成功表示の文字化けを調査し、charset未宣言による
+Shift_JIS解釈を特定。両operator文書のhead先頭にUTF-8宣言を追加した修正をレビューして維持。
+成功run `/tmp/issue858-browser-9Da294` の25件passed=trueと25 PNGを確認・repo証跡へコピー。
+**WebKit synthetic 25/25成功**（light/darkの11状態＋3 operator）。画面コードは成功run以降
+変更せず、UTF-8宣言の回帰テストのみ追加。emergency UIと宣言的version specの境界を維持。
+最終focused 116成功、clean cwdで全npm test 1415件中1414成功・1skip・失敗0。
+build/self-parity/generated-worker/diff check成功。ChromiumのmacOS/RDC MachPort起動制限だけが
+ブラウザ固有の環境制限として残り、browser E2Eを未検証とはしない。live境界は引き続き未接続。
+今回commit/push/merge/deploy/install/services/実credentials/live monitors操作なし。

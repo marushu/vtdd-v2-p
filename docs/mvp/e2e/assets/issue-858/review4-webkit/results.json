@@ -1,0 +1,149 @@
+[
+  {
+    "browser": "webkit",
+    "scenario": "healthy",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "ready",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "hiccup",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "emergency",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "version",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "dirty",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "unsynced",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "planned-stale",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "emergency-unsynced",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "pending",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "uninitialized",
+    "colorScheme": "light",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "healthy",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "ready",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "hiccup",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "emergency",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "version",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "dirty",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "unsynced",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "planned-stale",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "emergency-unsynced",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "pending",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "uninitialized",
+    "colorScheme": "dark",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "planned-operator",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "emergency-operator",
+    "passed": true
+  },
+  {
+    "browser": "webkit",
+    "scenario": "executor-enroll-operator",
+    "passed": true
+  }
+]

@@ -69,7 +69,8 @@ export function mountMonitorHome(computeView) {
         const targetNode = v.nodes[v.standbyExecutor];
         const standbyFresh = current && targetNode?.healthy && targetNode.heartbeatAgeSeconds + elapsed <= (v.standbyExecutor === 'mac' ? 120 : 300);
         const checkpointFresh = current && v.checkpointFresh && now - Date.parse(v.checkpoint?.updatedAt) <= 600000;
-        const readyCurrent = current && standbyFresh && checkpointFresh && v.ready;
+        const checkpointEligible = v.transitionMode === 'emergency' || (v.transitionMode === 'planned' && checkpointFresh);
+        const readyCurrent = current && standbyFresh && checkpointEligible && v.ready;
         const calm = (v.blockers || []).every(reason => reason === 'PRIMARYが実行中');
         const macFresh = current && v.nodes.mac?.healthy && (v.nodes.mac.heartbeatAgeSeconds + elapsed <= 120);
         executor.append(element('p', v.activationPending ? '切替準備中 / activation pending' : macFresh ? 'Mac 確認済み' : 'Mac未確認', 'chip ' + (macFresh && standbyFresh && v.standbyReady && calm ? 'green' : 'amber')));

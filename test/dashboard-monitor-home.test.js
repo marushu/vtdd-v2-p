@@ -147,3 +147,16 @@ test('executor card pending, uninitialized and Mac version approval preserve mon
   if(state===changed)assert.match(b.nodes.get('executors').children.find(n=>n.tag==='a').href,/mode=executor-version/);assert.match(b.nodes.get('monitors').text,/空きなし/);assert.match(b.nodes.get('notifications').text,/以前の停止/);
  }
 });
+for(const mode of ['planned','emergency'])test('client '+mode+' checkpoint gating respects server readiness and snapshot expiry',async()=>{
+ const {bootstrapControl,applyNodeReport,executorOverview}=await import('../src/core/executor-failover-state.js');const {seed,report}=await import('./executor-failover-fixtures.js');
+ const n=Date.now(),old=n-601000;let state=applyNodeReport(bootstrapControl(seed(mode==='emergency'?old:n),mode==='emergency'?old:n),report('vps',n),n);
+ const data=overview();data.serverTime=new Date(n).toISOString();data.executors=executorOverview(state,n);
+ assert.equal(data.executors.ready,true);assert.equal(data.executors.transitionMode,mode);
+ const b=browser(async()=>({ok:true,json:async()=>data}));await flush();const links=()=>b.nodes.get('executors').children.filter(node=>node.tag==='a');assert.equal(links().length,1);
+ if(mode==='emergency')assert.match(b.nodes.get('executors').text,/checkpoint: 未確認・古い/);
+ // Even a cached ready=true cannot bypass planned checkpoint expiry.
+ data.executors.checkpointFresh=false;data.executors.checkpoint.updatedAt=new Date(old).toISOString();b.events.online();await flush();assert.equal(links().length,mode==='emergency'?1:0);
+ data.executors.ready=false;b.events.online();await flush();assert.equal(links().length,0);
+ data.executors.ready=true;data.executors.checkpointFresh=true;data.executors.checkpoint.updatedAt=new Date(n).toISOString();b.events.online();await flush();assert.equal(links().length,1);
+ b.advance(30001);assert.equal(links().length,0);
+});

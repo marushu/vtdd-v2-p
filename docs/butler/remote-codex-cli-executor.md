@@ -578,10 +578,13 @@ repository/branch/headSha/current issueNumber を含む。会話やコマンド�
 reporter はこの証拠を読み、版一致と120秒の鮮度を検証する。report/証拠の時計ずれは未来側
 120秒まで許容し、server receivedAt でも鮮度を制限する。配置/scheduling は live 未実施。
 
-`plan-codex-version-sync.mjs` は Mac/VPS report/control overview JSON から exact plan を生成。
+`plan-codex-version-sync.mjs` は Mac/VPS report/control overview JSON から宣言的なexact-version意図を生成。
 `sync-codex-exact-version.mjs --request <file> --check` は `packageName=@openai/codex` と
 exact semver、正の issueNumber を検証するだけ。`--apply` は必ず blocked。JSON verified:true
-は real grant の代替ではない。installer/rollback/sudo は実行しない。Macの候補版はhomeの「Macの検証済み版を承認」から明示的に承認する。
+は real grant の代替ではない。planner/checkerともcommand配列を返さず、VPS専用の
+`packageSpec={executorId,packageName,exactVersion}` とcheckerの `rollbackSpec`（旧版がなければnull）
+だけを返す。`executable=false`、`requiresScopedApproval=true`であり、provider-bound approval
+executorの接続前にrunnableなglobal-installコマンドを生成しない。installer/rollback/sudo は実行しない。Macの候補版はhomeの「Macの検証済み版を承認」から明示的に承認する。
 `POST /v2/executors/version` は executor_failover_version / destructive のreal passkeyを
 Issue/current generation/from-to Mac/previous version/exact candidateへ束縛する。
 CASの再評価で現在のMac fresh smoke報告を照合し、approvedCodexVersionだけを変更する。
@@ -668,3 +671,10 @@ checkpoint-sync-004: plannedの待機側checkpointはclean/pushed・現世代・
 PRIMARY報告とcontrol双方のrepository/branch/baseRef/headSha/issueNumber/pullNumberと一致が
 必要（nullable IDの未指定とnullは同値）。emergencyは鮮度だけを免除し、最後のdurable
 controlとの同項目一致を要求する。欠落・不一致は専用blockerを返しstandbyReadyもfalse。
+
+
+Review #4: Dashboardのemergencyリンクはserver readyとsnapshot/standby鮮度を維持しつつ、
+checkpointFreshを必須にしない。plannedでは引き続き必須。リンク表示自体は承認ではなく、
+serverが同期・世代・10分待機・owner隔離確認・passkey scopeを改めて検証する。
+synthetic harnessは `node scripts/e2e-issue858-executor-home.mjs --browser webkit` または
+`--browser chromium`（既定）でインストール済みbrowserを選べる。install処理は含まない。
