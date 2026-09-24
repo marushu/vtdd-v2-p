@@ -23,3 +23,6 @@
 
 ## 未実施
 本番デプロイ、実reporter送信、iPhoneインストール済みPWAでのトップ切り替え、生成Worker版の独立ブラウザ再検証は未実施。ソースWorkerのブラウザ検証と生成物整合テストを区別する。実運用完了とは主張しない。
+
+## CIで検出した生成物差分の補正
+最初のCIでは1310件中1309成功・1skipで全テストが通った後、generated worker整合チェックで停止した。共有node_modulesへのリンクがbundler内のモジュールパスへ反映されたことが原因。隔離worktreeにpackage-lockどおりの実体依存をinstall scripts無しで配置し、既存buildコマンドから再生成した。共有依存・buildルール・CI gateは変更していない。再生成後も全体1309成功・1skip・失敗0、self-parity、generated worker整合が成功。生成物に共有作業ディレクトリ名や絶対homeパスが残らないことも確認した。
