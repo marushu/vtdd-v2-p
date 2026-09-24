@@ -17,7 +17,7 @@ function browser(fetcher, renderer = renderDashboardMonitorHome) {
   let elapsed = 0;
   const document = { hidden: false, getElementById(id) { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); }, createElement: tag => new Element(tag, document), addEventListener: (name, fn) => { events[name] = fn; } };
   const navigator = { onLine: true };
-  const context = { document, navigator, window: { addEventListener: (name, fn) => { events[name] = fn; } }, fetch: fetcher, performance: { now: () => elapsed }, AbortController, Date, setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; }, clearInterval() {}, setTimeout(fn) { timeouts.push(fn); return timeouts.length; }, clearTimeout() {} };
+  const context = { URL, location: { origin: 'https://example.com' }, document, navigator, window: { addEventListener: (name, fn) => { events[name] = fn; } }, fetch: fetcher, performance: { now: () => elapsed }, AbortController, Date, setInterval(fn, ms) { intervals.push({ fn, ms }); return intervals.length; }, clearInterval() {}, setTimeout(fn) { timeouts.push(fn); return timeouts.length; }, clearTimeout() {} };
   vm.runInNewContext(renderer().match(/<script>([\s\S]*?)<\/script>/)[1], context);
   return { nodes, events, intervals, timeouts, document, navigator, advance(ms) { elapsed += ms; intervals.find(t => t.ms === 5000).fn(); } };
 }
@@ -119,4 +119,44 @@ test('generated browser source matches the canonical unbundled client', async ()
   const { dashboardMonitorClientScript } = await import('../src/worker/dashboard-monitor-client.generated.js');
   assert.equal(dashboardMonitorClientScript, dashboardMonitorClientSource());
   assert.doesNotMatch(dashboardMonitorClientScript, /__name\(/);
+});
+
+test('executor card renders safe ready link, exact blockers, and removes link when offline', async () => {
+  const { bootstrapControl, applyNodeReport, executorOverview } = await import('../src/core/executor-failover-state.js');
+  const { seed, report } = await import('./executor-failover-fixtures.js');
+  const n=Date.now();const state=applyNodeReport(bootstrapControl(seed(n),n),report('vps',n),n);
+  const data=overview();data.executors=executorOverview(state,n);
+  // The DOM harness exposes only a same-origin URL base, never a live browser.
+  const renderer=()=>renderDashboardMonitorHome().replace('<script>','<script>const location={origin:"https://example.com"}; const URL=globalThis.TestURL;');
+  // A separate renderer replaces URL validation with the native URL implementation through a tiny wrapper.
+  const htmlRenderer=()=>renderer().replace('const URL=globalThis.TestURL;',`const URL = class { constructor(path, origin) { this.origin=origin; this.pathname=path.split('?')[0]; this.search='?'+path.split('?')[1]; this.searchParams={get: key => key==='mode' ? 'failover' : null}; } };`);
+  const b=browser(async()=>({ok:true,json:async()=>data}),htmlRenderer);await flush();
+  assert.match(b.nodes.get('executors').text,/Mac PRIMARY/);assert.match(b.nodes.get('executors').text,/VPS STANDBY/);
+  assert.equal(b.nodes.get('executors').children.filter(n=>n.tag==='a').length,1);
+  b.navigator.onLine=false;b.events.offline();assert.equal(b.nodes.get('executors').children.filter(n=>n.tag==='a').length,0);
+  b.navigator.onLine=true;data.executors=executorOverview({...state,checkpoint:{...state.checkpoint,dirty:true}},n);b.events.online();await flush();
+  assert.match(b.nodes.get('executors').text,/未コミット/);assert.equal(b.nodes.get('executors').children.filter(n=>n.tag==='a').length,0);
+});
+test('executor card pending, uninitialized and Mac version approval preserve monitor and notification rendering',async()=>{
+ const {bootstrapControl,applyNodeReport,transitionControl,executorOverview}=await import('../src/core/executor-failover-state.js');const {seed,report,transition}=await import('./executor-failover-fixtures.js');
+ const n=Date.now(),base=applyNodeReport(bootstrapControl(seed(n),n),report('vps',n),n);
+ const changed=structuredClone(base);changed.nodes.mac.codexVersion='1.2.4';
+ for(const [state,pattern] of [[null,/未初期化/],[transitionControl(base,transition(),n),/activation pending/],[changed,/承認待ち/]]){
+  const data=overview();data.executors=executorOverview(state,n);const b=browser(async()=>({ok:true,json:async()=>data}));await flush();
+  assert.match(b.nodes.get('executors').text,pattern);assert.equal(b.nodes.get('executors').children.filter(n=>n.tag==='a').length,state===changed?1:0);
+  if(state===changed)assert.match(b.nodes.get('executors').children.find(n=>n.tag==='a').href,/mode=executor-version/);assert.match(b.nodes.get('monitors').text,/空きなし/);assert.match(b.nodes.get('notifications').text,/以前の停止/);
+ }
+});
+for(const mode of ['planned','emergency'])test('client '+mode+' checkpoint gating respects server readiness and snapshot expiry',async()=>{
+ const {bootstrapControl,applyNodeReport,executorOverview}=await import('../src/core/executor-failover-state.js');const {seed,report}=await import('./executor-failover-fixtures.js');
+ const n=Date.now(),old=n-601000;let state=applyNodeReport(bootstrapControl(seed(mode==='emergency'?old:n),mode==='emergency'?old:n),report('vps',n),n);
+ const data=overview();data.serverTime=new Date(n).toISOString();data.executors=executorOverview(state,n);
+ assert.equal(data.executors.ready,true);assert.equal(data.executors.transitionMode,mode);
+ const b=browser(async()=>({ok:true,json:async()=>data}));await flush();const links=()=>b.nodes.get('executors').children.filter(node=>node.tag==='a');assert.equal(links().length,1);
+ if(mode==='emergency')assert.match(b.nodes.get('executors').text,/checkpoint: 未確認・古い/);
+ // Even a cached ready=true cannot bypass planned checkpoint expiry.
+ data.executors.checkpointFresh=false;data.executors.checkpoint.updatedAt=new Date(old).toISOString();b.events.online();await flush();assert.equal(links().length,mode==='emergency'?1:0);
+ data.executors.ready=false;b.events.online();await flush();assert.equal(links().length,0);
+ data.executors.ready=true;data.executors.checkpointFresh=true;data.executors.checkpoint.updatedAt=new Date(n).toISOString();b.events.online();await flush();assert.equal(links().length,1);
+ b.advance(30001);assert.equal(links().length,0);
 });

@@ -15,7 +15,7 @@ test("thread-independent startup contract captures cross-surface drift guardrail
   assert.equal(doc.includes("`working_memory`"), true);
   assert.equal(doc.includes("Use `decision_log` only for rationale-backed decisions"), true);
   assert.equal(doc.includes("VTDD is iPhone/iPad-first"), true);
-  assert.equal(doc.includes("Butler -> VPS Codex CLI"), true);
+  assert.equal(doc.includes("Butler routes normal execution\n  to Mac PRIMARY. VPS STANDBY"), true);
   assert.equal(doc.includes("do not silently"), true);
   assert.equal(doc.includes("Close comments are optional"), true);
   assert.equal(doc.includes("does not complete Issue #344 by itself"), true);

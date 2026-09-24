@@ -24,7 +24,7 @@ test("remote Codex docs keep API-backed runner optional", () => {
   assert.equal(doc.includes("no-extra-API-cost default"), true);
   assert.equal(doc.includes("Executor transport is a pluggable registry."), true);
   assert.equal(doc.includes("not a shared hosted runner"), true);
-  assert.equal(doc.includes("Default Codex Cloud GitHub Comment Runner"), true);
+  assert.equal(doc.includes("Optional Codex Cloud GitHub Comment Runner"), true);
   assert.equal(doc.includes("This runner does not use `OPENAI_API_KEY`."), true);
   assert.equal(doc.includes("Codex Cloud CLI Control Runner"), true);
   assert.equal(doc.includes("private GitHub Actions minutes"), true);

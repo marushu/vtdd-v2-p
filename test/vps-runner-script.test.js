@@ -189,6 +189,7 @@ test("VPS runner dry-run selects VPS local helper queue before GitHub Issue comm
   });
 
   const result = await runVpsRunnerOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     githubFetch: async () => [],
     token: "ghs_test",
     repositoryPolicies: normalizeRepositoryPolicies({ allowedRepositories: ["sample-org/vtdd-v2"] }),
@@ -1493,6 +1494,7 @@ test("VPS runner repo sync preflight blocks tracked dirty, ahead, and unknown un
 test("VPS runner repo sync preflight blocks queue pickup before GitHub reads", async () => {
   let githubRead = false;
   const result = await runVpsRunnerOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     token: "ghs_test",
     allowedRepositories: ["sample-org/vtdd-v2"],
     workRoot: "/tmp/vtdd-runner-test",
@@ -1521,6 +1523,7 @@ test("VPS runner repo sync preflight blocks queue pickup before GitHub reads", a
 test("VPS runner blocks execution when workRoot is inside the control-plane checkout", async () => {
   const posted = [];
   const result = await runVpsRunnerOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     token: "ghs_test",
     allowedRepositories: ["sample-org/vtdd-v2"],
     workRoot: "/tmp/vtdd-control-plane/workspaces",
@@ -1573,6 +1576,7 @@ test("VPS runner blocks execution when workRoot is inside the control-plane chec
 test("VPS runner dry run reports selected execution without side effects", async () => {
   const calls = [];
   const result = await runVpsRunnerOnce({
+    authorizeExecutor: async () => ({allowed:true}),
     token: "ghs_test",
     allowedRepositories: ["sample-org/vtdd-v2"],
     workRoot: "/tmp/vtdd-runner-test",

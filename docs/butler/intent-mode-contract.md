@@ -2,6 +2,40 @@
 
 Related Issues: #594, #455, #495, #595
 
+## 現行 executor 契約 — Issue #858
+
+Owner の明示承認により **Mac PRIMARY / VPS STANDBY / Butler authority** を採用する。
+iPhone/iPad の Dashboard Butler が主操作面、Mac が通常の実行基盤、VPS は
+emergency / break-glass と固定費内の recovery 用待機基盤である。
+active-active、自動 failover、自動 failback は禁止する。heartbeat 喪失は owner action
+だけを生成し、実行権を移さない。手動切替は現在の policy が指定する正の relatedIssue・from/to・generation に
+束縛した real passkey 承認を必要とする。planned は freshな停止報告・clean/pushed/fresh checkpoint、emergency は
+最終PRIMARY報告から10分以上とownerの電源/ネットワーク/アクセス隔離確認を必須とする。
+transitionMode と隔離確認は passkey scope に束縛し、heartbeatから隔離を推測しない。
+切替 API は durable control state だけを更新し、
+merge/deploy/root/credential 権限やプロセス操作を含まない。
+
+VPS は Mac で app-server smoke 検証済みかつ owner 承認済みの exact Codex version だけに追従する。
+Mac の bundled Codex 自動更新は PRIMARY の健康性を壊さず、versionApprovalPending と
+未承認 candidate を表示する。承認済み版は standby sync の目標で、自動変更しない。
+latest の推測、npm 自動更新は禁止。初期化も専用 passkey を必要とし、初回 report
+から PRIMARY を推測しない。未初期化は Dashboard にそのまま表示する。
+古い generation の復帰ノードは実行可能と扱わない。
+
+transition は control-state 更新だけで activationPending=true。対象・旧新 generation・
+relatedIssue・10分の期限を束縛した receipt を、対象側 helper がサーバーと照合して private
+config に明示適用する。対象の新世代/receipt付き fresh heartbeat・running・smoke・承認済み版一致まで
+「切替準備中」と表示する。
+reporter はサーバー generation を自動取得・採用しない。共有 bearer は transport 認証のみ。report/authorize は scoped passkey で
+登録したノードごとの Ed25519 公開鍵で署名を検証し、nonce と時刻で replay を拒否する。
+秘密鍵は端末の private ファイルだけに保持する。侵害済みノードの停止は保証しない。receipt の期限切れからの再承認/recovery は未接続で、fail closed を維持する。
+
+この隔離実装は control-state と実行前 admission fence を接続した slice である。
+bridge の各turn/selector、VPS runner のqueue pickup/subprocess/GitHub write前にserverを照会する。
+未初期化もbootstrap_requiredで拒否する。live設定・配置、installerのprovider-bound実行契約、
+本番E2Eは未実施。進行中Codexの強制停止や認可と副作用の間の原子性は保証しない。
+ローカル検証だけで運用全体の single-writer 完了を主張しない。
+
 ## Purpose
 
 VTDD must exceed Custom GPT without turning into a rigid command runner.
@@ -14,11 +48,9 @@ reasoning, external side effects, or premature completion claims.
 This contract defines the mode boundary that Skills, subagents, Butler,
 mac Codex, and VPS Codex CLI should share.
 
-Dashboard Butler is the intended primary operator surface. VPS Codex CLI is the
-always-on execution surface behind it. mac Codex is the temporary development
-and emergency/debug surface while Dashboard Butler is incomplete; after
-Dashboard Butler can complete the owner-facing workflow, mac Codex should move
-to a secondary support role.
+Dashboard Butler is the primary operator surface. Mac Codex is the PRIMARY
+execution surface; VPS Codex CLI is the STANDBY emergency/recovery surface.
+Butler retains authority; neither executor automatically takes over.
 
 Therefore VTDD Skills must be repository-backed and usable by Dashboard Butler
 and VPS Codex CLI. A Skill that only lives in a local mac Codex install is not a

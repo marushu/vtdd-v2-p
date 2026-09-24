@@ -11,6 +11,17 @@ preemption decisions, blockers, and evidence gaps.
 
 Last rebuilt from GitHub runtime truth: 2026-09-23
 
+## Owner instruction delta — Issue #858
+
+Issue #858 は ROOT / Now。owner の明示指示に基づき Mac PRIMARY / VPS STANDBY
+へ切り替える。#741 の always-on 前提のまま進むと authority drift を生むため preempt する。
+#741 は recovery / standby lifecycle 作業として active/incomplete のまま再分類し、
+close・downscope はしない。他の active Issues の成功条件も変更しない。
+従前の Now は Next に保持する。下記 runtime snapshot は過去の証拠として保持する。
+
+threadLocalAssumptionsPromoted=true: この判断を作戦図と現行契約のリポジトリファイルに
+記録した。ただし現在は隔離 worktree の未コミット変更であり、push/PR/runtime 共有は未完了。
+
 ## Queue Policy
 
 - Treat owner input as a queue update event before treating it as implementation.
@@ -223,14 +234,20 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
 
 ## Now
 
+- Issue #858: Mac PRIMARY / VPS STANDBY authority / persistence slice。
+  ROOT preemption、owner explicit instruction。手動 passkey 切替、報告、readiness、
+  exact-version policy を実装・検証する。live 切替や deploy は別承認。
+
+## Next
+
+### Previous Now（#858 により preempt、active / Next）
+
 - Issue #849: Lean Butler Execution Contract. Replace the default all-active-Issue
   / full-preflight / full-strategy execution ritual with current Mission/current
   Issue + direct dependencies, minimal startup, small/normal/root planning tiers,
   generation-before-test ordering, scoped tests before one final full suite, and
   CI as verification rather than the edit-test debugger. Existing open Issues
   remain active/incomplete and existing authority boundaries remain unchanged.
-
-## Next
 
 - Issue #845: resume Business Mission Orchestrator after Issue #849 merges.
   PR #846/#847/#848 established the Mission core, Dashboard runtime, and actual
@@ -239,7 +256,7 @@ Last rebuilt from GitHub runtime truth: 2026-09-23
   and production iPhone/PWA E2E remain open.
 
 - Issue #741: resume the existing VPS local helper queue / bridge continuation
-  slice immediately after Issue #845's bounded Mission core PR reaches its stop
+  as recovery / standby lifecycle work under #858 authority, immediately after Issue #845's bounded Mission core PR reaches its stop
   condition. Issue #741 remains active and incomplete; this queue move is a
   temporary ROOT preemption, not a downscope.
 

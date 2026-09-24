@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { AsyncLocalStorage } from "node:async_hooks";
+import { authorizeRuntimeExecutor, requireRuntimeExecutor } from "./executor-runtime-fence.mjs";
+const executorFenceContext = new AsyncLocalStorage();
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -109,7 +112,20 @@ async function main() {
   console.log(result.message);
 }
 
-async function runVpsRunnerOnce({
+async function runVpsRunnerOnce(options) {
+  const env = options.env || process.env;
+  const authorize = options.authorizeExecutor || authorizeRuntimeExecutor;
+  const check = purpose => authorize({purpose,env,fetchImpl:options.executorFetch || globalThis.fetch});
+  if ((await check('vps_queue'))?.allowed !== true) return {ok:false,reason:'executor_fenced',message:'VPSは未承認・旧世代・待機中です。queue pickupを停止しました。'};
+  return executorFenceContext.run(() => requireRuntimeExecutor(() => check('vps_work')), async () => {
+    const githubFetch = async (url,init={}) => {
+      if (init.method && init.method !== 'GET') await executorFenceContext.getStore()();
+      return options.githubFetch(url,init);
+    };
+    return runVpsRunnerOnceAuthorized({...options,githubFetch});
+  });
+}
+async function runVpsRunnerOnceAuthorized({
   githubFetch,
   token,
   allowedRepositories,
@@ -138,6 +154,7 @@ async function runVpsRunnerOnce({
     }
   }
 
+  await executorFenceContext.getStore()?.();
   const localPrivilegedMaintenanceExecution = dryRun
     ? await peekNextVpsLocalHelperExecution({
         queueRoot: env.VTDD_VPS_LOCAL_HELPER_QUEUE_DIR,
@@ -241,6 +258,7 @@ async function runVpsRunnerOnce({
 }
 
 async function executeVpsPrivilegedMaintenanceRunnerExecution({ githubFetch, execution }) {
+  await executorFenceContext.getStore()?.();
   const payload = { ...execution.payload };
   const notification = buildVpsRunnerNotificationContext({
     queueCommentAuthor: execution?.actors?.queueCommentAuthor,
@@ -321,6 +339,7 @@ async function executeVpsPrivilegedMaintenanceRunnerExecution({ githubFetch, exe
 }
 
 async function executeVpsLocalPrivilegedMaintenanceRunnerExecution({ execution, env = process.env }) {
+  await executorFenceContext.getStore()?.();
   const payload = { ...execution.payload };
   const helperPath = normalizeText(payload.executionEnvelope?.helperInvocation?.args?.[1]) ||
     DEFAULT_PRIVILEGED_MAINTENANCE_HELPER_PATH;
@@ -386,6 +405,7 @@ async function executeVpsRunnerExecution({
   execution,
   repositoryPolicies
 }) {
+  await executorFenceContext.getStore()?.();
   let payload = { ...execution.payload };
   payload.lifecycle = normalizeVpsRunnerLifecycle({
     ...payload.lifecycle,
@@ -3077,7 +3097,8 @@ function createGitHubFetch({ apiBaseUrl, token }) {
   };
 }
 
-function runCommand(command, args, options = {}) {
+async function runCommand(command, args, options = {}) {
+  await executorFenceContext.getStore()?.();
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,

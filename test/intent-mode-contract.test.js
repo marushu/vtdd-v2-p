@@ -14,8 +14,8 @@ test("intent mode contract preserves autonomy without allowing drift", () => {
   assert.equal(doc.includes("VTDD must exceed Custom GPT"), true);
   assert.equal(doc.includes("AI autonomy is required for judgment, critique, and proposal."), true);
   assert.equal(doc.includes("AI autonomy is forbidden for unapproved scope expansion"), true);
-  assert.equal(doc.includes("Dashboard Butler is the intended primary operator surface."), true);
-  assert.equal(doc.includes("VPS Codex CLI is the\nalways-on execution surface behind it."), true);
+  assert.equal(doc.includes("Dashboard Butler is the primary operator surface."), true);
+  assert.equal(doc.includes("execution surface; VPS Codex CLI is the STANDBY emergency/recovery surface."), true);
   assert.equal(doc.includes("A Skill that only lives in a local mac Codex install is not a\nproduct capability."), true);
   assert.equal(doc.includes("## Repository Sharing Gate"), true);
   assert.equal(doc.includes("the changed files are committed on a topic branch"), true);

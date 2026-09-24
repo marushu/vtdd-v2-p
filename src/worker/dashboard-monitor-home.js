@@ -55,8 +55,54 @@ export function mountMonitorHome(computeView) {
     const now = serverTime + Math.max(0, performance.now() - loadedAt, Date.now() - loadedWallTime);
     const freshConnection = connected && now - serverTime <= 120000;
     if (connected && !freshConnection) byId('connection').textContent = '更新が途絶えています · 現在は未確認';
+    const executor = byId('executors');
+    if (executor) {
+      const v = snapshot.executors;
+      const priorDetails = executor.querySelector?.('details');
+      const detailOpen = priorDetails?.open;
+      const detailFocused = !!priorDetails && priorDetails.firstChild === document.activeElement;
+      executor.replaceChildren();
+      if (!v?.initialized) executor.append(element('p', v?.ownerAction || '実行基盤は未初期化'));
+      else {
+        const current = freshConnection && now - serverTime < 30000;
+        const elapsed = Math.max(0, (now - serverTime) / 1000);
+        const targetNode = v.nodes[v.standbyExecutor];
+        const standbyFresh = current && targetNode?.healthy && targetNode.heartbeatAgeSeconds + elapsed <= (v.standbyExecutor === 'mac' ? 120 : 300);
+        const checkpointFresh = current && v.checkpointFresh && now - Date.parse(v.checkpoint?.updatedAt) <= 600000;
+        const checkpointEligible = v.transitionMode === 'emergency' || (v.transitionMode === 'planned' && checkpointFresh);
+        const readyCurrent = current && standbyFresh && checkpointEligible && v.ready;
+        const calm = (v.blockers || []).every(reason => reason === 'PRIMARYが実行中');
+        const macFresh = current && v.nodes.mac?.healthy && (v.nodes.mac.heartbeatAgeSeconds + elapsed <= 120);
+        executor.append(element('p', v.activationPending ? '切替準備中 / activation pending' : macFresh ? 'Mac 確認済み' : 'Mac未確認', 'chip ' + (macFresh && standbyFresh && v.standbyReady && calm ? 'green' : 'amber')));
+        for (const id of ['mac','vps']) {
+          const n = v.nodes[id];
+          executor.append(element('p', (id === 'mac' ? 'Mac' : 'VPS') + ' ' + n.role + (v.activationPending && n.role === 'PRIMARY' ? '（有効化待ち）' : '') + ' · Codex ' + (n.codexVersion || '未確認') + ' · ' + (n.versionMatch ? '版一致' : '版不一致')));
+          executor.append(element('p', 'heartbeat: ' + (n.heartbeatAgeSeconds == null ? '未確認' : Math.floor(n.heartbeatAgeSeconds + elapsed) + '秒前') + ' · ' + localTime(n.heartbeatAt), 'muted'));
+        }
+        if (v.versionApprovalPending) executor.append(element('p', '新しいMac版は承認待ち: ' + v.versionCandidate));
+        executor.append(element('p', '承認済みCodex: ' + v.approvedCodexVersion));
+        executor.append(element('p', 'checkpoint: ' + (checkpointFresh ? '新鮮' : '未確認・古い') + ' · ' + localTime(v.checkpoint?.updatedAt)));
+        executor.append(element('p', current && (!v.ready || readyCurrent) ? v.ownerAction : '更新待ち · 手動切替の可否は未確認'));
+        if (current && v.versionApprovalPending && v.versionActionURL) {
+          const link = new URL(v.versionActionURL, location.origin);
+          if (link.origin === location.origin && link.pathname === '/v2/approval/passkey/operator' && link.searchParams.get('mode') === 'executor-version') {
+            const a = element('a', 'Macの検証済み版を承認', 'action'); a.href = link.pathname + link.search; executor.append(a);
+          }
+        }
+        if (readyCurrent && v.actionURL) {
+          const link = new URL(v.actionURL, location.origin);
+          if (link.origin === location.origin && link.pathname === '/v2/approval/passkey/operator' && link.searchParams.get('mode') === 'failover') {
+            const a = element('a', '実行基盤の切替を確認', 'action'); a.href = link.pathname + link.search; executor.append(a);
+          }
+        }
+        const detail = element('details'); detail.append(element('summary', '実行基盤の詳細'), element('p', 'generation: ' + v.generation + ' · 切替: ' + localTime(v.lastTransitionAt)));
+        detail.open = !!detailOpen;
+        executor.append(detail);
+        if (detailFocused) detail.firstChild.focus();
+      }
+    }
     const views = snapshot.monitors.map(m => computeView(m, now, freshConnection));
-    const signature = JSON.stringify([snapshot, freshConnection, views.map(m => m.currentState)]);
+    const signature = JSON.stringify([snapshot, freshConnection, views.map(m => m.currentState), Math.floor(now / 30000)]);
     if (signature === lastRender) return;
     lastRender = signature;
     const problems = views.filter(m => m.needsAction);
@@ -88,6 +134,7 @@ export function mountMonitorHome(computeView) {
     connected = false;
     byId('connection').textContent = message;
     if (!snapshot) {
+      byId('executors')?.replaceChildren(element('p', '実行基盤を取得できません。'));
       byId('monitors').replaceChildren(element('p', '監視状態を取得できません。', 'empty'));
       byId('notifications').replaceChildren(element('p', '通知履歴を取得できません。接続または認証を確認してください。', 'muted'));
     }
@@ -170,5 +217,5 @@ a.action{display:inline-flex;align-items:center;min-height:44px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
 
-</style></head><body><main><header><h1>任せたことを、ひと目で。</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">接続を確認しています…</p><p id="counts">状態を取得しています…</p></header><section id="attention-section" hidden><h2>対応が必要</h2><div id="attention"></div></section><section><h2>監視・実行中</h2><div id="monitors" aria-label="現在の監視状態"></div></section><section><h2>最近の通知</h2><p class="muted">届いた通知の履歴です。現在の状態は上のカードで確認できます。</p><div id="notifications"></div></section><noscript>現在の状態を表示するには JavaScript を有効にしてください。</noscript></main><script>${dashboardMonitorClientScript}</script></body></html>`, { active: "home", layout: "home" });
+</style></head><body><main><header><h1>任せたことを、ひと目で。</h1><p id="today"></p><p id="connection" role="status" aria-live="polite">接続を確認しています…</p><p id="counts">状態を取得しています…</p></header><section id="attention-section" hidden><h2>対応が必要</h2><div id="attention"></div></section><section><h2>実行基盤</h2><article class="card" id="executors" aria-label="実行基盤">実行基盤を確認しています…</article></section><section><h2>監視・実行中</h2><div id="monitors" aria-label="現在の監視状態"></div></section><section><h2>最近の通知</h2><p class="muted">届いた通知の履歴です。現在の状態は上のカードで確認できます。</p><div id="notifications"></div></section><noscript>現在の状態を表示するには JavaScript を有効にしてください。</noscript></main><script>${dashboardMonitorClientScript}</script></body></html>`, { active: "home", layout: "home" });
 }
